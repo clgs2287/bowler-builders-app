@@ -430,11 +430,11 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
           </div>
         </div>
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className={bigScreen ? "w-full min-w-[760px] text-2xl" : "w-full min-w-[520px] text-xs md:min-w-0 md:text-sm"}>
+          <table className={bigScreen ? "w-full min-w-[760px] text-2xl" : "w-full min-w-[460px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
-                <th className="sticky left-0 z-20 w-12 bg-blue-800 p-2 text-left md:p-3">#</th>
-                <th className="sticky left-12 z-20 min-w-[130px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">Bowler</th>
+                <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">#</th>
+                <th className="sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">Bowler</th>
                 <th className="p-2 text-right md:p-3">Scratch</th>
                 {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp</th>}
                 <th className="p-2 text-right md:p-3">+/-</th>
@@ -451,8 +451,8 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                   <React.Fragment key={`${b.seed}-${b.name}`}>
                     {!search && index === financials.cashers && <tr className="border-t-4 border-dotted border-red-500"><td colSpan={colspan} className="p-0" /></tr>}
                     <tr className={rowClass(b)}>
-                      <td className={`sticky left-0 z-10 w-12 p-2 font-black md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.rank}</td>
-                      <td className={`sticky left-12 z-10 max-w-[130px] truncate p-2 font-semibold md:max-w-none md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.name}</td>
+                      <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.rank}</td>
+                      <td className={`sticky left-10 z-10 max-w-[100px] truncate p-2 text-[11px] font-semibold md:max-w-none md:text-sm md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.name}</td>
                       <td className="p-2 text-right md:p-3">{b.scratch}</td>
                       {useHandicapScores && <td className="hidden p-2 text-right font-semibold md:table-cell md:p-3">{b.handicap}</td>}
                       <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
