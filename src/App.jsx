@@ -282,7 +282,7 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   const addBowler = () => setBowlers((current) => [...current, makeBowler(current.length + 1)]);
   const autoAssignLanes = () => setBowlers((current) => current.map((b, index) => ({ ...b, lane: String(1 + Math.floor(index / 4) * 2 + (index % 2)) })));
   const rosterCsv = [["#", "Name", "Hdcp", "Lane", "Paid", "Scratch HG", "Handicap HG", "Phone", "Email"], ...bowlers.map((b, i) => [i + 1, b.name, handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
-  return <AppCard><CardContent className="p-3 md:p-5"><div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Registration / Roster</h2><p className="text-sm text-blue-700">Manage entrants, lane assignments, handicap, payments, and contacts.</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm border border-blue-100"><Label>Use Handicap Scores</Label><Switch checked={useHandicapScores} onCheckedChange={setUseHandicapScores} /></div><Button variant="outline" className="rounded-2xl" onClick={addBowler}>+ Add Bowler</Button><Button variant="outline" className="rounded-2xl" onClick={() => setBowlers((current) => current.slice(0, -1))}>Remove Last</Button><Button variant="outline" className="rounded-2xl" onClick={autoAssignLanes}>Auto Lanes</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => downloadCsv("tournament-roster.csv", rosterCsv)}>Export Roster CSV</Button></div></div><div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3"><StatCard label="Entries" value={entries} /><StatCard label="Roster Count" value={bowlers.length} /><StatCard label="Paid" value={paidCount} /><StatCard label="Unpaid" value={bowlers.length - paidCount} /></div><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[820px] text-xs md:min-w-[980px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">#</th><th className="p-3 text-left">Bowler</th>{useHandicapScores && <th className="p-3 text-center">Hdcp</th>}<th className="p-3 text-left">Lane</th><th className="p-3 text-left">Paid</th><th className="p-3 text-left">Scratch HG</th>{useHandicapScores && <th className="p-3 text-left">Handicap HG</th>}<th className="p-3 text-left">Phone</th><th className="p-3 text-left">Email</th></tr></thead><tbody>{bowlers.map((b, index) => <tr key={`${b.seed}-${index}`} className="border-t"><td className="p-3 font-semibold">{index + 1}</td><td className="p-2"><Input value={b.name} onChange={(e) => updateBowler(index, "name", e.target.value)} /></td>{useHandicapScores && <td className="p-2 text-center"><SmallNumberInput value={handicapPerGame(b)} onChange={(value) => updateBowler(index, "handicapPerGame", value)} /></td>}<td className="p-2"><Input className="w-16 text-center" value={b.lane || ""} onChange={(e) => updateBowler(index, "lane", e.target.value)} /></td><td className="p-3"><Switch checked={Boolean(b.paid)} onCheckedChange={(v) => updateBowler(index, "paid", v)} /></td><td className="p-3"><Switch checked={Boolean(b.sidePots?.scratchHighGame)} onCheckedChange={(v) => updateSidePot(index, "scratchHighGame", v)} /></td>{useHandicapScores && <td className="p-3"><Switch checked={Boolean(b.sidePots?.handicapHighGame)} onCheckedChange={(v) => updateSidePot(index, "handicapHighGame", v)} /></td>}<td className="p-2"><Input value={b.phone || ""} onChange={(e) => updateBowler(index, "phone", e.target.value)} /></td><td className="p-2"><Input value={b.email || ""} onChange={(e) => updateBowler(index, "email", e.target.value)} /></td></tr>)}</tbody></table></div></CardContent></AppCard>;
+  return <AppCard><CardContent className="p-3 md:p-5"><div className="mb-3 flex flex-col gap-2 md:mb-4 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Registration / Roster</h2><p className="text-sm text-blue-700">Manage entrants, lane assignments, handicap, payments, and contacts.</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2 rounded-2xl bg-white px-3 py-2 shadow-sm border border-blue-100"><Label>Use Handicap Scores</Label><Switch checked={useHandicapScores} onCheckedChange={setUseHandicapScores} /></div><Button variant="outline" className="rounded-2xl" onClick={addBowler}>+ Add Bowler</Button><Button variant="outline" className="rounded-2xl" onClick={() => setBowlers((current) => current.slice(0, -1))}>Remove Last</Button><Button variant="outline" className="rounded-2xl" onClick={autoAssignLanes}>Auto Lanes</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => downloadCsv("tournament-roster.csv", rosterCsv)}>Export Roster CSV</Button></div></div><div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3"><StatCard label="Entries" value={entries} /><StatCard label="Roster Count" value={bowlers.length} /><StatCard label="Paid" value={paidCount} /><StatCard label="Unpaid" value={bowlers.length - paidCount} /></div><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[820px] text-xs md:min-w-[980px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">#</th><th className="p-3 text-left">Bowler</th>{useHandicapScores && <th className="p-3 text-center">Hdcp</th>}<th className="p-3 text-left">Lane</th><th className="p-3 text-left">Paid</th><th className="p-3 text-left">Scratch HG</th>{useHandicapScores && <th className="p-3 text-left">Handicap HG</th>}<th className="p-3 text-left">Phone</th><th className="p-3 text-left">Email</th></tr></thead><tbody>{bowlers.map((b, index) => <tr key={`${b.seed}-${index}`} className="border-t"><td className="p-3 font-semibold">{index + 1}</td><td className="p-2"><Input value={b.name} onChange={(e) => updateBowler(index, "name", e.target.value)} /></td>{useHandicapScores && <td className="p-2 text-center"><SmallNumberInput value={handicapPerGame(b)} onChange={(value) => updateBowler(index, "handicapPerGame", value)} /></td>}<td className="p-2"><Input className="w-16 text-center" value={b.lane || ""} onChange={(e) => updateBowler(index, "lane", e.target.value)} /></td><td className="p-3"><Switch checked={Boolean(b.paid)} onCheckedChange={(v) => updateBowler(index, "paid", v)} /></td><td className="p-3"><Switch checked={Boolean(b.sidePots?.scratchHighGame)} onCheckedChange={(v) => updateSidePot(index, "scratchHighGame", v)} /></td>{useHandicapScores && <td className="p-3"><Switch checked={Boolean(b.sidePots?.handicapHighGame)} onCheckedChange={(v) => updateSidePot(index, "handicapHighGame", v)} /></td>}<td className="p-2"><Input value={b.phone || ""} onChange={(e) => updateBowler(index, "phone", e.target.value)} /></td><td className="p-2"><Input value={b.email || ""} onChange={(e) => updateBowler(index, "email", e.target.value)} /></td></tr>)}</tbody></table></div></CardContent></AppCard>;
 }
 
 function LockedScoreCell({ value, onChange, colIndex }) {
@@ -408,36 +408,37 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   };
 
   const statusBadge = (b) => {
-    if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return <span className="rounded-full bg-purple-200 px-3 py-1 text-xs font-bold text-purple-900">BYE</span>;
-    if (tournamentFormat === "eliminator" && b.rank <= 4) return <span className="rounded-full bg-yellow-200 px-3 py-1 text-xs font-bold text-yellow-900">TOP 4</span>;
-    if (b.rank <= financials.cashers) return <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">CASH</span>;
-    if (b.rank === bubbleRank) return <span className="rounded-full bg-amber-200 px-3 py-1 text-xs font-bold text-amber-900">BUBBLE</span>;
+    const base = "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold md:px-3 md:py-1 md:text-xs";
+    if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return <span className={`${base} bg-purple-200 text-purple-900`}>BYE</span>;
+    if (tournamentFormat === "eliminator" && b.rank <= 4) return <span className={`${base} bg-yellow-200 text-yellow-900`}>TOP 4</span>;
+    if (b.rank <= financials.cashers) return <span className={`${base} bg-green-100 text-green-800`}>CASH</span>;
+    if (b.rank === bubbleRank) return <span className={`${base} bg-amber-200 text-amber-900`}>BUBBLE</span>;
     return <span className="text-blue-400">—</span>;
   };
 
   return (
     <AppCard className={bigScreen ? "fixed inset-4 z-50 overflow-auto bg-white" : ""}>
-      <CardContent className={bigScreen ? "p-8" : "p-5"}>
+      <CardContent className={bigScreen ? "p-5 md:p-8" : "p-2 md:p-5"}>
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className={bigScreen ? "text-4xl font-black text-blue-950" : "text-xl font-semibold text-blue-900"}>Live Leaderboard</h2>
             
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Input className="w-64" placeholder="Search bowler..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="w-full md:w-64" placeholder="Search bowler..." value={search} onChange={(e) => setSearch(e.target.value)} />
             <Button variant="outline" className="rounded-2xl" onClick={() => setBigScreen((current) => !current)}>{bigScreen ? "Exit Big Screen" : "Big Screen"}</Button>
           </div>
         </div>
-        <div className="overflow-hidden rounded-2xl border border-blue-200 bg-white">
-       <table className={bigScreen ? "w-full text-2xl" : "w-full text-xs md:text-sm"}>
+        <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+          <table className={bigScreen ? "w-full min-w-[760px] text-2xl" : "w-full min-w-[520px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
-                <th className="p-3 text-left">Rank</th>
-                <th className="p-3 text-left">Bowler</th>
-                <th className="p-3 text-right">Scratch</th>
-                {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp Total</th>}
-                <th className="p-3 text-right">+/-</th>
-                <th className="p-3 text-right">Status</th>
+                <th className="sticky left-0 z-20 w-12 bg-blue-800 p-2 text-left md:p-3">#</th>
+                <th className="sticky left-12 z-20 min-w-[130px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">Bowler</th>
+                <th className="p-2 text-right md:p-3">Scratch</th>
+                {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp</th>}
+                <th className="p-2 text-right md:p-3">+/-</th>
+                <th className="p-2 text-right md:p-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -450,11 +451,11 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                   <React.Fragment key={`${b.seed}-${b.name}`}>
                     {!search && index === financials.cashers && <tr className="border-t-4 border-dotted border-red-500"><td colSpan={colspan} className="p-0" /></tr>}
                     <tr className={rowClass(b)}>
-                      <td className="p-2 font-black md:p-3">{b.rank}</td>
-                      <td className="max-w-[115px] truncate p-2 font-semibold md:max-w-none md:p-3">{b.name}</td>
+                      <td className={`sticky left-0 z-10 w-12 p-2 font-black md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.rank}</td>
+                      <td className={`sticky left-12 z-10 max-w-[130px] truncate p-2 font-semibold md:max-w-none md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.name}</td>
                       <td className="p-2 text-right md:p-3">{b.scratch}</td>
                       {useHandicapScores && <td className="hidden p-2 text-right font-semibold md:table-cell md:p-3">{b.handicap}</td>}
-                      <td className={`p-3 text-right font-black ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
+                      <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className="p-2 text-right md:p-3">{statusBadge(b)}</td>
                     </tr>
                   </React.Fragment>
