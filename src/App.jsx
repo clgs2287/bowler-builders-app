@@ -188,7 +188,7 @@ function TabButton({ active, onClick, children }) {
       onClick={onClick}
       className={
         active
-          ? "rounded-2xl bg-white text-blue-950 shadow-md hover:bg-blue-50"
+          ? "rounded-2xl border border-blue-300 bg-blue-800 text-white shadow-md hover:bg-blue-900"
           : "rounded-2xl border border-blue-200 bg-white text-blue-900 shadow-sm hover:bg-blue-50"
       }
     >
