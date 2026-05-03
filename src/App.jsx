@@ -435,7 +435,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
               <tr>
                 <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">#</th>
                 <th className="sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">Bowler</th>
-                <th className="p-2 text-right md:p-3">Scratch</th>
+                <th className="w-14 p-2 text-right text-[11px] md:w-auto md:p-3 md:text-sm">Scratch</th>
                 {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp</th>}
                 <th className="p-2 text-right md:p-3">+/-</th>
                 <th className="p-2 text-right md:p-3">Status</th>
@@ -453,7 +453,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                     <tr className={rowClass(b)}>
                       <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.rank}</td>
                       <td className={`sticky left-10 z-10 max-w-[100px] truncate p-2 text-[11px] font-semibold md:max-w-none md:text-sm md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.name}</td>
-                      <td className="p-2 text-right md:p-3">{b.scratch}</td>
+                      <td className="w-14 p-2 text-right text-[11px] md:w-auto md:p-3 md:text-sm">{b.scratch}</td>
                       {useHandicapScores && <td className="hidden p-2 text-right font-semibold md:table-cell md:p-3">{b.handicap}</td>}
                       <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className="p-2 text-right md:p-3">{statusBadge(b)}</td>
