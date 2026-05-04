@@ -443,7 +443,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
               <tr>
                 <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">#</th>
                 <th className="sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">Bowler</th>
-                <th className="w-14 p-2 text-right text-[11px] md:w-auto md:p-3 md:text-sm">Scratch</th>
+                <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">Scratch</th>
                 {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp</th>}
                 <th className="p-2 text-right md:p-3">+/-</th>
                 <th className="p-2 text-right md:p-3">Status</th>
@@ -466,7 +466,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                     )}
                     <tr className={rowClass(b)}>
                       <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${bg}`}>{b.rank}</td>
-                      <td className={`sticky left-10 z-10 max-w-[100px] p-2 text-[11px] font-semibold md:max-w-none md:p-3 md:text-sm ${bg}`}>
+                      <td className={`sticky left-10 z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm ${bg}`}>
                         <button
                           type="button"
                           className="block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"
@@ -476,7 +476,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                           {b.name}
                         </button>
                       </td>
-                      <td className="w-14 p-2 text-right text-[11px] md:w-auto md:p-3 md:text-sm">{b.scratch}</td>
+                      <td className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">{b.scratch}</td>
                       {useHandicapScores && <td className="hidden p-2 text-right font-semibold md:table-cell md:p-3">{b.handicap}</td>}
                       <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className="p-2 text-right md:p-3">{statusBadge(b)}</td>
@@ -484,11 +484,11 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                     {expandedSeed === b.seed && (
                       <tr className="border-t bg-white">
                         <td colSpan={colspan} className="p-2 md:p-3">
-                          <div className="grid grid-cols-4 gap-1.5 rounded-xl border border-blue-100 bg-blue-50 p-1.5 text-center text-[10px] md:ml-24 md:max-w-xl md:p-2 md:text-sm">
+                          <div className="grid grid-cols-4 gap-1 rounded-lg border border-blue-100 bg-blue-50 p-1 text-center text-[9px] md:ml-24 md:max-w-xl md:p-2 md:text-sm">
                             {b.games.map((game, gameIndex) => (
-                              <div key={`${b.seed}-public-game-${gameIndex}`} className="rounded-md bg-white p-1.5 shadow-sm md:rounded-lg md:p-2">
+                              <div key={`${b.seed}-public-game-${gameIndex}`} className="rounded-md bg-white p-1 shadow-sm md:rounded-lg md:p-2">
                                 <p className="text-[9px] font-semibold text-blue-600 md:text-xs">G{gameIndex + 1}</p>
-                                <p className="font-bold text-[11px] text-blue-950 md:text-base">{Number(game || 0) > 0 ? game : "—"}</p>
+                                <p className="font-bold text-[10px] text-blue-950 md:text-base">{Number(game || 0) > 0 ? game : "—"}</p>
                               </div>
                             ))}
                           </div>
