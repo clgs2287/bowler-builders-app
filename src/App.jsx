@@ -197,21 +197,58 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
-const appTabs = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "registration", label: "Registration" },
-  { id: "results", label: "Scoring" },
-  { id: "scoresheets", label: "Scoresheets" },
-  { id: "payouts", label: "Payouts" },
-  { id: "bracket", label: "Bracket" },
-  { id: "eliminator", label: "Eliminator" },
-  { id: "summary", label: "Cash Sheet" },
-  { id: "finance", label: "Finance" },
-  { id: "public", label: "Public View" },
-  { id: "sidepots", label: "Side Pots Later" },
+const appSections = [
+  {
+    id: "setup",
+    label: "Setup",
+    tabs: [
+      { id: "dashboard", label: "Dashboard" },
+      { id: "registration", label: "Registration" },
+      { id: "scoresheets", label: "Scoresheets" },
+      { id: "finance", label: "Finance" },
+    ],
+  },
+  {
+    id: "scoring",
+    label: "Scoring",
+    tabs: [
+      { id: "results", label: "Score Entry" },
+      { id: "public", label: "Leaderboard" },
+    ],
+  },
+  {
+    id: "finals",
+    label: "Finals",
+    tabs: [
+      { id: "bracket", label: "Bracket" },
+      { id: "eliminator", label: "Eliminator" },
+    ],
+  },
+  {
+    id: "money",
+    label: "Money",
+    tabs: [
+      { id: "payouts", label: "Payouts" },
+      { id: "summary", label: "Cash Sheet" },
+    ],
+  },
+  {
+    id: "later",
+    label: "Later",
+    tabs: [
+      { id: "sidepots", label: "Side Pots Later" },
+    ],
+  },
 ];
 
+const appTabs = appSections.flatMap((section) => section.tabs);
+
+function getSectionForTab(activeTab) {
+  return appSections.find((section) => section.tabs.some((tab) => tab.id === activeTab)) || appSections[0];
+}
+
 function MobileTabSelect({ activeTab, setActiveTab }) {
+  const activeSection = getSectionForTab(activeTab);
   return (
     <div className="md:hidden rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
       <Label className="mb-2 block text-blue-100">Go to section</Label>
@@ -220,23 +257,49 @@ function MobileTabSelect({ activeTab, setActiveTab }) {
         onChange={(e) => setActiveTab(e.target.value)}
         className="w-full rounded-xl border border-blue-200 bg-white px-3 py-3 text-base font-semibold text-blue-950 outline-none"
       >
-        {appTabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
+        {appSections.map((section) => (
+          <optgroup key={section.id} label={section.label}>
+            {section.tabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
+          </optgroup>
+        ))}
       </select>
+      <p className="mt-2 text-xs font-semibold text-blue-100">Current: {activeSection.label}</p>
     </div>
   );
 }
 
 function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament }) {
+  const activeSection = getSectionForTab(activeTab);
+
   return (
-    <div className="hidden w-full items-center gap-2 rounded-2xl bg-white/10 p-2 ring-1 ring-white/15 md:flex">
-      <div className="grid flex-1 grid-cols-5 gap-2 xl:grid-cols-11">
-        {appTabs.map((tab) => (
-          <TabButton key={tab.id} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>
-            {tab.label}
-          </TabButton>
+    <div className="hidden w-full space-y-2 md:block">
+      <div className="grid grid-cols-4 gap-2 xl:grid-cols-5">
+        {appSections.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() => setActiveTab(section.tabs[0].id)}
+            className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
+              activeSection.id === section.id
+                ? "bg-white text-blue-950 shadow-md"
+                : "border border-white/20 bg-blue-950/20 text-white hover:bg-white/20"
+            }`}
+          >
+            {section.label}
+          </button>
         ))}
       </div>
-      <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>
+
+      <div className="flex items-center justify-between gap-2 rounded-2xl bg-white/10 p-2 ring-1 ring-white/15">
+        <div className="flex flex-wrap gap-2">
+          {activeSection.tabs.map((tab) => (
+            <TabButton key={tab.id} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>
+              {tab.label}
+            </TabButton>
+          ))}
+        </div>
+        <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>
+      </div>
     </div>
   );
 }
