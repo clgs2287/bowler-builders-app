@@ -484,11 +484,11 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                     {expandedSeed === b.seed && (
                       <tr className="border-t bg-white">
                         <td colSpan={colspan} className="p-2 md:p-3">
-                          <div className="grid grid-cols-4 gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-center text-xs md:ml-24 md:max-w-xl md:text-sm">
+                          <div className="grid grid-cols-4 gap-1.5 rounded-xl border border-blue-100 bg-blue-50 p-1.5 text-center text-[10px] md:ml-24 md:max-w-xl md:p-2 md:text-sm">
                             {b.games.map((game, gameIndex) => (
-                              <div key={`${b.seed}-public-game-${gameIndex}`} className="rounded-lg bg-white p-2 shadow-sm">
-                                <p className="text-[10px] font-semibold text-blue-600 md:text-xs">G{gameIndex + 1}</p>
-                                <p className="font-bold text-blue-950">{Number(game || 0) > 0 ? game : "—"}</p>
+                              <div key={`${b.seed}-public-game-${gameIndex}`} className="rounded-md bg-white p-1.5 shadow-sm md:rounded-lg md:p-2">
+                                <p className="text-[9px] font-semibold text-blue-600 md:text-xs">G{gameIndex + 1}</p>
+                                <p className="font-bold text-[11px] text-blue-950 md:text-base">{Number(game || 0) > 0 ? game : "—"}</p>
                               </div>
                             ))}
                           </div>
