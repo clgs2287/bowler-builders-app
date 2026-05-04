@@ -395,6 +395,7 @@ function getBracketByeRanks(qualifiers) {
 function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat }) {
   const [search, setSearch] = useState("");
   const [bigScreen, setBigScreen] = useState(false);
+  const [expandedSeed, setExpandedSeed] = useState(null);
   const filtered = ranked.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()));
   const bubbleRank = financials.cashers + 1;
   const byeRanks = getBracketByeRanks(financials.cashers);
@@ -404,7 +405,15 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     if (tournamentFormat === "eliminator" && b.rank <= 4) return "border-t bg-yellow-50";
     if (b.rank === bubbleRank) return "border-t bg-amber-100";
     if (b.rank <= financials.cashers) return "border-t bg-blue-50";
-    return "border-t";
+    return "border-t bg-white";
+  };
+
+  const stickyBgClass = (b) => {
+    if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return "bg-purple-100";
+    if (tournamentFormat === "eliminator" && b.rank <= 4) return "bg-yellow-50";
+    if (b.rank === bubbleRank) return "bg-amber-100";
+    if (b.rank <= financials.cashers) return "bg-blue-50";
+    return "bg-white";
   };
 
   const statusBadge = (b) => {
@@ -419,10 +428,9 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   return (
     <AppCard className={bigScreen ? "fixed inset-4 z-50 overflow-auto bg-white" : ""}>
       <CardContent className={bigScreen ? "p-5 md:p-8" : "p-2 md:p-5"}>
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mb-3 flex flex-col gap-2 md:mb-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className={bigScreen ? "text-4xl font-black text-blue-950" : "text-xl font-semibold text-blue-900"}>Live Leaderboard</h2>
-            
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Input className="w-full md:w-64" placeholder="Search bowler..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -447,17 +455,46 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                 const gamesCompleted = completedGamesCount(b);
                 const diff = gamesCompleted > 0 ? Number(score - gamesCompleted * 200) : null;
                 const colspan = useHandicapScores ? 6 : 5;
+                const bg = stickyBgClass(b);
+
                 return (
                   <React.Fragment key={`${b.seed}-${b.name}`}>
-                    {!search && index === financials.cashers && <tr className="border-t-4 border-dotted border-red-500"><td colSpan={colspan} className="p-0" /></tr>}
+                    {!search && index === financials.cashers && (
+                      <tr className="border-t-4 border-dotted border-red-500">
+                        <td colSpan={colspan} className="p-0" />
+                      </tr>
+                    )}
                     <tr className={rowClass(b)}>
-                      <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.rank}</td>
-                      <td className={`sticky left-10 z-10 max-w-[100px] truncate p-2 text-[11px] font-semibold md:max-w-none md:text-sm md:p-3 ${rowClass(b).includes("purple") ? "bg-purple-100" : rowClass(b).includes("yellow") ? "bg-yellow-50" : rowClass(b).includes("amber") ? "bg-amber-100" : rowClass(b).includes("blue") ? "bg-blue-50" : "bg-white"}`}>{b.name}</td>
+                      <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${bg}`}>{b.rank}</td>
+                      <td className={`sticky left-10 z-10 max-w-[100px] p-2 text-[11px] font-semibold md:max-w-none md:p-3 md:text-sm ${bg}`}>
+                        <button
+                          type="button"
+                          className="block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"
+                          onClick={() => setExpandedSeed((current) => current === b.seed ? null : b.seed)}
+                          title="Click to show game scores"
+                        >
+                          {b.name}
+                        </button>
+                      </td>
                       <td className="w-14 p-2 text-right text-[11px] md:w-auto md:p-3 md:text-sm">{b.scratch}</td>
                       {useHandicapScores && <td className="hidden p-2 text-right font-semibold md:table-cell md:p-3">{b.handicap}</td>}
                       <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className="p-2 text-right md:p-3">{statusBadge(b)}</td>
                     </tr>
+                    {expandedSeed === b.seed && (
+                      <tr className="border-t bg-white">
+                        <td colSpan={colspan} className="p-2 md:p-3">
+                          <div className="grid grid-cols-4 gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-center text-xs md:ml-24 md:max-w-xl md:text-sm">
+                            {b.games.map((game, gameIndex) => (
+                              <div key={`${b.seed}-public-game-${gameIndex}`} className="rounded-lg bg-white p-2 shadow-sm">
+                                <p className="text-[10px] font-semibold text-blue-600 md:text-xs">G{gameIndex + 1}</p>
+                                <p className="font-bold text-blue-950">{Number(game || 0) > 0 ? game : "—"}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </React.Fragment>
                 );
               })}
