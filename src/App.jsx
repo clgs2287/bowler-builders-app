@@ -1303,15 +1303,25 @@ const saveCurrentGame = () => {
   </td>
 )}
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
-                      <td key={gi} className="p-2 text-center">
-                        <LockedScoreCell
-  value={Number(b.games?.[gi] || 0)}
-  onChange={(value) => updateGame(originalIndex, gi, value)}
-  rowIndex={index}
-  colIndex={gi}
-  locked={Boolean(savedScoreGames[gi])}
-/>
-                      </td>
+<td key={gi} className="p-2 text-center">
+  <div className="mb-1 text-[10px] font-bold text-blue-700">
+    {lanePairForGame(
+      b.lane,
+      gi,
+      tournamentInfo?.lanesUsed,
+      tournamentInfo?.movePairs || 1,
+      tournamentInfo?.movementMode || "right"
+    )}
+  </div>
+
+  <LockedScoreCell
+    value={Number(b.games?.[gi] || 0)}
+    onChange={(value) => updateGame(originalIndex, gi, value)}
+    rowIndex={index}
+    colIndex={gi}
+    locked={Boolean(savedScoreGames[gi])}
+  />
+</td>
                     ))}
                     <td className="p-2 text-center font-semibold">{ranked?.scratch ?? 0}</td>
                     {useHandicapScores && <td className="p-2 text-center font-semibold">{ranked?.handicap ?? 0}</td>}
