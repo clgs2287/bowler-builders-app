@@ -439,16 +439,42 @@ function StatCard({ label, value }) {
   return <div className="rounded-xl border border-blue-100 bg-white p-3 shadow-sm md:rounded-2xl md:p-4"><p className="text-xs text-blue-700 md:text-sm">{label}</p><p className="text-lg font-bold text-blue-950 md:text-2xl">{value}</p></div>;
 }
 
-function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", autoAdvance = false, colIndex }) {
+function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, colIndex, scoreNavigation = false }) {
   const handleChange = (e) => {
     const raw = e.target.value;
     onChange(Number(raw || 0));
+  };
 
-    if (autoAdvance && raw.length >= 3) {
-      const inputs = Array.from(document.querySelectorAll(`[data-col="${colIndex}"]`));
-      const currentIndex = inputs.indexOf(e.target);
-      const next = inputs[currentIndex + 1];
-      if (next) setTimeout(() => next.focus(), 0);
+  const handleKeyDown = (e) => {
+    if (!scoreNavigation) return;
+
+    const row = Number(rowIndex || 0);
+    const col = Number(colIndex || 0);
+
+    const focusCell = (nextRow, nextCol) => {
+      const next = document.querySelector(`[data-score-cell="${nextRow}-${nextCol}"]`);
+
+      if (next) {
+        e.preventDefault();
+        next.focus();
+        next.select?.();
+      }
+    };
+
+    if (e.key === "Tab" || e.key === "Enter" || e.key === "ArrowDown") {
+      focusCell(row + 1, col);
+    }
+
+    if (e.key === "ArrowUp") {
+      focusCell(row - 1, col);
+    }
+
+    if (e.key === "ArrowRight") {
+      focusCell(row, col + 1);
+    }
+
+    if (e.key === "ArrowLeft") {
+      focusCell(row, col - 1);
     }
   };
 
@@ -456,10 +482,11 @@ function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", autoAdvance
     <Input
       type="number"
       inputMode="numeric"
-      data-col={colIndex}
+      data-score-cell={scoreNavigation ? `${rowIndex}-${colIndex}` : undefined}
       className={`${width} text-center`}
       value={value === 0 ? "" : value}
       onChange={handleChange}
+      onKeyDown={handleKeyDown}
     />
   );
 }
@@ -1028,8 +1055,17 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   );
 }
 
-function LockedScoreCell({ value, onChange, colIndex }) {
-  return <SmallNumberInput value={value} onChange={onChange} width="w-12 md:w-14" />;
+function LockedScoreCell({ value, onChange, rowIndex, colIndex }) {
+  return (
+    <SmallNumberInput
+      value={value}
+      onChange={onChange}
+      width="w-12 md:w-14"
+      rowIndex={rowIndex}
+      colIndex={colIndex}
+      scoreNavigation
+    />
+  );
 }
 
 function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames }) {
@@ -1066,7 +1102,12 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames 
                     <td className="p-2"><Input value={b.name} onChange={(e) => updateBowler(originalIndex, "name", e.target.value)} /></td>
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
                       <td key={gi} className="p-2 text-center">
-                        <LockedScoreCell value={Number(b.games?.[gi] || 0)} onChange={(value) => updateGame(originalIndex, gi, value)} colIndex={gi} />
+                        <LockedScoreCell
+  value={Number(b.games?.[gi] || 0)}
+  onChange={(value) => updateGame(originalIndex, gi, value)}
+  rowIndex={index}
+  colIndex={gi}
+/>
                       </td>
                     ))}
                     <td className="p-2 text-center font-semibold">{ranked?.scratch ?? 0}</td>
