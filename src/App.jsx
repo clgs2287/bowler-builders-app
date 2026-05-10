@@ -1499,10 +1499,27 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
                   <thead>
                     <tr className="bg-slate-900 text-white print:bg-white print:text-black">
                       <th className="w-12 border border-slate-900 p-1 text-left print:border-black">Pos</th>
-                      <th className="border border-slate-900 p-1 text-left print:border-black">Bowler</th>
+                      <th className="w-56 border border-slate-900 p-1 text-left print:border-black">Bowler</th>
                       {useHandicapScores && <th className="border border-slate-900 p-2 text-center print:border-black">Hdcp</th>}
-                      {scoreHeaders.map((header) => <th key={`${pair}-${lane}-${header}`} className="border border-slate-900 p-2 text-center print:border-black">{header}</th>)}
-                      <th className="border border-slate-900 p-2 text-center print:border-black">Total</th>
+{scoreHeaders.map((header, gi) => (
+  <th
+    key={`${pair}-${lane}-${header}`}
+    className="border border-slate-900 p-2 text-center print:border-black"
+  >
+    <div>{header}</div>
+
+    <div className="mt-1 text-[10px] font-bold text-blue-700 print:text-black">
+      {lanePairForGame(
+        lane,
+        gi,
+        tournamentInfo?.lanesUsed,
+        1,
+        "custom",
+        tournamentInfo?.customRotation || ""
+      )}
+    </div>
+  </th>
+))}                      <th className="border border-slate-900 p-2 text-center print:border-black">Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1511,7 +1528,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
                       return (
                         <tr key={`${pair}-${lane}-${index}`}>
                           <td className="h-10 w-12 border border-slate-900 p-1 text-base font-black print:border-black">{position}</td>
-                          <td className="border border-slate-900 p-1 text-base font-bold print:border-black">{bowler.name}</td>
+                          <td className="w-56 border border-slate-900 p-1 text-base font-bold print:border-black">{bowler.name}</td>
                           {useHandicapScores && <td className="border border-slate-900 p-2 text-center text-lg font-bold print:border-black">{bowler.name ? handicapPerGame(bowler) : ""}</td>}
                           {scoreHeaders.map((header) => <td key={`${pair}-${lane}-${index}-${header}`} className="border border-slate-900 p-2 print:border-black" />)}
                           <td className="border border-slate-900 p-2 print:border-black" />
