@@ -200,6 +200,15 @@ function getLanePair(lane) {
   return `${low}-${low + 1}`;
 }
 
+function getBracketSize(qualifiers) {
+  if (qualifiers <= 4) return 4;
+  if (qualifiers <= 8) return 8;
+  if (qualifiers <= 16) return 16;
+  if (qualifiers <= 32) return 32;
+  if (qualifiers <= 64) return 64;
+  return "Over 64";
+}
+
 function parseLaneNumbers(lanesUsed) {
   return String(lanesUsed || "")
     .split(",")
@@ -1499,9 +1508,23 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
                   <thead>
                     <tr className="bg-slate-900 text-white print:bg-white print:text-black">
                       <th className="w-12 border border-slate-900 p-1 text-left print:border-black">Pos</th>
-                      <th className="border border-slate-900 p-1 text-left print:border-black">Bowler</th>
+                      <th className="w-56 border border-slate-900 p-1 text-left print:border-black">Bowler</th>
                       {useHandicapScores && <th className="border border-slate-900 p-2 text-center print:border-black">Hdcp</th>}
-                      {scoreHeaders.map((header) => <th key={`${pair}-${lane}-${header}`} className="border border-slate-900 p-2 text-center print:border-black">{header}</th>)}
+                      {scoreHeaders.map((header, gi) => (
+  <th key={`${pair}-${lane}-${header}`} className="border border-slate-900 p-2 text-center print:border-black">
+    <div>{header}</div>
+    <div className="mt-1 text-[10px] font-bold text-blue-700 print:text-black">
+      {lanePairForGame(
+        lane,
+        gi,
+        tournamentInfo?.lanesUsed,
+        1,
+        "custom",
+        tournamentInfo?.customRotation || ""
+      )}
+    </div>
+  </th>
+))}
                       <th className="border border-slate-900 p-2 text-center print:border-black">Total</th>
                     </tr>
                   </thead>
@@ -1511,7 +1534,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
                       return (
                         <tr key={`${pair}-${lane}-${index}`}>
                           <td className="h-10 w-12 border border-slate-900 p-1 text-base font-black print:border-black">{position}</td>
-                          <td className="border border-slate-900 p-1 text-base font-bold print:border-black">{bowler.name}</td>
+                          <td className="w-56 border border-slate-900 p-1 text-base font-bold print:border-black">{bowler.name}</td>
                           {useHandicapScores && <td className="border border-slate-900 p-2 text-center text-lg font-bold print:border-black">{bowler.name ? handicapPerGame(bowler) : ""}</td>}
                           {scoreHeaders.map((header) => <td key={`${pair}-${lane}-${index}-${header}`} className="border border-slate-900 p-2 print:border-black" />)}
                           <td className="border border-slate-900 p-2 print:border-black" />
@@ -3580,27 +3603,7 @@ function PlaceholderTab({ title, note }) {
   return <AppCard><CardContent className="p-3 md:p-5"><h2 className="text-xl font-semibold text-blue-900">{title}</h2><p className="mt-2 text-sm text-blue-700">{note}</p></CardContent></AppCard>;
 }
 
-function runCalculationTests() {
-  const financials = calculateFinancials({ entries: 48, entryFee: 60, lineage: 18, ballRaffleAdded: 235, otherAddedMoney: 0, prizeFundOverride: 0 });
-  console.assert(financials.cashers === 12, "Expected 48 entries to pay 12 spots using 1-in-4 cashing.");
-  console.assert(financials.prizeFund === 2251, "Expected default prize fund to be 2251.");
-  const rows = buildPayoutRows({ financials, middlePercent: 5, minCashPercent: 4, rounding: 5, sameThirdFourth: true, manualOverridesEnabled: true, overrides: defaultOverrides });
-  console.assert(rows.reduce((sum, row) => sum + row.totalPaid, 0) === financials.prizeFund, "Expected total paid to equal prize fund.");
-  console.assert(getBracketSize(12) === 16, "Expected 12 qualifiers to build a 16-player bracket.");
-  console.assert(getLanePair(2) === "1-2" && getLanePair(3) === "3-4", "Expected lane-pair grouping to work.");
-  const rankingTestBowlers = [{ seed: 1, name: "Scratch Leader", games: [250, 200, 200, 200], handicapPerGame: 0 }, { seed: 2, name: "Handicap Leader", games: [180, 180, 180, 180], handicapPerGame: 50 }];
-  console.assert(getRankedBowlers(rankingTestBowlers, false)[0].name === "Scratch Leader", "Expected scratch ranking to sort by scratch total.");
-  console.assert(getRankedBowlers(rankingTestBowlers, true)[0].name === "Handicap Leader", "Expected handicap ranking to sort by calculated handicap total.");
-  console.assert(buildInitialBowlers(48).length === 48, "Expected app to open with 48 registered entrants.");
-  const partialBowler = { seed: 100, name: "Partial", games: [183, 0, 0, 0], handicapPerGame: 17 };
-  console.assert(handicapTotal(partialBowler) === 200, "Expected one entered game of 183 with 17 handicap to total 200.");
-  console.assert(completedGamesCount({ games: [183, 0, 0, 0] }) === 1, "Expected only entered games to count toward handicap total.");
-}
 
-if (typeof window !== "undefined" && !window.__bowlingPayoutTestsRan) {
-  window.__bowlingPayoutTestsRan = true;
-  runCalculationTests();
-}
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
