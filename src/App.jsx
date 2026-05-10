@@ -41,9 +41,35 @@ const numberInputStyles = `
     -webkit-appearance: none;
     margin: 0;
   }
+
   input.no-number-arrows[type="number"] {
     -moz-appearance: textfield;
   }
+
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+    background: white !important;
+  }
+
+  .print-sheet {
+    display: block !important;
+    margin: 0 !important;
+    padding-bottom: 0 !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  .print-sheet:last-of-type {
+    break-after: avoid-page !important;
+    page-break-after: avoid !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}
 `;
 
 const STORAGE_KEY = "bowler-builders-tournament-app-v1";
@@ -1304,7 +1330,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
     const byLane = lanes.reduce((groups, lane) => ({ ...groups, [lane]: pairBowlers.filter((b) => String(b.laneNumber || b.lane || "") === String(lane)) }), {});
 
     return (
-      <div className="print-sheet mb-6 break-after-page rounded-2xl border border-blue-200 bg-white p-6 shadow-sm print:mb-0 print:min-h-screen print:rounded-none print:border-0 print:p-8 print:shadow-none">
+      <div className="print-sheet rounded-2xl border border-slate-300 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-4 print:border-black">
           <div>
             <h1 className="text-3xl font-black text-slate-950 print:text-black">{tournamentInfo.name || "Tournament"}</h1>
@@ -1355,7 +1381,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
           })}
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 text-xs print:text-black">
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs print:hidden">
           <div className="rounded-xl border border-slate-900 p-4 print:border-black">
             <p className="font-black">Director Notes</p>
             <div className="mt-4 border-b border-slate-900 print:border-black" />
@@ -1391,8 +1417,12 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
         </CardContent>
       </AppCard>
 
-      <div className="print:block">
-        {sortedPairs.map((pair) => <PrintableLaneSheet key={`print-sheet-${pair}`} pair={pair} />)}
+      <div className="print:block print:m-0 print:p-0">
+        {sortedPairs.map((pair, index) => (
+  <div key={`print-sheet-wrap-${pair}`} className={index === 0 ? "" : "print:break-before-page"}>
+    <PrintableLaneSheet pair={pair} />
+  </div>
+))}
       </div>
 
       {sortedPairs.length === 0 && <AppCard><CardContent className="p-3 md:p-5"><p className="text-blue-700">No lane assignments yet. Add lanes on the Registration tab, then return here.</p></CardContent></AppCard>}
