@@ -255,7 +255,8 @@ function lanePairForGame(
   gameIndex,
   lanesUsed,
   movePairs = 1,
-  movementMode = "right"
+  movementMode = "right",
+  customRotation = ""
 ) {
   const pairs = buildLanePairs(lanesUsed);
 
@@ -269,6 +270,38 @@ function lanePairForGame(
 
   const step = Number(movePairs || 1) * gameIndex;
 
+if (movementMode === "custom") {
+  const customLanes = String(customRotation || "")
+    .split(",")
+    .map((lane) => Number(lane.trim()))
+    .filter((lane) => Number.isFinite(lane) && lane > 0);
+
+  const startingLane = Number(String(laneValue || "").match(/[0-9]+/)?.[0] || 0);
+
+  if (customLanes.length < 2 || !startingLane) return startPair;
+
+  const baseLane = customLanes[0];
+  const relativeMoves = customLanes.map((lane) => lane - baseLane);
+
+const rawMovedLane = startingLane + relativeMoves[gameIndex % relativeMoves.length];
+
+const availableLanes = parseLaneNumbers(lanesUsed);
+const lowLane = Math.min(...availableLanes);
+const highLane = Math.max(...availableLanes);
+const laneCount = highLane - lowLane + 1;
+
+let movedLane = rawMovedLane;
+
+while (movedLane > highLane) {
+  movedLane -= laneCount;
+}
+
+while (movedLane < lowLane) {
+  movedLane += laneCount;
+}
+  return String(movedLane || startingLane);
+}
+
   if (movementMode === "left") {
     let next = startIndex - step;
 
@@ -277,16 +310,6 @@ function lanePairForGame(
     return pairs[next % pairs.length];
   }
 
-  if (movementMode === "splitOut") {
-    const low = Number(startPair.split("-")[0]);
-
-    const offset = step * 2;
-
-    return `${low - offset}-${low + 1 + offset}`;
-  }
-
-  return pairs[(startIndex + step) % pairs.length];
-}
 
 function getBracketSize(qualifiers) {
   if (qualifiers <= 4) return 4;
@@ -295,7 +318,7 @@ function getBracketSize(qualifiers) {
   if (qualifiers <= 32) return 32;
   if (qualifiers <= 64) return 64;
   return "Over 64";
-}
+}}
 
 function bracketSeedOrder(size) {
   let seeds = [1, 2];
@@ -723,27 +746,28 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
               </div>
               <div className="space-y-3">
                 <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
-                  <LockedTextField
-  label="Move Pairs"
-  value={tournamentInfo.movePairs || "1"}
-  onChange={(value) => update("movePairs", value)}
-/>
 
 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
   <Label className="text-left text-sm font-bold text-blue-900">
     Movement
   </Label>
 
-  <select
-    value={tournamentInfo.movementMode || "right"}
-    onChange={(e) => update("movementMode", e.target.value)}
-    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
-  >
-    <option value="right">Together Right</option>
-    <option value="left">Together Left</option>
-    <option value="splitOut">Split Outward</option>
-  </select>
+<select
+  value={tournamentInfo.movementMode || "custom"}
+  onChange={(e) => update("movementMode", e.target.value)}
+  className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+>
+  <option value="custom">Custom Rotation</option>
+</select>
 </div>
+{(tournamentInfo.movementMode || "custom") === "custom" && (
+  <LockedTextField
+    label="Custom Rotation"
+    value={tournamentInfo.customRotation || ""}
+    onChange={(value) => update("customRotation", value)}
+    placeholder="Example: 9,17,13,19,15,11"
+  />
+)}
                 <LockedTextField label="Current Stage" value={tournamentInfo.stage} onChange={(value) => update("stage", value)} />
                 <LockedQualifyingGamesField qualifyingGames={qualifyingGames} onSave={updateQualifyingGames} />
                 <LockedTextField label="Director" value={tournamentInfo.director} onChange={(value) => update("director", value)} />
@@ -1305,13 +1329,14 @@ const saveCurrentGame = () => {
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
 <td key={gi} className="p-2 text-center">
   <div className="mb-1 text-[10px] font-bold text-blue-700">
-    {lanePairForGame(
-      b.lane,
-      gi,
-      tournamentInfo?.lanesUsed,
-      tournamentInfo?.movePairs || 1,
-      tournamentInfo?.movementMode || "right"
-    )}
+{lanePairForGame(
+  b.lane,
+  gi,
+  tournamentInfo?.lanesUsed,
+  tournamentInfo?.movePairs || 1,
+  tournamentInfo?.movementMode || "custom",
+  tournamentInfo?.customRotation || ""
+)}
   </div>
 
   <LockedScoreCell
