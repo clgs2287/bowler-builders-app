@@ -723,6 +723,27 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
               </div>
               <div className="space-y-3">
                 <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
+                  <LockedTextField
+  label="Move Pairs"
+  value={tournamentInfo.movePairs || "1"}
+  onChange={(value) => update("movePairs", value)}
+/>
+
+<div className="grid grid-cols-[120px_1fr] items-center gap-3">
+  <Label className="text-left text-sm font-bold text-blue-900">
+    Movement
+  </Label>
+
+  <select
+    value={tournamentInfo.movementMode || "right"}
+    onChange={(e) => update("movementMode", e.target.value)}
+    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+  >
+    <option value="right">Together Right</option>
+    <option value="left">Together Left</option>
+    <option value="splitOut">Split Outward</option>
+  </select>
+</div>
                 <LockedTextField label="Current Stage" value={tournamentInfo.stage} onChange={(value) => update("stage", value)} />
                 <LockedQualifyingGamesField qualifyingGames={qualifyingGames} onSave={updateQualifyingGames} />
                 <LockedTextField label="Director" value={tournamentInfo.director} onChange={(value) => update("director", value)} />
