@@ -1055,7 +1055,26 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   );
 }
 
-function LockedScoreCell({ value, onChange, rowIndex, colIndex }) {
+function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }) {
+  const [editing, setEditing] = useState(!locked);
+
+  useEffect(() => {
+    if (locked) setEditing(false);
+  }, [locked]);
+
+  if (locked && !editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="w-12 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-center font-bold text-blue-950 shadow-sm hover:bg-blue-100 md:w-14"
+        title="Click to edit saved score"
+      >
+        {value || "—"}
+      </button>
+    );
+  }
+
   return (
     <SmallNumberInput
       value={value}
@@ -1068,11 +1087,23 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex }) {
   );
 }
 
-function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames }) {
-  const updateBowler = (index, field, value) => setBowlers((current) => current.map((b, i) => i === index ? { ...b, [field]: value } : b));
+function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, }) {
+  
   const updateGame = (index, gameIndex, value) => setBowlers((current) => current.map((b, i) => i === index ? { ...b, games: Array.from({ length: qualifyingGames }, (_, gi) => gi === gameIndex ? value : Number(b.games?.[gi] || 0)) } : b));
   const sorted = getRankedBowlers(bowlers, useHandicapScores);
   const exportRows = [["Rank", "Name", ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", "Handicap Total"], ...sorted.map((b) => [b.rank, b.name, ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, b.handicap])];
+  const nextUnsavedGameIndex = Array.from({ length: qualifyingGames }, (_, gi) => gi).find(
+  (gi) => !savedScoreGames[gi]
+);
+
+const saveCurrentGame = () => {
+  if (nextUnsavedGameIndex === undefined) return;
+
+  setSavedScoreGames((current) => ({
+    ...current,
+    [nextUnsavedGameIndex]: true,
+  }));
+};
 
   return (
     <AppCard>
@@ -1099,7 +1130,7 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames 
                 return (
                   <tr key={`${b.seed}-${index}`} className="border-t">
                     <td className="p-2 text-center font-semibold">{ranked?.rank ?? index + 1}</td>
-                    <td className="p-2"><Input value={b.name} onChange={(e) => updateBowler(originalIndex, "name", e.target.value)} /></td>
+                    <td className="p-2 font-semibold text-blue-950">{b.name || "—"}</td>
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
                       <td key={gi} className="p-2 text-center">
                         <LockedScoreCell
@@ -1107,6 +1138,7 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames 
   onChange={(value) => updateGame(originalIndex, gi, value)}
   rowIndex={index}
   colIndex={gi}
+  locked={Boolean(savedScoreGames[gi])}
 />
                       </td>
                     ))}
@@ -1117,7 +1149,28 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames 
               })}
             </tbody>
           </table>
-        </div>
+                </div>
+
+<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+  <div className="text-sm font-semibold text-blue-800">
+    Saved games:{" "}
+    {Array.from({ length: qualifyingGames }, (_, gi) =>
+      savedScoreGames[gi] ? `G${gi + 1}` : null
+    )
+      .filter(Boolean)
+      .join(", ") || "None"}
+  </div>
+
+  <Button
+    className="rounded-2xl bg-blue-800 hover:bg-blue-900"
+    disabled={nextUnsavedGameIndex === undefined}
+    onClick={saveCurrentGame}
+  >
+    {nextUnsavedGameIndex === undefined
+      ? "All Games Saved"
+      : `Save Game ${nextUnsavedGameIndex + 1}`}
+  </Button>
+</div>
       </CardContent>
     </AppCard>
   );
@@ -3345,6 +3398,7 @@ export default function BowlingPayoutApp() {
   const [tournamentHistory, setTournamentHistory] = useState([]);
   const [manualTitles, setManualTitles] = useState([]);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+  const [savedScoreGames, setSavedScoreGames] = useState({});
   if (typeof window !== "undefined") window.__currentTournamentFormat = tournamentFormat;
 
   useEffect(() => {
@@ -3382,6 +3436,7 @@ export default function BowlingPayoutApp() {
         if (parsed.tournamentInfo) setTournamentInfo(parsed.tournamentInfo);
         if (parsed.payoutState) setPayoutState({ ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
         if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, ...parsed.bracketState });
+        if (parsed.savedScoreGames) setSavedScoreGames(parsed.savedScoreGames);
         if (parsed.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...parsed.eliminatorState });
         if (parsed.sidePotState) setSidePotState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: 0, highGamePrice: 10, handicapHighGamePrice: 10, entries: {}, bracketSets: { early: parsed.sidePotState.entries || {}, handicapEarly: {}, middle: {}, late: {} }, brackets: [], bracketGroups: { early: parsed.sidePotState.brackets || [], handicapEarly: [], middle: [], late: [] }, leftovers: 0, leftoversBySet: { early: parsed.sidePotState.leftovers || 0, handicapEarly: 0, middle: 0, late: 0 }, refunds: [], refundsBySet: { early: parsed.sidePotState.refunds || [], handicapEarly: [], middle: [], late: [] }, selectedPlanIds: { early: parsed.sidePotState.selectedPlanId || "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only" }, ...parsed.sidePotState });
       }
@@ -3399,7 +3454,7 @@ export default function BowlingPayoutApp() {
     } catch (error) {
       console.warn("Could not auto-save tournament data", error);
     }
-  }, [qualifyingGames, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, payoutState, bracketState, eliminatorState, sidePotState, hasLoadedSavedData]);
+  }, [qualifyingGames, savedScoreGames, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, payoutState, bracketState, eliminatorState, sidePotState, hasLoadedSavedData]);
 
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
@@ -3462,7 +3517,7 @@ export default function BowlingPayoutApp() {
 
         {activeTab === "dashboard" && <AppErrorBoundary key="dashboard"><DashboardTab tournamentInfo={tournamentInfo} setTournamentInfo={setTournamentInfo} entries={entries} bowlers={bowlers} financials={financials} payoutRows={payoutRows} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} setTournamentFormat={setTournamentFormat} qualifyingGames={qualifyingGames} setQualifyingGames={setQualifyingGames} setBowlers={setBowlers} /></AppErrorBoundary>}
         {activeTab === "registration" && <RegistrationTab entries={entries} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} />}
-        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
+        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} />}
