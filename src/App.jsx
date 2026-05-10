@@ -1089,7 +1089,29 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }
 
 function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, }) {
   
-  const updateGame = (index, gameIndex, value) => setBowlers((current) => current.map((b, i) => i === index ? { ...b, games: Array.from({ length: qualifyingGames }, (_, gi) => gi === gameIndex ? value : Number(b.games?.[gi] || 0)) } : b));
+ const updateGame = (index, gameIndex, value) => {
+  setBowlers((current) =>
+    current.map((b, i) =>
+      i === index
+        ? {
+            ...b,
+            games: Array.from(
+              { length: qualifyingGames },
+              (_, gi) => gi === gameIndex ? value : Number(b.games?.[gi] || 0)
+            ),
+          }
+        : b
+    )
+  );
+
+  setSavedScoreGames((current) => {
+    if (!current[gameIndex]) return current;
+
+    const updated = { ...current };
+    delete updated[gameIndex];
+    return updated;
+  });
+};
   const sorted = getRankedBowlers(bowlers, useHandicapScores);
   const exportRows = [["Rank", "Name", ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", "Handicap Total"], ...sorted.map((b) => [b.rank, b.name, ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, b.handicap])];
   const nextUnsavedGameIndex = Array.from({ length: qualifyingGames }, (_, gi) => gi).find(
@@ -1118,6 +1140,7 @@ const saveCurrentGame = () => {
               <tr>
                 <th className="p-2 text-left md:p-2.5">Rank</th>
                 <th className="p-2 text-left md:p-2.5">Name</th>
+                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp</th>}
                 {Array.from({ length: qualifyingGames }, (_, gi) => <th key={`score-head-${gi}`} className="p-3 text-center">G{gi + 1}</th>)}
                 <th className="p-2 text-center md:p-2.5">Scratch</th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp Total</th>}
@@ -1131,6 +1154,11 @@ const saveCurrentGame = () => {
                   <tr key={`${b.seed}-${index}`} className="border-t">
                     <td className="p-2 text-center font-semibold">{ranked?.rank ?? index + 1}</td>
                     <td className="p-2 font-semibold text-blue-950">{b.name || "—"}</td>
+                    {useHandicapScores && (
+  <td className="p-2 text-center font-semibold text-blue-950">
+    {handicapPerGame(b)}
+  </td>
+)}
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
                       <td key={gi} className="p-2 text-center">
                         <LockedScoreCell
