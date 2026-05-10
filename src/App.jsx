@@ -1029,7 +1029,7 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
 }
 
 function LockedScoreCell({ value, onChange, colIndex }) {
-  return <SmallNumberInput value={value} onChange={onChange} width="w-12 md:w-14" autoAdvance colIndex={colIndex} />;
+  return <SmallNumberInput value={value} onChange={onChange} width="w-12 md:w-14" />;
 }
 
 function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames }) {
@@ -1057,19 +1057,20 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames 
               </tr>
             </thead>
             <tbody>
-              {sorted.map((b, index) => {
-                const originalIndex = bowlers.findIndex((row) => row.seed === b.seed);
+              {bowlers.map((b, index) => {
+                const originalIndex = index;
+                const ranked = sorted.find((row) => row.seed === b.seed);
                 return (
                   <tr key={`${b.seed}-${index}`} className="border-t">
-                    <td className="p-2 text-center font-semibold">{b.rank}</td>
+                    <td className="p-2 text-center font-semibold">{ranked?.rank ?? index + 1}</td>
                     <td className="p-2"><Input value={b.name} onChange={(e) => updateBowler(originalIndex, "name", e.target.value)} /></td>
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
                       <td key={gi} className="p-2 text-center">
                         <LockedScoreCell value={Number(b.games?.[gi] || 0)} onChange={(value) => updateGame(originalIndex, gi, value)} colIndex={gi} />
                       </td>
                     ))}
-                    <td className="p-2 text-center font-semibold">{b.scratch}</td>
-                    {useHandicapScores && <td className="p-2 text-center font-semibold">{b.handicap}</td>}
+                    <td className="p-2 text-center font-semibold">{ranked?.scratch ?? 0}</td>
+                    {useHandicapScores && <td className="p-2 text-center font-semibold">{ranked?.handicap ?? 0}</td>}
                   </tr>
                 );
               })}
