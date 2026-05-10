@@ -200,6 +200,94 @@ function getLanePair(lane) {
   return `${low}-${low + 1}`;
 }
 
+function parseLaneNumbers(lanesUsed) {
+  return String(lanesUsed || "")
+    .split(",")
+    .flatMap((part) => {
+      const trimmed = part.trim();
+
+      if (trimmed.includes("-")) {
+        const [start, end] = trimmed.split("-").map(Number);
+
+        if (!Number.isFinite(start) || !Number.isFinite(end)) {
+          return [];
+        }
+
+        const low = Math.min(start, end);
+        const high = Math.max(start, end);
+
+        return Array.from(
+          { length: high - low + 1 },
+          (_, i) => low + i
+        );
+      }
+
+      const n = Number(trimmed);
+
+      return Number.isFinite(n) ? [n] : [];
+    })
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b);
+}
+
+function buildLanePairs(lanesUsed) {
+  const lanes = parseLaneNumbers(lanesUsed);
+
+  return lanes
+    .filter((lane) => lane % 2 === 1 && lanes.includes(lane + 1))
+    .map((lane) => `${lane}-${lane + 1}`);
+}
+
+function lanePairFromAssignment(laneValue) {
+  const lane = Number(
+    String(laneValue || "").match(/[0-9]+/)?.[0] || 0
+  );
+
+  if (!lane) return "";
+
+  const low = lane % 2 === 0 ? lane - 1 : lane;
+
+  return `${low}-${low + 1}`;
+}
+
+function lanePairForGame(
+  laneValue,
+  gameIndex,
+  lanesUsed,
+  movePairs = 1,
+  movementMode = "right"
+) {
+  const pairs = buildLanePairs(lanesUsed);
+
+  const startPair = lanePairFromAssignment(laneValue);
+
+  if (!startPair || !pairs.length) {
+    return startPair || "";
+  }
+
+  const startIndex = Math.max(0, pairs.indexOf(startPair));
+
+  const step = Number(movePairs || 1) * gameIndex;
+
+  if (movementMode === "left") {
+    let next = startIndex - step;
+
+    while (next < 0) next += pairs.length;
+
+    return pairs[next % pairs.length];
+  }
+
+  if (movementMode === "splitOut") {
+    const low = Number(startPair.split("-")[0]);
+
+    const offset = step * 2;
+
+    return `${low - offset}-${low + 1 + offset}`;
+  }
+
+  return pairs[(startIndex + step) % pairs.length];
+}
+
 function getBracketSize(qualifiers) {
   if (qualifiers <= 4) return 4;
   if (qualifiers <= 8) return 8;
