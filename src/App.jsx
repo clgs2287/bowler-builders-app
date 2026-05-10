@@ -1087,7 +1087,7 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }
   );
 }
 
-function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, }) {
+function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, }) {
   
  const updateGame = (index, gameIndex, value) => {
   setBowlers((current) =>
@@ -1128,13 +1128,21 @@ const saveCurrentGame = () => {
 };
 
   return (
-    <AppCard>
-      <CardContent className="p-3 md:p-5">
-        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <AppCard className="print:shadow-none">
+      <CardContent className="p-3 md:p-5 print:p-0">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between print:hidden">
           <h2 className="text-xl font-semibold text-blue-900">Scoring / Qualifying Results</h2>
-          <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("qualifying-results.csv", exportRows)}>Export Results CSV</Button>
+          <div className="flex flex-wrap gap-2">
+  <Button variant="outline" className="rounded-2xl" onClick={() => window.print()}>
+    Print Score Entry Sheet
+  </Button>
+
+  <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("qualifying-results.csv", exportRows)}>
+    Export Results CSV
+  </Button>
+</div>
         </div>
-        <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+        <div className="overflow-auto rounded-2xl border border-blue-200 bg-white print:hidden">
           <table className="w-full min-w-[640px] text-xs md:min-w-[760px] md:text-sm">
             <thead className="bg-blue-800 text-white">
               <tr>
@@ -1179,7 +1187,47 @@ const saveCurrentGame = () => {
           </table>
                 </div>
 
-<div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+<div className="hidden print:block">
+  <h1 className="mb-1 text-2xl font-black text-black">  {tournamentInfo.name || "Tournament"}
+</h1>
+
+  <table className="w-full border-collapse text-xs text-black">
+    <thead>
+      <tr>
+        <th className="border border-black p-1 text-left">#</th>
+        <th className="border border-black p-1 text-left">Bowler</th>
+        <th className="border border-black p-1 text-center">Lane</th>
+        {useHandicapScores && <th className="border border-black p-1 text-center">Hdcp</th>}
+        {Array.from({ length: qualifyingGames }, (_, gi) => (
+          <th key={`print-score-game-${gi}`} className="border border-black p-1 text-center">
+            G{gi + 1}
+          </th>
+        ))}
+        <th className="border border-black p-1 text-center">Total</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {bowlers.map((b, index) => (
+        <tr key={`print-score-row-${b.seed}-${index}`}>
+          <td className="border border-black p-1 font-bold">{index + 1}</td>
+          <td className="border border-black p-1 font-bold">{b.name || ""}</td>
+          <td className="border border-black p-1 text-center">{b.lane || ""}</td>
+          {useHandicapScores && (
+            <td className="border border-black p-1 text-center font-bold">
+              {handicapPerGame(b)}
+            </td>
+          )}
+          {Array.from({ length: qualifyingGames }, (_, gi) => (
+            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-1" />
+          ))}
+          <td className="border border-black p-1" />
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+<div className="mt-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
   <div className="text-sm font-semibold text-blue-800">
     Saved games:{" "}
     {Array.from({ length: qualifyingGames }, (_, gi) =>
@@ -2234,7 +2282,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       {selectedArchivedTournament && (
         <AppCard>
           <CardContent className="p-3 md:p-5">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between print:hidden">
               <div>
                 <h2 className="text-xl font-semibold text-blue-900">{selectedArchivedTournament.name}</h2>
                 <p className="text-sm text-blue-700">{selectedArchivedTournament.date} • {selectedArchivedTournament.center || selectedArchivedTournament.location || "No center"} • Season {selectedArchivedTournament.season || "Unassigned"}</p>
@@ -3545,7 +3593,7 @@ export default function BowlingPayoutApp() {
 
         {activeTab === "dashboard" && <AppErrorBoundary key="dashboard"><DashboardTab tournamentInfo={tournamentInfo} setTournamentInfo={setTournamentInfo} entries={entries} bowlers={bowlers} financials={financials} payoutRows={payoutRows} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} setTournamentFormat={setTournamentFormat} qualifyingGames={qualifyingGames} setQualifyingGames={setQualifyingGames} setBowlers={setBowlers} /></AppErrorBoundary>}
         {activeTab === "registration" && <RegistrationTab entries={entries} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} />}
-        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames}   />}
+        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} />}
