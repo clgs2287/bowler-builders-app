@@ -490,6 +490,8 @@ const appSections = [
     tabs: [
       { id: "bracket", label: "Bracket" },
       { id: "eliminator", label: "Eliminator" },
+      { id: "summary", label: "Cash Sheet" },
+
     ],
   },
   {
@@ -497,7 +499,6 @@ const appSections = [
     label: "Money",
     tabs: [
       { id: "payouts", label: "Payouts" },
-      { id: "summary", label: "Cash Sheet" },
     ],
   },
   {
@@ -2214,6 +2215,7 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
     }
   });
 
+  const [paidPayouts, setPaidPayouts] = useState({});
   const cashRows = cashers.map((bowler, index) => ({
     ...bowler,
     payoutLabel: payoutAssignments[index]?.label || "",
@@ -2273,7 +2275,25 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
                     {useHandicapScores && <td className="p-3 text-right">{row.handicap}</td>}
                     <td className="p-3">{row.payoutLabel}</td>
                     <td className="p-3 text-right font-bold text-green-700">{currency(row.payoutAmount)}</td>
-                    <td className="p-3"><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 print:hidden">UNPAID</span><span className="hidden print:inline">________</span></td>
+                    <td className="p-3">
+  <button
+    type="button"
+    onClick={() =>
+      setPaidPayouts((current) => ({
+        ...current,
+        [row.seed]: !current[row.seed],
+      }))
+    }
+    className={
+      paidPayouts[row.seed]
+        ? "rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 print:hidden"
+        : "rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 print:hidden"
+    }
+  >
+    {paidPayouts[row.seed] ? "PAID" : "UNPAID"}
+  </button>
+  <span className="hidden print:inline">________</span>
+</td>
                   </tr>
                 ))}
               </tbody>
