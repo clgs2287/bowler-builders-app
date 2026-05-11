@@ -3385,7 +3385,6 @@ function HighGameTab({ bowlers, useHandicapScores, sidePotState, qualifyingGames
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-blue-900">High Game Side Pots</h2>
-              <p className="text-sm text-blue-700">Scratch and handicap high game tracking for all qualifying games.</p>
             </div>
             <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("high-game-side-pots.csv", highGameCsv)}>Export High Game CSV</Button>
           </div>
@@ -3511,7 +3510,7 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
       .sort((a, b) => b.score - a.score || a.bowler.name.localeCompare(b.bowler.name));
     const highScore = scores.length ? scores[0].score : 0;
     const winners = scores.filter((item) => item.score === highScore).map((item) => item.bowler);
-    const payoutEach = winners.length ? highGamePayoutPerGame / winners.length : 0;
+    const payoutEach = winners.length ? Math.floor(highGamePayoutPerGame / winners.length) : 0;
     return { gameIndex, scores, highScore, winners, payoutEach, label: "Scratch" };
   });
 
@@ -3522,7 +3521,7 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
       .sort((a, b) => b.score - a.score || a.bowler.name.localeCompare(b.bowler.name));
     const highScore = scores.length ? scores[0].score : 0;
     const winners = scores.filter((item) => item.score === highScore).map((item) => item.bowler);
-    const payoutEach = winners.length ? handicapHighGamePayoutPerGame / winners.length : 0;
+    const payoutEach = winners.length ? Math.floor(handicapHighGamePayoutPerGame / winners.length) : 0;
     return { gameIndex, scores, highScore, winners, payoutEach, label: "Handicap" };
   });
 
@@ -3578,7 +3577,6 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
         <CardContent className="p-3 md:p-5">
           <div className="mb-4">
             <h2 className="text-xl font-semibold text-blue-900">Side Action</h2>
-            <p className="text-sm text-blue-700">Public view of bracket status, high game leaders, and side-action payouts.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {[{ id: "brackets", label: "Brackets" }, { id: "highgame", label: "High Game" }, { id: "payouts", label: "Payouts" }].map((tab) => (
@@ -3675,7 +3673,15 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
   );
 }
 
-function SideActionPayoutsTab({ bowlers, useHandicapScores, sidePotState, qualifyingGames }) {
+function SideActionPayoutsTab({
+  bowlers,
+  useHandicapScores,
+  sidePotState,
+  qualifyingGames,
+  paidSideActionPayouts = {},
+  setPaidSideActionPayouts,
+}) {
+
   const bracketSetMeta = {
     early: { label: "Scratch Games 1-3", offset: 0, scoring: "scratch" },
     handicapEarly: { label: "Handicap Games 1-3", offset: 0, scoring: "handicap" },
@@ -3760,7 +3766,7 @@ function SideActionPayoutsTab({ bowlers, useHandicapScores, sidePotState, qualif
     const scores = highGameBowlers.map((b) => ({ bowler: b, score: Number(b.games?.[gameIndex] || 0) })).filter((item) => item.score > 0);
     const highScore = scores.length ? Math.max(...scores.map((item) => item.score)) : 0;
     const winners = scores.filter((item) => item.score === highScore).map((item) => item.bowler);
-    const payoutEach = winners.length ? highGamePayoutPerGame / winners.length : 0;
+    const payoutEach = winners.length ? Math.floor(highGamePayoutPerGame / winners.length) : 0;
     winners.forEach((winner) => addPayout(payoutMap, winner, "High Game", payoutEach, `Scratch Game ${gameIndex + 1} high game (${highScore})`));
 
     if (useHandicapScores) {
@@ -3785,7 +3791,6 @@ function SideActionPayoutsTab({ bowlers, useHandicapScores, sidePotState, qualif
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-blue-900">Side Action Payouts</h2>
-              <p className="text-sm text-blue-700">Combined payouts from side-pot brackets and high game pots.</p>
             </div>
             <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-action-payouts.csv", payoutCsv)}>Export Payouts CSV</Button>
           </div>
@@ -3797,10 +3802,47 @@ function SideActionPayoutsTab({ bowlers, useHandicapScores, sidePotState, qualif
           </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[680px] text-xs md:text-sm">
-              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Brackets</th><th className="p-2 text-right md:p-3">High Game</th><th className="p-2 text-right md:p-3">Total</th><th className="p-2 text-left md:p-3">Details</th></tr></thead>
+              <thead className="bg-blue-800 text-white">
+  <tr>
+    <th className="p-2 text-left md:p-3">Bowler</th>
+    <th className="p-2 text-right md:p-3">Brackets</th>
+    <th className="p-2 text-right md:p-3">High Game</th>
+    <th className="p-2 text-right md:p-3">Total</th>
+    <th className="p-2 text-left md:p-3">Details</th>
+    <th className="p-2 text-center md:p-3">Paid?</th>
+  </tr>
+</thead>
               <tbody>
-                {payoutRows.map((row) => <tr key={`side-pay-${row.seed}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.name}</td><td className="p-2 text-right md:p-3">{currency(row.bracket)}</td><td className="p-2 text-right md:p-3">{currency(row.highGame)}</td><td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td><td className="p-2 text-xs text-blue-800 md:p-3">{row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" • ")}</td></tr>)}
-                {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={5}>No side-action payouts calculated yet.</td></tr>}
+                {payoutRows.map((row) => (
+  <tr key={`side-pay-${row.seed}`} className="border-t">
+    <td className="p-2 font-semibold md:p-3">{row.name}</td>
+    <td className="p-2 text-right md:p-3">{currency(row.bracket)}</td>
+    <td className="p-2 text-right md:p-3">{currency(row.highGame)}</td>
+    <td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td>
+    <td className="p-2 text-xs text-blue-800 md:p-3">
+      {row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" • ")}
+    </td>
+    <td className="p-2 text-center md:p-3">
+      <button
+        type="button"
+        onClick={() =>
+          setPaidSideActionPayouts((current) => ({
+            ...current,
+            [row.seed]: !current[row.seed],
+          }))
+        }
+        className={
+          paidSideActionPayouts[row.seed]
+            ? "rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+            : "rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700"
+        }
+      >
+        {paidSideActionPayouts[row.seed] ? "PAID" : "UNPAID"}
+      </button>
+    </td>
+  </tr>
+))}
+                {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No side-action payouts calculated yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -3848,6 +3890,7 @@ class AppErrorBoundary extends React.Component {
 
 export default function BowlingPayoutApp() {
   const [paidPayouts, setPaidPayouts] = useState({});
+  const [paidSideActionPayouts, setPaidSideActionPayouts] = useState({});
   const [activeTab, setActiveTab] = useState("dashboard");
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(48, 4));
@@ -3897,6 +3940,7 @@ export default function BowlingPayoutApp() {
         if (Number(parsed.qualifyingGames)) setQualifyingGames(Number(parsed.qualifyingGames));
         if (Array.isArray(parsed.bowlers)) setBowlers(parsed.bowlers.map((bowler) => normalizeBowlerGames(bowler, Number(parsed.qualifyingGames || 4))));
         if (parsed.paidPayouts) setPaidPayouts(parsed.paidPayouts);
+        if (parsed.paidSideActionPayouts) setPaidSideActionPayouts(parsed.paidSideActionPayouts);
         if (typeof parsed.useHandicapScores === "boolean") setUseHandicapScores(parsed.useHandicapScores);
         if (parsed.tournamentFormat) setTournamentFormat(parsed.tournamentFormat);
         if (parsed.tournamentInfo) setTournamentInfo(parsed.tournamentInfo);
@@ -3999,7 +4043,7 @@ export default function BowlingPayoutApp() {
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} /></AppErrorBoundary>}
         {activeTab === "highgame" && <AppErrorBoundary key="highgame"><HighGameTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
-        {activeTab === "sideactionpayouts" && <AppErrorBoundary key="sideactionpayouts"><SideActionPayoutsTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
+        {activeTab === "sideactionpayouts" && <AppErrorBoundary key="sideactionpayouts"><SideActionPayoutsTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} paidSideActionPayouts={paidSideActionPayouts} setPaidSideActionPayouts={setPaidSideActionPayouts} /></AppErrorBoundary>}
       </div>
     </div>
   );
