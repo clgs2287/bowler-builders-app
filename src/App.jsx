@@ -643,6 +643,66 @@ function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, c
   );
 }
 
+function TournamentInfoTab({ tournamentInfo, qualifyingGames, tournamentFormat, payoutState }) {
+  const [showDirectorEmail, setShowDirectorEmail] = useState(false);
+  const infoRows = [
+    ["Tournament Name", tournamentInfo.name || "Tournament"],
+    ["Date", tournamentInfo.date || "TBD"],
+    ["Center", tournamentInfo.center || "TBD"],
+    ["Address", tournamentInfo.location || "TBD"],
+["Entry Fee", currency(payoutState.entryFee || 0)],    ["Current Stage", tournamentInfo.stage || "Qualifying"],
+    ["Finals Format", tournamentFormat === "sweeper" ? "Sweeper" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"],
+    ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
+  ];
+
+  return (
+    <AppCard>
+      <CardContent className="p-4 md:p-6">
+        <h2 className="mb-5 text-center text-2xl font-bold text-blue-900">
+          Tournament Info
+        </h2>
+
+        <div className="rounded-2xl border border-blue-200 bg-white p-5">
+          <div className="space-y-4">
+            {infoRows.map(([label, value]) => (
+              <div key={label} className="flex items-center justify-between gap-6 border-b pb-3">
+                <span className="font-semibold text-blue-900">{label}</span>
+                <span className="text-right font-bold text-slate-900">{value}</span>
+              </div>
+            ))}
+
+            <div className="flex items-center justify-between gap-6">
+              <span className="font-semibold text-blue-900">Tournament Director</span>
+              <span className="text-right font-bold text-slate-900">
+                {tournamentInfo.director || "TBD"}
+{tournamentInfo.directorEmail && (
+  <>
+    <br />
+
+    {showDirectorEmail ? (
+      <span className="text-sm font-semibold text-blue-700">
+        {tournamentInfo.directorEmail}
+      </span>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setShowDirectorEmail(true)}
+        className="text-sm font-semibold text-blue-700 underline"
+      >
+        Contact Director
+      </button>
+    )}
+  </>
+)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </AppCard>
+  );
+}
+
 function AppCard({ children, className = "" }) {
   return <Card className={`rounded-xl border border-blue-300 bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
 }
@@ -795,6 +855,11 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
                 <LockedTextField label="Current Stage" value={tournamentInfo.stage} onChange={(value) => update("stage", value)} />
                 <LockedQualifyingGamesField qualifyingGames={qualifyingGames} onSave={updateQualifyingGames} />
                 <LockedTextField label="Director" value={tournamentInfo.director} onChange={(value) => update("director", value)} />
+                <LockedTextField
+  label="Director Email"
+  value={tournamentInfo.directorEmail || ""}
+  onChange={(value) => update("directorEmail", value)}
+/>
                 <LockedTextField label="Finals Format" value={tournamentFormat === "sweeper" ? "N/A" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"} onChange={() => {}} />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
                   <Label className="text-left text-sm font-bold text-blue-900">FKM Eligible</Label>
@@ -3896,6 +3961,7 @@ export default function BowlingPayoutApp() {
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} /></AppErrorBoundary>}
+        {activeTab === "tournamentInfo" && <TournamentInfoTab tournamentInfo={tournamentInfo} qualifyingGames={qualifyingGames} tournamentFormat={tournamentFormat}   payoutState={payoutState} />}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
