@@ -163,6 +163,36 @@ function calculateFinancials({ entries, entryFee, lineage, ballRaffleAdded, othe
   return { grossRevenue, lineageOwed, netFromEntries, autoPrizeFund, prizeFund, cashers, topSpots, middleSpots, bottomSpots, format };
 }
 
+function getTournamentStage({
+  bowlers,
+  qualifyingGames,
+  savedScoreGames,
+  tournamentFormat,
+}) {
+  const qualifyingComplete = Array.from(
+    { length: qualifyingGames || 0 },
+    (_, gi) => gi
+  ).every((gi) => savedScoreGames?.[gi]);
+
+  if (!qualifyingComplete) {
+    return "Qualifying";
+  }
+
+  if (tournamentFormat === "sweeper") {
+    return "Finished";
+  }
+
+  if (tournamentFormat === "eliminator") {
+    return "Eliminator Game 1";
+  }
+
+  if (tournamentFormat === "bracket") {
+    return "Match Play Round 1";
+  }
+
+  return "Qualifying";
+}
+
 function buildPayoutRows({ financials, middlePercent, minCashPercent, rounding, sameThirdFourth, manualOverridesEnabled, overrides }) {
   const middlePct = Number(middlePercent || 0) / 100;
   const bottomPct = Number(minCashPercent || 0) / 100;
@@ -643,14 +673,24 @@ function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, c
   );
 }
 
-function TournamentInfoTab({ tournamentInfo, qualifyingGames, tournamentFormat, payoutState }) {
+function TournamentInfoTab({
+  tournamentInfo,
+  qualifyingGames,
+  tournamentFormat,
+  payoutState,
+  savedScoreGames,
+}) {
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
   const infoRows = [
     ["Tournament Name", tournamentInfo.name || "Tournament"],
     ["Date", tournamentInfo.date || "TBD"],
     ["Center", tournamentInfo.center || "TBD"],
     ["Address", tournamentInfo.location || "TBD"],
-["Entry Fee", currency(payoutState.entryFee || 0)],    ["Current Stage", tournamentInfo.stage || "Qualifying"],
+["Entry Fee", currency(payoutState.entryFee || 0)],    ["Current Stage", getTournamentStage({
+  qualifyingGames,
+  savedScoreGames,
+  tournamentFormat,
+})],
     ["Finals Format", tournamentFormat === "sweeper" ? "Sweeper" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"],
     ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
   ];
@@ -793,9 +833,9 @@ function LockedQualifyingGamesField({ qualifyingGames, onSave }) {
   );
 }
 
-function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, financials, payoutRows, useHandicapScores, tournamentFormat, setTournamentFormat, qualifyingGames, setQualifyingGames, setBowlers }) {
-  const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
+function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, financials, payoutRows, useHandicapScores, tournamentFormat, setTournamentFormat, qualifyingGames, setQualifyingGames, savedScoreGames, setBowlers }) { 
   const totalPaid = payoutRows.reduce((sum, row) => sum + row.totalPaid, 0);
+  const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
   const updateQualifyingGames = (value) => {
     const next = Math.max(1, Math.min(12, Number(value || 1)));
@@ -820,7 +860,16 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
                 <LockedTextField label="Season" value={tournamentInfo.season || ""} onChange={(value) => update("season", value)} />
                   <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
 
-<LockedTextField label="Current Stage" value={tournamentInfo.stage} onChange={(value) => update("stage", value)} />
+<LockedTextField
+  label="Current Stage"
+  value={getTournamentStage({
+    bowlers,
+    qualifyingGames,
+    savedScoreGames,
+    tournamentFormat,
+  })}
+  onChange={(value) => update("stage", value)}
+/>
 
 <LockedQualifyingGamesField qualifyingGames={qualifyingGames} onSave={updateQualifyingGames} />
 
@@ -4025,7 +4074,7 @@ export default function BowlingPayoutApp() {
           </div>
         </div>
 
-        {activeTab === "dashboard" && <AppErrorBoundary key="dashboard"><DashboardTab tournamentInfo={tournamentInfo} setTournamentInfo={setTournamentInfo} entries={entries} bowlers={bowlers} financials={financials} payoutRows={payoutRows} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} setTournamentFormat={setTournamentFormat} qualifyingGames={qualifyingGames} setQualifyingGames={setQualifyingGames} setBowlers={setBowlers} /></AppErrorBoundary>}
+        {activeTab === "dashboard" && <AppErrorBoundary key="dashboard"><DashboardTab tournamentInfo={tournamentInfo} setTournamentInfo={setTournamentInfo} entries={entries} bowlers={bowlers} financials={financials} payoutRows={payoutRows} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} setTournamentFormat={setTournamentFormat} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setQualifyingGames={setQualifyingGames} setBowlers={setBowlers} /></AppErrorBoundary>}
         {activeTab === "registration" && <RegistrationTab entries={entries} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} />}
         {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
@@ -4037,7 +4086,15 @@ export default function BowlingPayoutApp() {
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} /></AppErrorBoundary>}
-        {activeTab === "tournamentInfo" && <TournamentInfoTab tournamentInfo={tournamentInfo} qualifyingGames={qualifyingGames} tournamentFormat={tournamentFormat}   payoutState={payoutState} />}
+{activeTab === "tournamentInfo" && (
+  <TournamentInfoTab
+    tournamentInfo={tournamentInfo}
+    qualifyingGames={qualifyingGames}
+    tournamentFormat={tournamentFormat}
+    payoutState={payoutState}
+    savedScoreGames={savedScoreGames}
+  />
+)}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
