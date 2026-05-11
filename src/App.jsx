@@ -818,6 +818,19 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
                 <LockedTextField label="Center" value={tournamentInfo.center || ""} onChange={(value) => update("center", value)} />
                 <LockedTextField label="Address" value={tournamentInfo.location} onChange={(value) => update("location", value)} />
                 <LockedTextField label="Season" value={tournamentInfo.season || ""} onChange={(value) => update("season", value)} />
+                  <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
+
+<LockedTextField label="Current Stage" value={tournamentInfo.stage} onChange={(value) => update("stage", value)} />
+
+<LockedQualifyingGamesField qualifyingGames={qualifyingGames} onSave={updateQualifyingGames} />
+
+<LockedTextField label="Director" value={tournamentInfo.director} onChange={(value) => update("director", value)} />
+
+<LockedTextField
+  label="Director Email"
+  value={tournamentInfo.directorEmail || ""}
+  onChange={(value) => update("directorEmail", value)}
+/>
               </div>
               <div className="space-y-3">
                 <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
@@ -852,14 +865,32 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
     placeholder="Example: 10,14,18,12,16,20"
   />
 )}
-                <LockedTextField label="Current Stage" value={tournamentInfo.stage} onChange={(value) => update("stage", value)} />
-                <LockedQualifyingGamesField qualifyingGames={qualifyingGames} onSave={updateQualifyingGames} />
-                <LockedTextField label="Director" value={tournamentInfo.director} onChange={(value) => update("director", value)} />
-                <LockedTextField
-  label="Director Email"
-  value={tournamentInfo.directorEmail || ""}
-  onChange={(value) => update("directorEmail", value)}
+
+<LockedTextField
+  label="Livestream Link"
+  value={tournamentInfo.streamLink || ""}
+  onChange={(value) => update("streamLink", value)}
 />
+
+<LockedTextField
+  label="Sponsors"
+  value={tournamentInfo.sponsors || ""}
+  onChange={(value) => update("sponsors", value)}
+  placeholder="Separate sponsors with commas"
+/>
+
+<div className="space-y-2">
+  <Label className="text-sm font-bold text-blue-900">
+    Tournament Notes
+  </Label>
+
+  <textarea
+    value={tournamentInfo.notes || ""}
+    onChange={(e) => update("notes", e.target.value)}
+    placeholder="Tournament rules, schedule notes, announcements, etc."
+    className="min-h-[120px] w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
+  />
+</div>
                 <LockedTextField label="Finals Format" value={tournamentFormat === "sweeper" ? "N/A" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"} onChange={() => {}} />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
                   <Label className="text-left text-sm font-bold text-blue-900">FKM Eligible</Label>
