@@ -164,10 +164,10 @@ function calculateFinancials({ entries, entryFee, lineage, ballRaffleAdded, othe
 }
 
 function getTournamentStage({
-  bowlers,
   qualifyingGames,
   savedScoreGames,
   tournamentFormat,
+  savedFinalsRounds = {},
 }) {
   const qualifyingComplete = Array.from(
     { length: qualifyingGames || 0 },
@@ -183,6 +183,18 @@ function getTournamentStage({
   }
 
   if (tournamentFormat === "eliminator") {
+    if (savedFinalsRounds.stepladderFinal) {
+      return "Finished";
+    }
+
+    if (savedFinalsRounds.eliminatorGame2) {
+      return "Stepladder Finals";
+    }
+
+    if (savedFinalsRounds.eliminatorGame1) {
+      return "Eliminator Game 2";
+    }
+
     return "Eliminator Game 1";
   }
 
@@ -466,15 +478,16 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState 
 }
 
 function winnerFromMatch(left, right, leftScore, rightScore) {
-  if (!left && !right) return null;
-  if (!left || left.name === "BYE") return right;
-  if (!right || right.name === "BYE") return left;
-  if (leftScore === "" || rightScore === "") return null;
-  const l = Number(leftScore);
-  const r = Number(rightScore);
+  if (!left || !right) return null;
+
+  const l = Number(leftScore || 0);
+  const r = Number(rightScore || 0);
+
+  if (l <= 0 && r <= 0) return null;
   if (l > r) return left;
   if (r > l) return right;
-  return { name: "TIE", seed: Math.min(Number(left.seed || 0), Number(right.seed || 0)) };
+
+  return null;
 }
 
 function TabButton({ active, onClick, children }) {
@@ -690,7 +703,9 @@ function TournamentInfoTab({
   qualifyingGames,
   savedScoreGames,
   tournamentFormat,
-})],
+  savedFinalsRounds,
+})]
+
     ["Finals Format", tournamentFormat === "sweeper" ? "Sweeper" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"],
     ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
   ];
@@ -833,8 +848,22 @@ function LockedQualifyingGamesField({ qualifyingGames, onSave }) {
   );
 }
 
-function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, financials, payoutRows, useHandicapScores, tournamentFormat, setTournamentFormat, qualifyingGames, setQualifyingGames, savedScoreGames, setBowlers }) { 
-  const totalPaid = payoutRows.reduce((sum, row) => sum + row.totalPaid, 0);
+function DashboardTab({
+  tournamentInfo,
+  setTournamentInfo,
+  entries,
+  bowlers,
+  financials,
+  payoutRows,
+  useHandicapScores,
+  tournamentFormat,
+  setTournamentFormat,
+  qualifyingGames,
+  savedScoreGames,
+  savedFinalsRounds,
+  setQualifyingGames,
+  setBowlers,
+}) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
   const updateQualifyingGames = (value) => {
@@ -867,6 +896,7 @@ function DashboardTab({ tournamentInfo, setTournamentInfo, entries, bowlers, fin
     qualifyingGames,
     savedScoreGames,
     tournamentFormat,
+    savedFinalsRounds,
   })}
   onChange={(value) => update("stage", value)}
 />
@@ -2326,7 +2356,8 @@ function BracketRoundColumn({ title, matches, scores, onScoreChange, topOffset =
   );
 }
 
-function BracketTab({ entries, bowlers, useHandicapScores, bracketState, setBracketState }) {
+function BracketTab({ entries, bowlers, useHandicapScores, bracketState, setBracketState,savedFinalsRounds,
+setSavedFinalsRounds }) {
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState });
   const handleScoreChange = (scoreKey, value) => setBracketState((current) => ({ ...current, scores: { ...(current.scores || {}), [scoreKey]: value } }));
 
@@ -2367,7 +2398,8 @@ function EliminatorScoreInput({ value, onChange }) {
   return <Input className="w-20 text-center" inputMode="numeric" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
 }
 
-function EliminatorTab({ entries, bowlers, useHandicapScores, eliminatorState, setEliminatorState }) {
+function EliminatorTab({ entries, bowlers, useHandicapScores, eliminatorState, setEliminatorState,savedFinalsRounds,
+setSavedFinalsRounds }) {
   const game1Scores = eliminatorState.game1Scores || {};
   const game2Scores = eliminatorState.game2Scores || {};
   const stepScores = eliminatorState.stepScores || {};
@@ -2396,7 +2428,65 @@ function EliminatorTab({ entries, bowlers, useHandicapScores, eliminatorState, s
   const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
   const StepScore = ({ scoreKey }) => <Input className="w-20 text-center" inputMode="numeric" value={stepScores[scoreKey] ?? ""} onChange={(e) => updateStep(scoreKey, e.target.value)} />;
   const StepMatch = ({ title, match, winner }) => <div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"><h3 className="mb-3 font-semibold text-blue-900">{title}</h3><div className="grid grid-cols-[1fr_auto] items-center gap-2"><span>{match.left?.name || "TBD"}</span><StepScore scoreKey={`${match.id}-l`} /><span>{match.right?.name || "TBD"}</span><StepScore scoreKey={`${match.id}-r`} /></div><p className="mt-3 text-sm text-blue-700">Winner: <span className="font-semibold text-blue-900">{winner?.name || "TBD"}</span></p></div>;
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label="Cut Bowlers" value={cutCount} /><StatCard label="Game 1 Advancers" value={game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} /></div><p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler’s 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2><p className="mb-4 text-sm text-blue-700">Average + Game 1. Top half advances.</p><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><EliminatorScoreInput value={game1Scores[row.seed] ?? ""} onChange={(value) => updateGame1(row.seed, value)} /></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 2</h2><p className="mb-4 text-sm text-blue-700">Game 1 total + Game 2. Top 4 advance to stepladder.</p><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><EliminatorScoreInput value={game2Scores[row.seed] ?? ""} onChange={(value) => updateGame2(row.seed, value)} /></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">Seeded by eliminator results. No averages are added in the stepladder.</p><div className="grid gap-4 lg:grid-cols-4"><div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"><h3 className="mb-3 font-semibold text-blue-900">Seeds</h3>{[1, 2, 3, 4].map((seed) => <p key={seed} className="mb-2 text-sm"><span className="font-bold">#{seed}</span> {seedMap[seed]?.name || "TBD"}</p>)}</div><StepMatch title="Match 1: #4 vs #3" match={stepMatch1} winner={stepWinner1} /><StepMatch title="Match 2: Winner vs #2" match={stepMatch2} winner={stepWinner2} /><StepMatch title="Championship: Winner vs #1" match={championship} winner={champion} /></div></CardContent></AppCard></div>;
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label="Cut Bowlers" value={cutCount} /><StatCard label="Game 1 Advancers" value={game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} /></div><p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler’s 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
+
+<p className="mb-4 text-sm text-blue-700">
+  Average + Game 1. Top half advances.
+</p>
+
+<div className="mb-4">
+  <Button
+    onClick={() =>
+      setSavedFinalsRounds((current) => ({
+        ...current,
+        eliminatorGame1: true,
+      }))
+    }
+  >
+    Save Eliminator Game 1
+  </Button>
+</div>
+
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><EliminatorScoreInput value={game1Scores[row.seed] ?? ""} onChange={(value) => updateGame1(row.seed, value)} /></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">
+  Eliminator Game 2
+</h2>
+
+<p className="mb-4 text-sm text-blue-700">
+  Game 1 total + Game 2. Top 4 advance to stepladder.
+</p>
+
+<div className="mb-4">
+  <Button
+    onClick={() =>
+      setSavedFinalsRounds((current) => ({
+        ...current,
+        eliminatorGame2: true,
+      }))
+    }
+  >
+    Save Eliminator Game 2
+  </Button>
+</div>
+
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><EliminatorScoreInput value={game2Scores[row.seed] ?? ""} onChange={(value) => updateGame2(row.seed, value)} /></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">
+  Seeded by eliminator results. No averages are added in the stepladder.
+</p>
+
+<div className="mb-4">
+  <Button
+    onClick={() =>
+      setSavedFinalsRounds((current) => ({
+        ...current,
+        stepladderFinal: true,
+      }))
+    }
+  >
+    Save Stepladder Finals
+  </Button>
+</div>
+
+<div className="grid gap-4 lg:grid-cols-4"><StepMatch title="Match 1: Winner vs #4" match={stepMatch1} winner={stepWinner1} /><StepMatch title="Match 2: Winner vs #2" match={stepMatch2} winner={stepWinner2} /><StepMatch title="Championship: Winner vs #1" match={championship} winner={champion} /></div></CardContent></AppCard></div>;  
+
 }
 
 function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHandicapScores, tournamentInfo, tournamentFormat, bracketState, eliminatorState, paidPayouts = {}, setPaidPayouts }) {
@@ -3956,6 +4046,7 @@ export default function BowlingPayoutApp() {
   const [manualTitles, setManualTitles] = useState([]);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [savedScoreGames, setSavedScoreGames] = useState({});
+  const [savedFinalsRounds, setSavedFinalsRounds] = useState({});
   if (typeof window !== "undefined") window.__currentTournamentFormat = tournamentFormat;
 
   useEffect(() => {
@@ -3996,6 +4087,7 @@ export default function BowlingPayoutApp() {
         if (parsed.payoutState) setPayoutState({ ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
         if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, ...parsed.bracketState });
         if (parsed.savedScoreGames) setSavedScoreGames(parsed.savedScoreGames);
+        if (parsed.savedFinalsRounds) setSavedFinalsRounds(parsed.savedFinalsRounds);
         if (parsed.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...parsed.eliminatorState });
         if (parsed.sidePotState) setSidePotState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: 0, highGamePrice: 10, handicapHighGamePrice: 10, entries: {}, bracketSets: { early: parsed.sidePotState.entries || {}, handicapEarly: {}, middle: {}, late: {} }, brackets: [], bracketGroups: { early: parsed.sidePotState.brackets || [], handicapEarly: [], middle: [], late: [] }, leftovers: 0, leftoversBySet: { early: parsed.sidePotState.leftovers || 0, handicapEarly: 0, middle: 0, late: 0 }, refunds: [], refundsBySet: { early: parsed.sidePotState.refunds || [], handicapEarly: [], middle: [], late: [] }, selectedPlanIds: { early: parsed.sidePotState.selectedPlanId || "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only" }, ...parsed.sidePotState });
       }
@@ -4013,8 +4105,7 @@ export default function BowlingPayoutApp() {
     } catch (error) {
       console.warn("Could not auto-save tournament data", error);
     }
-  }, [qualifyingGames, savedScoreGames, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, payoutState, bracketState, eliminatorState, sidePotState, hasLoadedSavedData]);
-
+  }, [qualifyingGames, savedScoreGames, savedFinalsRounds, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, payoutState, bracketState, eliminatorState, sidePotState, hasLoadedSavedData]); 
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
     if (!confirmed) return;
@@ -4074,15 +4165,56 @@ export default function BowlingPayoutApp() {
           </div>
         </div>
 
-        {activeTab === "dashboard" && <AppErrorBoundary key="dashboard"><DashboardTab tournamentInfo={tournamentInfo} setTournamentInfo={setTournamentInfo} entries={entries} bowlers={bowlers} financials={financials} payoutRows={payoutRows} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} setTournamentFormat={setTournamentFormat} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setQualifyingGames={setQualifyingGames} setBowlers={setBowlers} /></AppErrorBoundary>}
+        {activeTab === "dashboard" && (
+  <AppErrorBoundary key="dashboard">
+    <DashboardTab
+      tournamentInfo={tournamentInfo}
+      setTournamentInfo={setTournamentInfo}
+      entries={entries}
+      bowlers={bowlers}
+      financials={financials}
+      payoutRows={payoutRows}
+      useHandicapScores={useHandicapScores}
+      tournamentFormat={tournamentFormat}
+      setTournamentFormat={setTournamentFormat}
+      qualifyingGames={qualifyingGames}
+      savedScoreGames={savedScoreGames}
+      savedFinalsRounds={savedFinalsRounds}
+      setQualifyingGames={setQualifyingGames}
+      setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
+
+    />
+  </AppErrorBoundary>
+)}
         {activeTab === "registration" && <RegistrationTab entries={entries} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} />}
         {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} />}
         {activeTab === "summary" && <SummaryCashSheetTab entries={entries} bowlers={bowlers} payoutRows={payoutRows} financials={financials} useHandicapScores={useHandicapScores} tournamentInfo={tournamentInfo} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} paidPayouts={paidPayouts}setPaidPayouts={setPaidPayouts}/>}
-        {activeTab === "bracket" && <BracketTab entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} setBracketState={setBracketState} />}
-        {activeTab === "eliminator" && <EliminatorTab entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} setEliminatorState={setEliminatorState} />}
+ {activeTab === "bracket" && (
+  <BracketTab
+    entries={entries}
+    bowlers={bowlers}
+    useHandicapScores={useHandicapScores}
+    bracketState={bracketState}
+    setBracketState={setBracketState}
+    savedFinalsRounds={savedFinalsRounds}
+    setSavedFinalsRounds={setSavedFinalsRounds}
+  />
+)}
+
+{activeTab === "eliminator" && (
+  <EliminatorTab
+    entries={entries}
+    bowlers={bowlers}
+    useHandicapScores={useHandicapScores}
+    eliminatorState={eliminatorState}
+    setEliminatorState={setEliminatorState}
+    savedFinalsRounds={savedFinalsRounds}
+    setSavedFinalsRounds={setSavedFinalsRounds}
+  />
+)}
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} /></AppErrorBoundary>}
