@@ -164,6 +164,9 @@ function calculateFinancials({ entries, entryFee, lineage, ballRaffleAdded, othe
 }
 
 function getTournamentStage({
+  bowlers = [],
+  eliminatorState = {},
+  useHandicapScores = false,
   qualifyingGames,
   savedScoreGames,
   tournamentFormat,
@@ -183,9 +186,77 @@ function getTournamentStage({
   }
 
   if (tournamentFormat === "eliminator") {
-    if (savedFinalsRounds.stepladderFinal) {
-      return "Finished";
-    }
+if (savedFinalsRounds.stepladderFinal) {
+  const game1Scores = eliminatorState?.game1Scores || {};
+  const game2Scores = eliminatorState?.game2Scores || {};
+  const stepScores = eliminatorState?.stepScores || {};
+
+  const cutCount = Math.ceil(bowlers.length / 4);
+
+  const cutBowlers = getRankedBowlers(
+    bowlers,
+    useHandicapScores
+  ).slice(0, cutCount);
+
+  const baseRows = cutBowlers.map((b) => {
+    const average =
+      completedGamesCount(b) > 0
+        ? (useHandicapScores ? b.handicap : b.scratch) /
+          completedGamesCount(b)
+        : 0;
+
+    const g1 = Number(game1Scores[b.seed] || 0);
+    const game1Total = g1 > 0 ? average + g1 : 0;
+
+    return { ...b, average, game1Total };
+  });
+
+  const game1Ranked = rankRows(baseRows, "game1Total");
+
+  const game1Advancers = game1Ranked.filter(
+    (row) => row.rank <= Math.max(4, Math.ceil(cutBowlers.length / 2))
+  );
+
+  const game2Rows = game1Advancers.map((b) => {
+    const g2 = Number(game2Scores[b.seed] || 0);
+    const game2Total = g2 > 0 ? b.game1Total + g2 : b.game1Total;
+
+    return { ...b, game2Total };
+  });
+
+  const game2Ranked = rankRows(game2Rows, "game2Total");
+
+  const finalists = game2Ranked
+    .slice(0, 4)
+    .map((b, index) => ({ ...b, stepSeed: index + 1 }));
+
+  const seedMap = Object.fromEntries(
+    finalists.map((b) => [b.stepSeed, b])
+  );
+
+  const stepWinner1 = winnerFromMatch(
+    seedMap[4],
+    seedMap[3],
+    stepScores["step-1-l"],
+    stepScores["step-1-r"]
+  );
+
+  const stepWinner2 = winnerFromMatch(
+    stepWinner1,
+    seedMap[2],
+    stepScores["step-2-l"],
+    stepScores["step-2-r"]
+  );
+
+  const champion = winnerFromMatch(
+    stepWinner2,
+    seedMap[1],
+    stepScores["step-3-l"],
+    stepScores["step-3-r"]
+  );
+
+  return `Winner - ${champion?.name || "Champion TBD"}`;
+}
 
     if (savedFinalsRounds.eliminatorGame2) {
       return "Stepladder Finals";
@@ -692,23 +763,41 @@ function TournamentInfoTab({
   tournamentFormat,
   payoutState,
   savedScoreGames,
+  savedFinalsRounds,
+  bowlers,
+  eliminatorState,
+  useHandicapScores,
 }) {
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
-  const infoRows = [
-    ["Tournament Name", tournamentInfo.name || "Tournament"],
-    ["Date", tournamentInfo.date || "TBD"],
-    ["Center", tournamentInfo.center || "TBD"],
-    ["Address", tournamentInfo.location || "TBD"],
-["Entry Fee", currency(payoutState.entryFee || 0)],    ["Current Stage", getTournamentStage({
-  qualifyingGames,
-  savedScoreGames,
-  tournamentFormat,
-  savedFinalsRounds,
-})]
-
-    ["Finals Format", tournamentFormat === "sweeper" ? "Sweeper" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"],
-    ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
-  ];
+const infoRows = [
+  ["Tournament Name", tournamentInfo.name || "Tournament"],
+  ["Date", tournamentInfo.date || "TBD"],
+  ["Center", tournamentInfo.center || "TBD"],
+  ["Address", tournamentInfo.location || "TBD"],
+  ["Entry Fee", currency(payoutState.entryFee || 0)],
+[
+  "Current Stage",
+  getTournamentStage({
+    bowlers,
+    eliminatorState,
+    useHandicapScores,
+    qualifyingGames,
+    savedScoreGames,
+    tournamentFormat,
+    savedFinalsRounds,
+  }),
+],
+  ["Qualifying Games", qualifyingGames || 4],
+  [
+    "Finals Format",
+    tournamentFormat === "sweeper"
+      ? "Sweeper"
+      : tournamentFormat === "bracket"
+        ? "Bracket"
+        : "Eliminator",
+  ],
+  ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
+];
 
   return (
     <AppCard>
@@ -719,12 +808,40 @@ function TournamentInfoTab({
 
         <div className="rounded-2xl border border-blue-200 bg-white p-5">
           <div className="space-y-4">
-            {infoRows.map(([label, value]) => (
-              <div key={label} className="flex items-center justify-between gap-6 border-b pb-3">
-                <span className="font-semibold text-blue-900">{label}</span>
-                <span className="text-right font-bold text-slate-900">{value}</span>
-              </div>
-            ))}
+{infoRows.map(([label, value]) => {
+  const isCurrentStage = label === "Current Stage";
+
+  return (
+    <div
+      key={label}
+      className={
+        isCurrentStage
+          ? "flex items-center justify-between gap-6 rounded-2xl border border-green-300 bg-green-50 p-4"
+          : "flex items-center justify-between gap-6 border-b pb-3"
+      }
+    >
+      <span
+        className={
+          isCurrentStage
+            ? "text-lg font-bold text-blue-900"
+            : "font-semibold text-blue-900"
+        }
+      >
+        {label}
+      </span>
+
+      <span
+        className={
+          isCurrentStage
+            ? "text-right text-2xl font-black text-green-700"
+            : "text-right font-bold text-slate-900"
+        }
+      >
+        {value}
+      </span>
+    </div>
+  );
+})}
 
             <div className="flex items-center justify-between gap-6">
               <span className="font-semibold text-blue-900">Tournament Director</span>
@@ -762,15 +879,30 @@ function AppCard({ children, className = "" }) {
   return <Card className={`rounded-xl border border-blue-300 bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
 }
 
-function LockedTextField({ label, value, onChange, type = "text" }) {
+function LockedTextField({ label, value, onChange, type = "text", placeholder = "" }) {
   const isBlank = !String(value || "").trim();
   const [editing, setEditing] = useState(isBlank);
+  const [draftValue, setDraftValue] = useState(value || "");
 
   useEffect(() => {
+    if (!editing) {
+      setDraftValue(value || "");
+    }
+
     if (!String(value || "").trim()) {
       setEditing(true);
     }
-  }, [value]);
+  }, [value, editing]);
+
+  const saveValue = () => {
+    onChange(draftValue);
+    setEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setDraftValue(value || "");
+    setEditing(false);
+  };
 
   if (!editing && !isBlank) {
     return (
@@ -778,7 +910,10 @@ function LockedTextField({ label, value, onChange, type = "text" }) {
         <Label className="text-left text-sm font-bold text-blue-900">{label}</Label>
         <button
           type="button"
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            setDraftValue(value || "");
+            setEditing(true);
+          }}
           className="min-h-[38px] w-full rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-left text-sm font-semibold text-blue-950 shadow-sm hover:bg-blue-100"
           title="Click to edit"
         >
@@ -793,13 +928,14 @@ function LockedTextField({ label, value, onChange, type = "text" }) {
       <Label className="text-left text-sm font-bold text-blue-900">{label}</Label>
       <Input
         type={type}
-        value={value || ""}
+        value={draftValue}
+        placeholder={placeholder}
         autoFocus
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => setEditing(false)}
+        onChange={(e) => setDraftValue(e.target.value)}
+        onBlur={saveValue}
         onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") setEditing(false);
+          if (e.key === "Enter") saveValue();
+          if (e.key === "Escape") cancelEdit();
         }}
         className="w-full"
       />
@@ -863,6 +999,7 @@ function DashboardTab({
   savedFinalsRounds,
   setQualifyingGames,
   setBowlers,
+  eliminatorState,
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
@@ -893,6 +1030,8 @@ function DashboardTab({
   label="Current Stage"
   value={getTournamentStage({
     bowlers,
+    eliminatorState,
+    useHandicapScores,
     qualifyingGames,
     savedScoreGames,
     tournamentFormat,
@@ -2394,8 +2533,63 @@ setSavedFinalsRounds }) {
   );
 }
 
-function EliminatorScoreInput({ value, onChange }) {
-  return <Input className="w-20 text-center" inputMode="numeric" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />;
+function EliminatorScoreInput({ value, onChange, locked = false }) {
+  const [editing, setEditing] = useState(false);
+
+  if (locked && !editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="w-20 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-center font-bold text-blue-950"
+        title="Click to edit saved score"
+      >
+        {value || "—"}
+      </button>
+    );
+  }
+
+  return (
+    <Input
+      className="w-20 text-center"
+      inputMode="numeric"
+      value={value ?? ""}
+      autoFocus={editing}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={() => setEditing(false)}
+    />
+  );
+}
+
+function StepScore({ scoreKey, stepScores, updateStep }) {
+  return (
+    <Input
+      className="w-20 text-center"
+      inputMode="numeric"
+      value={stepScores?.[scoreKey] ?? ""}
+      onChange={(e) => updateStep(scoreKey, e.target.value)}
+    />
+  );
+}
+
+function StepMatch({ title, match, winner, stepScores, updateStep }) {
+  return (
+    <div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+      <h3 className="mb-3 font-semibold text-blue-900">{title}</h3>
+
+      <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+        <span>{match.left?.name || "TBD"}</span>
+        <StepScore scoreKey={`${match.id}-l`} stepScores={stepScores} updateStep={updateStep} />
+
+        <span>{match.right?.name || "TBD"}</span>
+        <StepScore scoreKey={`${match.id}-r`} stepScores={stepScores} updateStep={updateStep} />
+      </div>
+
+      <p className="mt-3 text-sm text-blue-700">
+        Winner: <span className="font-semibold text-blue-900">{winner?.name || "TBD"}</span>
+      </p>
+    </div>
+  );
 }
 
 function EliminatorTab({ entries, bowlers, useHandicapScores, eliminatorState, setEliminatorState,savedFinalsRounds,
@@ -2426,8 +2620,6 @@ setSavedFinalsRounds }) {
   const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "");
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
   const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
-  const StepScore = ({ scoreKey }) => <Input className="w-20 text-center" inputMode="numeric" value={stepScores[scoreKey] ?? ""} onChange={(e) => updateStep(scoreKey, e.target.value)} />;
-  const StepMatch = ({ title, match, winner }) => <div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"><h3 className="mb-3 font-semibold text-blue-900">{title}</h3><div className="grid grid-cols-[1fr_auto] items-center gap-2"><span>{match.left?.name || "TBD"}</span><StepScore scoreKey={`${match.id}-l`} /><span>{match.right?.name || "TBD"}</span><StepScore scoreKey={`${match.id}-r`} /></div><p className="mt-3 text-sm text-blue-700">Winner: <span className="font-semibold text-blue-900">{winner?.name || "TBD"}</span></p></div>;
   return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label="Cut Bowlers" value={cutCount} /><StatCard label="Game 1 Advancers" value={game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} /></div><p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler’s 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
 
 <p className="mb-4 text-sm text-blue-700">
@@ -2447,8 +2639,11 @@ setSavedFinalsRounds }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><EliminatorScoreInput value={game1Scores[row.seed] ?? ""} onChange={(value) => updateGame1(row.seed, value)} /></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">
-  Eliminator Game 2
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><EliminatorScoreInput
+  value={game1Scores[row.seed] ?? ""}
+  onChange={(value) => updateGame1(row.seed, value)}
+  locked={Boolean(savedFinalsRounds?.eliminatorGame1)}
+/></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900"> 
 </h2>
 
 <p className="mb-4 text-sm text-blue-700">
@@ -2468,8 +2663,11 @@ setSavedFinalsRounds }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><EliminatorScoreInput value={game2Scores[row.seed] ?? ""} onChange={(value) => updateGame2(row.seed, value)} /></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">
-  Seeded by eliminator results. No averages are added in the stepladder.
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><EliminatorScoreInput
+  value={game2Scores[row.seed] ?? ""}
+  onChange={(value) => updateGame2(row.seed, value)}
+  locked={Boolean(savedFinalsRounds?.eliminatorGame2)}
+/></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700"> 
 </p>
 
 <div className="mb-4">
@@ -2485,7 +2683,31 @@ setSavedFinalsRounds }) {
   </Button>
 </div>
 
-<div className="grid gap-4 lg:grid-cols-4"><StepMatch title="Match 1: Winner vs #4" match={stepMatch1} winner={stepWinner1} /><StepMatch title="Match 2: Winner vs #2" match={stepMatch2} winner={stepWinner2} /><StepMatch title="Championship: Winner vs #1" match={championship} winner={champion} /></div></CardContent></AppCard></div>;  
+<div className="grid gap-4 lg:grid-cols-4"><StepMatch
+  title="Match 1: Winner vs #4"
+  match={stepMatch1}
+  winner={stepWinner1}
+  stepScores={stepScores}
+  updateStep={updateStep}
+/>
+
+<StepMatch
+  title="Match 2: Winner vs #2"
+  match={stepMatch2}
+  winner={stepWinner2}
+  stepScores={stepScores}
+  updateStep={updateStep}
+/>
+
+<StepMatch
+  title="Championship: Winner vs #1"
+  match={championship}
+  winner={champion}
+  stepScores={stepScores}
+  updateStep={updateStep}
+/>
+
+</div></CardContent></AppCard></div>;
 
 }
 
@@ -4181,6 +4403,7 @@ export default function BowlingPayoutApp() {
       savedScoreGames={savedScoreGames}
       savedFinalsRounds={savedFinalsRounds}
       setQualifyingGames={setQualifyingGames}
+      eliminatorState={eliminatorState}
       setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
 
     />
@@ -4219,13 +4442,17 @@ export default function BowlingPayoutApp() {
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
-  <TournamentInfoTab
-    tournamentInfo={tournamentInfo}
-    qualifyingGames={qualifyingGames}
-    tournamentFormat={tournamentFormat}
-    payoutState={payoutState}
-    savedScoreGames={savedScoreGames}
-  />
+<TournamentInfoTab
+  tournamentInfo={tournamentInfo}
+  qualifyingGames={qualifyingGames}
+  tournamentFormat={tournamentFormat}
+  payoutState={payoutState}
+  savedScoreGames={savedScoreGames}
+  savedFinalsRounds={savedFinalsRounds}
+  bowlers={bowlers}
+  eliminatorState={eliminatorState}
+  useHandicapScores={useHandicapScores}
+/>
 )}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
