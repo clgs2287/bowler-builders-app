@@ -165,13 +165,14 @@ function calculateFinancials({ entries, entryFee, lineage, ballRaffleAdded, othe
 
 function getTournamentStage({
   bowlers = [],
+  bracketState = {},
   eliminatorState = {},
   useHandicapScores = false,
   qualifyingGames,
   savedScoreGames,
   tournamentFormat,
   savedFinalsRounds = {},
-}) {
+  }) {
   const qualifyingComplete = Array.from(
     { length: qualifyingGames || 0 },
     (_, gi) => gi
@@ -269,9 +270,40 @@ if (savedFinalsRounds.stepladderFinal) {
     return "Eliminator Game 1";
   }
 
-  if (tournamentFormat === "bracket") {
-    return "Match Play Round 1";
+if (tournamentFormat === "bracket") {
+  const qualifiers = Math.ceil((bowlers || []).length / 4);
+  const size = getBracketSize(qualifiers);
+  const totalRounds = typeof size === "number" ? Math.log2(size) : 0;
+
+  const roundNames = {
+    2: ["Semifinal", "Final"],
+    3: ["Quarterfinal", "Semifinal", "Final"],
+    4: ["Round of 16", "Quarterfinal", "Semifinal", "Final"],
+    5: ["Round of 32", "Round of 16", "Quarterfinal", "Semifinal", "Final"],
+    6: ["Round of 64", "Round of 32", "Round of 16", "Quarterfinal", "Semifinal", "Final"],
+  };
+
+  const names = roundNames[totalRounds] || ["Match Play Round 1"];
+
+  const finalRoundIndex = totalRounds - 1;
+
+  if (savedFinalsRounds[`bracketRound${finalRoundIndex}`]) {
+    const { champion } = buildBracketRounds({
+      entries: bowlers.length,
+      bowlers,
+      useHandicapScores,
+      bracketState,
+    });
+
+    return `Winner - ${champion?.name || "Champion TBD"}`;
   }
+
+  const savedCount = names.findIndex(
+    (_, index) => !savedFinalsRounds[`bracketRound${index}`]
+  );
+
+  return names[savedCount === -1 ? finalRoundIndex : savedCount];
+}
 
   return "Qualifying";
 }
@@ -549,7 +581,12 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState 
 }
 
 function winnerFromMatch(left, right, leftScore, rightScore) {
-  if (!left || !right) return null;
+  const leftIsBye = !left || left.name === "BYE";
+  const rightIsBye = !right || right.name === "BYE";
+
+  if (leftIsBye && rightIsBye) return null;
+  if (!leftIsBye && rightIsBye) return left;
+  if (leftIsBye && !rightIsBye) return right;
 
   const l = Number(leftScore || 0);
   const r = Number(rightScore || 0);
@@ -767,6 +804,7 @@ function TournamentInfoTab({
   bowlers,
   eliminatorState,
   useHandicapScores,
+  bracketState,
 }) {
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
 const infoRows = [
@@ -785,6 +823,7 @@ const infoRows = [
     savedScoreGames,
     tournamentFormat,
     savedFinalsRounds,
+    bracketState,
   }),
 ],
   ["Qualifying Games", qualifyingGames || 4],
@@ -997,6 +1036,7 @@ function DashboardTab({
   qualifyingGames,
   savedScoreGames,
   savedFinalsRounds,
+  bracketState,
   setQualifyingGames,
   setBowlers,
   eliminatorState,
@@ -1036,6 +1076,7 @@ function DashboardTab({
     savedScoreGames,
     tournamentFormat,
     savedFinalsRounds,
+    bracketState,
   })}
   onChange={(value) => update("stage", value)}
 />
@@ -2468,10 +2509,21 @@ function BracketMatchEditor({ match, scores, onScoreChange }) {
   );
 }
 
-function BracketRoundColumn({ title, matches, scores, onScoreChange, topOffset = 0, gap = 16, roundIndex = 0 }) {
+function BracketRoundColumn({
+  title,
+  matches,
+  scores,
+  onScoreChange,
+  topOffset = 0,
+  gap = 16,
+  roundIndex = 0,
+  savedFinalsRounds,
+  setSavedFinalsRounds,
+}) {
   const matchHeight = 84;
   const firstRoundGap = 24;
   const step = matchHeight + firstRoundGap;
+
   const getTop = (matchIndex) => {
     if (roundIndex === 0) {
       return matchIndex * (matchHeight + firstRoundGap + 18);
@@ -2483,7 +2535,23 @@ function BracketRoundColumn({ title, matches, scores, onScoreChange, topOffset =
   const columnHeight = Math.max(1, matches.length) * (matchHeight + firstRoundGap + 18) * Math.max(1, 2 ** roundIndex);
   return (
     <div className="min-w-[260px] flex-1">
-      <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
+      <div className="mb-3 flex flex-col items-center gap-2">
+  <h3 className="text-center font-semibold text-blue-900">
+    {title}
+  </h3>
+
+  <Button
+    size="sm"
+    onClick={() =>
+      setSavedFinalsRounds((current) => ({
+        ...current,
+        [`bracketRound${roundIndex}`]: true,
+      }))
+    }
+  >
+    Save Round
+  </Button>
+</div>
       <div className="relative" style={{ height: columnHeight }}>
         {matches.map((match, matchIndex) => (
           <div key={match.id} className="absolute left-0 right-0" style={{ top: getTop(matchIndex) }}>
@@ -2521,13 +2589,26 @@ setSavedFinalsRounds }) {
 
         {size === "Over 64" ? (
           <p className="rounded-2xl bg-white p-4 text-blue-700">This template supports up to 64 qualifiers.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border bg-blue-50 p-4">
-            <div className="flex min-w-max items-start gap-8">
-              {bracketRounds.map((round, roundIndex) => <BracketRoundColumn key={round.title} title={round.title} matches={round.matches} scores={scores} onScoreChange={handleScoreChange} topOffset={round.topOffset} gap={round.gap} roundIndex={roundIndex} />)}
-            </div>
-          </div>
-        )}
+) : (
+  <div className="overflow-x-auto rounded-2xl border bg-blue-50 p-4">
+    <div className="flex min-w-max items-start gap-8">
+      {bracketRounds.map((round, roundIndex) => (
+        <BracketRoundColumn
+          key={round.title}
+          title={round.title}
+          matches={round.matches}
+          scores={scores}
+          onScoreChange={handleScoreChange}
+          topOffset={round.topOffset}
+          gap={round.gap}
+          roundIndex={roundIndex}
+          savedFinalsRounds={savedFinalsRounds}
+          setSavedFinalsRounds={setSavedFinalsRounds}
+        />
+      ))}
+    </div>
+  </div>
+)}
       </CardContent>
     </AppCard>
   );
@@ -4403,6 +4484,7 @@ export default function BowlingPayoutApp() {
       savedScoreGames={savedScoreGames}
       savedFinalsRounds={savedFinalsRounds}
       setQualifyingGames={setQualifyingGames}
+      bracketState={bracketState}
       eliminatorState={eliminatorState}
       setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
 
@@ -4452,6 +4534,7 @@ export default function BowlingPayoutApp() {
   bowlers={bowlers}
   eliminatorState={eliminatorState}
   useHandicapScores={useHandicapScores}
+  bracketState={bracketState}
 />
 )}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
