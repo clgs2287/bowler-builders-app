@@ -1150,7 +1150,21 @@ function DashboardTab({
     className="min-h-[120px] w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
   />
 </div>
-                <LockedTextField label="Finals Format" value={tournamentFormat === "sweeper" ? "N/A" : tournamentFormat === "bracket" ? "Bracket" : "Eliminator"} onChange={() => {}} />
+                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+  <Label className="text-left text-sm font-bold text-blue-900">
+    Finals Format
+  </Label>
+
+  <select
+    value={tournamentFormat}
+    onChange={(e) => setTournamentFormat(e.target.value)}
+    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+  >
+    <option value="eliminator">Eliminator</option>
+    <option value="bracket">Bracket</option>
+    <option value="sweeper">Sweeper</option>
+  </select>
+</div>
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
                   <Label className="text-left text-sm font-bold text-blue-900">FKM Eligible</Label>
                   <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 shadow-sm">
@@ -1239,25 +1253,7 @@ function DashboardTab({
             <StatCard label="Format" value={tournamentFormat === "bracket" ? "Bracket" : tournamentFormat === "sweeper" ? "Sweeper" : "Eliminator"} />
             
           </div>
-          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-blue-100 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-            <p className="font-medium text-blue-950">Tournament Finals Format</p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { id: "eliminator", label: "Eliminator" },
-                { id: "bracket", label: "Bracket" },
-                { id: "sweeper", label: "Sweeper" },
-              ].map((format) => (
-                <button
-                  key={format.id}
-                  type="button"
-                  onClick={() => setTournamentFormat(format.id)}
-                  className={tournamentFormat === format.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}
-                >
-                  {format.label}
-                </button>
-              ))}
-            </div>
-          </div>
+
         </CardContent>
       </AppCard>
 
@@ -3758,7 +3754,9 @@ function HighGameTab({ bowlers, useHandicapScores, sidePotState, qualifyingGames
 
     const highScore = scores.length ? scores[0].score : 0;
     const winners = scores.filter((item) => item.score === highScore).map((item) => item.bowler);
-    const payoutEach = winners.length ? perGamePayout / winners.length : 0;
+    const payoutEach = winners.length
+  ? Math.floor(perGamePayout / winners.length)
+  : 0;
 
     return { gameIndex, scores, highScore, winners, payoutEach, useHandicap };
   });
