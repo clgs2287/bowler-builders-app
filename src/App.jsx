@@ -3135,6 +3135,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   const selectedArchivedTournament = tournamentHistory.find((t) => t.id === selectedArchivedTournamentId);
   const selectedSnapshot = selectedArchivedTournament?.activeSnapshot || null;
   const payoutAssignments = [];
+  const [archiveSort, setArchiveSort] = useState({ key: "place", direction: "asc" });
 
   payoutRows.forEach((row) => {
     for (let i = 0; i < row.players; i += 1) payoutAssignments.push(row.finalPerPlayer);
@@ -3266,8 +3267,196 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             {archivedDetailSection === "results" && (
               <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
                 <table className="w-full min-w-[760px] text-xs md:text-sm">
-                  <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Place</th><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Games</th><th className="p-2 text-right md:p-3">Scratch</th><th className="p-2 text-right md:p-3">Average</th><th className="p-2 text-right md:p-3">Cut Made</th><th className="p-2 text-right md:p-3">Payout</th></tr></thead>
-                  <tbody>{[...(selectedArchivedTournament.results || [])].sort((a, b) => a.place - b.place).map((result) => <tr key={`${selectedArchivedTournament.id}-${result.bowlerId}`} className={result.title ? "border-t bg-yellow-50" : result.cashed ? "border-t bg-blue-50" : "border-t"}><td className="p-2 font-bold md:p-3">#{result.place}</td><td className="p-2 font-semibold md:p-3">{result.name}</td><td className="p-2 text-right md:p-3">{(result.games || []).join("-")}</td><td className="p-2 text-right md:p-3">{result.scratchTotal}</td><td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td><td className="p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td><td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(result.payout || 0)}</td></tr>)}</tbody>
+                  <thead className="bg-blue-800 text-white"><tr><th
+  className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "place",
+      direction:
+        current.column === "place" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Place
+</th> <th
+  className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "name",
+      direction:
+        current.column === "name" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Bowler
+</th> <th className="p-2 text-right md:p-3">
+  Games
+</th>
+
+<th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "scratch",
+      direction:
+        current.column === "scratch" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  {Boolean(selectedSnapshot?.useHandicapScores)
+    ? "Scratch"
+    : "Total"}
+</th>
+
+{selectedSnapshot?.useHandicapScores && (
+  <th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "handicap",
+      direction:
+        current.column === "handicap" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Hdcp
+</th>
+)}
+
+<th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "average",
+      direction:
+        current.column === "average" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Average
+</th>
+<th className="p-2 text-right md:p-3">Cashed</th>
+<th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "payout",
+      direction:
+        current.column === "payout" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Payout
+</th>
+</tr>
+</thead>
+
+<tbody>
+{[...(selectedArchivedTournament.results || [])]
+  .sort((a, b) => {
+    const dir = archiveSort.direction === "asc" ? 1 : -1;
+
+    if (archiveSort.column === "name") {
+      return String(a.name || "").localeCompare(String(b.name || "")) * dir;
+    }
+
+    if (archiveSort.column === "scratch") {
+      return (Number(a.scratchTotal || 0) - Number(b.scratchTotal || 0)) * dir;
+    }
+
+    if (archiveSort.column === "handicap") {
+  const getHdcpTotal = (result) =>
+    Number(result.scratchTotal || 0) +
+    ((selectedSnapshot?.bowlers?.find((b) => b.name === result.name)?.handicapPerGame || 0) *
+      ((result.games || []).length || 0));
+
+  return (getHdcpTotal(a) - getHdcpTotal(b)) * dir;
+}
+
+    if (archiveSort.column === "average") {
+      return (Number(a.average || 0) - Number(b.average || 0)) * dir;
+    }
+
+    if (archiveSort.column === "payout") {
+      return (Number(a.payout || 0) - Number(b.payout || 0)) * dir;
+    }
+
+    return (Number(a.place || 0) - Number(b.place || 0)) * dir;
+  })
+  .map((result) => (
+      <tr
+        key={`${selectedArchivedTournament.id}-${result.bowlerId}`}
+        className={
+          result.title
+            ? "border-t bg-yellow-50"
+            : result.cashed
+              ? "border-t bg-blue-50"
+              : "border-t"
+        }
+      >
+        <td className="p-2 font-bold md:p-3">
+          #{result.place}
+        </td>
+
+<td className="p-2 font-semibold md:p-3">
+  {result.name}
+
+  {Boolean(selectedSnapshot?.useHandicapScores) && (
+    <span className="ml-2 text-xs font-semibold text-blue-700">
+(+{selectedSnapshot?.bowlers?.find(
+  (b) => b.name === result.name
+)?.handicapPerGame || 0})
+    </span>
+  )}
+</td>
+
+        <td className="p-2 text-right md:p-3">
+          {(result.games || []).join("-")}
+        </td>
+
+        <td className="p-2 text-right md:p-3">
+          {result.scratchTotal}
+        </td>
+
+{Boolean(selectedSnapshot?.useHandicapScores) && (
+  <td className="p-2 text-right font-semibold text-blue-700 md:p-3">
+    {Number(result.scratchTotal || 0) +
+      (
+        (selectedSnapshot?.bowlers?.find(
+          (b) => b.name === result.name
+        )?.handicapPerGame || 0) *
+        ((result.games || []).length || 0)
+      )}
+  </td>
+)}
+
+        <td className="p-2 text-right font-semibold md:p-3">
+          {Number(result.average || 0).toFixed(2)}
+        </td>
+
+        <td className="p-2 text-right md:p-3">
+          {result.cashed ? "Yes" : "No"}
+        </td>
+
+        <td className="p-2 text-right font-bold text-green-700 md:p-3">
+          {currency(result.payout || 0)}
+        </td>
+      </tr>
+    ))}
+</tbody>
+
                 </table>
               </div>
             )}
@@ -3379,7 +3568,85 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
           <h2 className="mb-4 text-xl font-semibold text-blue-900">Title Leaderboard</h2>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[560px] text-xs md:text-sm">
-              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Total</th><th className="p-2 text-right md:p-3">FKM</th><th className="p-2 text-right md:p-3">Non-FKM</th><th className="p-2 text-left md:p-3">Seasons</th><th className="p-2 text-left md:p-3">Latest</th></tr></thead>
+              <thead className="bg-blue-800 text-white"><tr><th
+  className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "name",
+      direction:
+        current.column === "name" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Bowler
+</th> <th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "titles",
+      direction:
+        current.column === "titles" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Titles
+</th> <th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "fkmTitles",
+      direction:
+        current.column === "fkmTitles" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  FKM
+</th> <th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "nonFkmTitles",
+      direction:
+        current.column === "nonFkmTitles" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Non-FKM
+</th> <th
+  className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "seasonsText",
+      direction:
+        current.column === "seasonsText" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Seasons
+</th> <th
+  className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "latest",
+      direction:
+        current.column === "latest" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Latest
+</th></tr></thead>
               <tbody>{titleLeaderRows.map((row) => <tr key={`title-leader-${row.bowler}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.bowler}</td><td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td><td className="p-2 text-right font-bold text-green-700 md:p-3">{row.fkmTitles}</td><td className="p-2 text-right font-bold text-slate-700 md:p-3">{row.nonFkmTitles}</td><td className="p-2 text-blue-900 md:p-3">{row.seasonsText || "—"}</td><td className="p-2 text-blue-900 md:p-3">{row.latest || "—"}</td></tr>)}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No titles entered yet.</td></tr>}</tbody>
             </table>
           </div>
