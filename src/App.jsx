@@ -149,18 +149,75 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
-function calculateFinancials({ entries, entryFee, lineage, ballRaffleAdded, otherAddedMoney, prizeFundOverride, cashersOverride }) {
-  const grossRevenue = Number(entries || 0) * Number(entryFee || 0);
-  const lineageOwed = Number(entries || 0) * Number(lineage || 0);
-  const netFromEntries = grossRevenue - lineageOwed;
-  const autoPrizeFund = netFromEntries + Number(ballRaffleAdded || 0) + Number(otherAddedMoney || 0);
-  const prizeFund = Number(prizeFundOverride || 0) > 0 ? Number(prizeFundOverride) : autoPrizeFund;
-  const cashers = Number(cashersOverride || 0) > 0 ? Number(cashersOverride) : Math.round(Number(entries || 0) / 4);
+function calculateFinancials({
+  entries,
+  entryFee,
+  lineagePerGame,
+  qualifyingGames,
+  finalsGames,
+  ballRaffleAdded,
+  otherAddedMoney,
+  prizeFundOverride,
+  cashersOverride,
+}) {
+  const grossRevenue =
+    Number(entries || 0) * Number(entryFee || 0);
+
+  const lineageOwed =
+    (Number(entries || 0) *
+      Number(qualifyingGames || 4) *
+      Number(lineagePerGame || 4)) +
+    (Number(finalsGames || 0) *
+      Number(lineagePerGame || 4));
+
+  const netFromEntries =
+    grossRevenue - lineageOwed;
+
+  const autoPrizeFund =
+    netFromEntries +
+    Number(ballRaffleAdded || 0) +
+    Number(otherAddedMoney || 0);
+
+  const prizeFund =
+    Number(prizeFundOverride || 0) > 0
+      ? Number(prizeFundOverride)
+      : autoPrizeFund;
+
+  const cashers =
+    Number(cashersOverride || 0) > 0
+      ? Number(cashersOverride)
+      : Math.round(Number(entries || 0) / 4);
+
   const topSpots = Math.min(4, cashers);
-  const middleSpots = Math.max(Math.min(4, cashers - topSpots), 0);
-  const bottomSpots = Math.max(cashers - topSpots - middleSpots, 0);
-  const format = cashers <= 4 ? "Top 4 Only" : cashers <= 8 ? "Top 4 + Middle" : "Top 4 + Middle + Bottom";
-  return { grossRevenue, lineageOwed, netFromEntries, autoPrizeFund, prizeFund, cashers, topSpots, middleSpots, bottomSpots, format };
+  const middleSpots = Math.max(
+    Math.min(4, cashers - topSpots),
+    0
+  );
+
+  const bottomSpots = Math.max(
+    cashers - topSpots - middleSpots,
+    0
+  );
+
+  const format =
+    cashers <= 4
+      ? "Top 4 Only"
+      : cashers <= 8
+        ? "Top 4 + Middle"
+        : "Top 4 + Middle + Bottom";
+
+  return {
+    grossRevenue,
+    lineageOwed,
+    netFromEntries,
+    autoPrizeFund,
+    prizeFund,
+    cashers,
+    topSpots,
+    middleSpots,
+    bottomSpots,
+    format,
+  };
 }
 
 function getTournamentStage({
@@ -1040,6 +1097,7 @@ function DashboardTab({
   setQualifyingGames,
   setBowlers,
   eliminatorState,
+  payoutState,
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
@@ -1050,6 +1108,13 @@ function DashboardTab({
   };
   const nonFkmTitles = [];
   const deleteManualTitle = () => {};
+  const lineagePerGame = Number(payoutState.lineagePerGame || 4);
+const payoutQualifyingGames = Number(payoutState.qualifyingGames || qualifyingGames || 4);
+const finalsGames = Number(payoutState.finalsGames || 0);
+
+const totalLineageOwed =
+  entries * payoutQualifyingGames * lineagePerGame +
+  finalsGames * lineagePerGame;
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -1210,7 +1275,7 @@ function DashboardTab({
     <div className="flex items-center justify-between border-b pb-2">
       <span className="font-semibold text-blue-900">Lineage</span>
       <span className="font-bold text-slate-900">
-        {currency(financials.lineageOwed)}
+        {currency(totalLineageOwed)}
       </span>
     </div>
 
@@ -1855,15 +1920,309 @@ const saveCurrentGame = () => {
   );
 }
 
-function PayoutsTab({ entries, payoutState, setPayoutState, financials, payoutRows }) {
-  const totalPaid = payoutRows.reduce((sum, row) => sum + row.totalPaid, 0);
-  const difference = financials.prizeFund - totalPaid;
-  const totalPercent = payoutRows.reduce((sum, row) => sum + row.players * row.percentPerPlayer, 0);
-  const update = (key, value) => setPayoutState((current) => ({ ...current, [key]: value }));
-  const updateOverride = (key, value) => setPayoutState((current) => ({ ...current, overrides: { ...current.overrides, [key]: value } }));
-  return <div className="space-y-3 md:space-y-4"><div className="grid gap-4 lg:grid-cols-12"><AppCard className="lg:col-span-7"><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Tournament Financials</h2><div className="grid gap-4 md:grid-cols-3"><div className="space-y-2"><Label>Total Entries</Label><Input type="number" value={entries} disabled /></div>{[["entryFee", "Entry Fee / Entry ($)"], ["lineage", "Lineage / Entry ($)"], ["ballRaffleAdded", "Ball Raffle Added ($)"], ["otherAddedMoney", "Other Added Money ($)"], ["prizeFundOverride", "Prize Fund Override ($)"], ["cashersOverride", "Paid Spots Override"], ["minCashPercent", "Min-Cash % / Player"], ["middlePercent", "Middle Tier % / Player"], ["rounding", "Round To ($)"]].map(([key, label]) => <div key={key} className="space-y-2"><Label>{label}</Label><Input type="number" value={payoutState[key]} onChange={(e) => update(key, Number(e.target.value) || 0)} /></div>)}</div></CardContent></AppCard><AppCard className="lg:col-span-5"><CardContent className="space-y-4 p-5"><div className="flex justify-between"><h2 className="text-xl font-semibold text-blue-900">Payout Controls</h2><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => downloadCsv("bowler-builders-payouts.csv", [["Published Label", "Tier", "Players", "Final Per Player", "Total Paid"], ...payoutRows.map((r) => [r.label, r.tier, r.players, r.finalPerPlayer, r.totalPaid])])}>Export CSV</Button></div><div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-blue-100"><div><p className="font-medium">3rd & 4th same payout?</p><p className="text-sm text-blue-700">Matches the Excel toggle.</p></div><Switch checked={payoutState.sameThirdFourth} onCheckedChange={(v) => update("sameThirdFourth", v)} /></div><div className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-blue-100"><div><p className="font-medium">Manual percent overrides?</p><p className="text-sm text-blue-700">Turn off for auto Top 4 ratios.</p></div><Switch checked={payoutState.manualOverridesEnabled} onCheckedChange={(v) => update("manualOverridesEnabled", v)} /></div><div className="w-full"><StatCard label="Prize Fund" value={currency(financials.prizeFund)} /><StatCard label="Cashers" value={financials.cashers} /><StatCard label="Format" value={financials.format} /><StatCard label="Difference" value={currency(difference)} /></div></CardContent></AppCard></div><div className="grid gap-4 lg:grid-cols-12"><AppCard className="lg:col-span-4"><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Percent Overrides</h2><div className="grid gap-3">{[["first", "1st %"], ["second", "2nd %"], ["third", payoutState.sameThirdFourth ? "3rd-4th % / Player" : "3rd %"], ["fourth", "4th %"], ["middle", "Middle %"], ["bottom", "Bottom %"]].map(([key, label]) => <div key={key} className="grid grid-cols-2 items-center gap-3"><Label>{label}</Label><Input type="number" disabled={!payoutState.manualOverridesEnabled || (key === "fourth" && payoutState.sameThirdFourth)} placeholder="Auto" value={payoutState.overrides[key]} onChange={(e) => updateOverride(key, e.target.value)} /></div>)}</div></CardContent></AppCard><AppCard className="lg:col-span-8"><CardContent className="p-3 md:p-5"><h2 className="text-xl font-semibold text-blue-900">Published Payout List</h2><div className="mt-4 overflow-hidden rounded-2xl border border-blue-200 bg-white"><table className="w-full text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Published</th><th className="p-2 text-left md:p-2.5">Tier</th><th className="p-2 text-right md:p-2.5">Players</th><th className="p-2 text-right md:p-2.5">% / Player</th><th className="p-2 text-right md:p-2.5">Final / Player</th><th className="p-2 text-right md:p-2.5">Total Paid</th></tr></thead><tbody>{payoutRows.map((row) => <tr key={row.id} className="border-t"><td className="p-3 font-semibold">{row.label}</td><td className="p-3">{row.tier}</td><td className="p-3 text-right">{row.players}</td><td className="p-3 text-right">{(row.percentPerPlayer * 100).toFixed(2)}%</td><td className="p-3 text-right font-semibold">{currency(row.finalPerPlayer)}</td><td className="p-3 text-right">{currency(row.totalPaid)}</td></tr>)}</tbody><tfoot className="border-t bg-blue-50"><tr><td className="p-3 font-semibold" colSpan={3}>Checks</td><td className="p-3 text-right">{(totalPercent * 100).toFixed(2)}%</td><td className="p-3 text-right font-semibold">Difference</td><td className="p-3 text-right font-semibold">{currency(difference)}</td></tr></tfoot></table></div></CardContent></AppCard></div></div>;
+function PayoutsTab({
+  entries,
+  payoutState,
+  setPayoutState,
+  financials,
+  payoutRows,
+  tournamentFormat,
+}) {
+  const totalPaid = payoutRows.reduce(
+    (sum, row) => sum + row.totalPaid,
+    0
+  );
+
+  const difference =
+    financials.prizeFund - totalPaid;
+
+  const totalPercent = payoutRows.reduce(
+    (sum, row) =>
+      sum + row.players * row.percentPerPlayer,
+    0
+  );
+
+  const lineagePerGame = Number(
+    payoutState.lineagePerGame || 4
+  );
+
+  const qualifyingGames = Number(
+    payoutState.qualifyingGames || 4
+  );
+
+  const autoFinalsGames = (() => {
+    if (tournamentFormat === "sweeper") {
+      return 0;
+    }
+
+if (tournamentFormat === "eliminator") {
+  const qualifiers = Math.max(4, Math.ceil(entries / 4));
+
+  return qualifiers + Math.ceil(qualifiers / 2) + 6;
 }
 
+if (tournamentFormat === "bracket") {
+  const qualifiers = Math.max(4, Math.ceil(entries / 4));
+  const bracketSize = getBracketSize(qualifiers);
+
+  if (typeof bracketSize !== "number") {
+    return 0;
+  }
+
+  return qualifiers + bracketSize - 2;
+}
+
+    return 0;
+  })();
+
+  const finalsGames =
+    payoutState.finalsGamesOverrideEnabled
+      ? Number(payoutState.finalsGames || 0)
+      : autoFinalsGames;
+
+  const qualifyingLineage =
+    entries * qualifyingGames * lineagePerGame;
+
+  const finalsLineage =
+    finalsGames * lineagePerGame;
+
+  const totalLineageOwed =
+    qualifyingLineage + finalsLineage;
+  const suggestedFinalsGames = (() => {
+  if (payoutState.finalsGamesOverrideEnabled) {
+    return Number(payoutState.finalsGames || 0);
+  }
+
+  if (payoutState.tournamentFormat === "sweeper") {
+    return 0;
+  }
+
+  if (payoutState.tournamentFormat === "eliminator") {
+    return 18;
+  }
+
+  if (payoutState.tournamentFormat === "bracket") {
+    const suggestedQualifiers = Math.ceil(entries / 4);
+    const bracketSize = getBracketSize(suggestedQualifiers);
+
+    return typeof bracketSize === "number"
+      ? (bracketSize - 1) * 2
+      : 0;
+  }
+
+  return 0;
+})();
+
+  const update = (key, value) =>
+    setPayoutState((current) => ({ ...current, [key]: value }));
+
+  const updateOverride = (key, value) =>
+    setPayoutState((current) => ({
+      ...current,
+      overrides: { ...current.overrides, [key]: value },
+    }));
+
+  const financialFields = [
+    ["entryFee", "Entry Fee / Entry ($)"],
+    ["lineagePerGame", "Lineage / Game ($)"],
+    ["qualifyingGames", "Qualifying Games"],
+    ["finalsGames", "Finals Games Bowled"],
+    ["ballRaffleAdded", "Ball Raffle Added ($)"],
+    ["otherAddedMoney", "Other Added Money ($)"],
+    ["prizeFundOverride", "Prize Fund Override ($)"],
+    ["cashersOverride", "Paid Spots Override"],
+    ["minCashPercent", "Min-Cash % / Player"],
+    ["middlePercent", "Middle Tier % / Player"],
+    ["rounding", "Round To ($)"],
+  ];
+
+  return (
+    <div className="space-y-3 md:space-y-4">
+      <div className="grid gap-4 lg:grid-cols-12">
+        <AppCard className="lg:col-span-12">
+          <CardContent className="p-3 md:p-5">
+            <h2 className="mb-4 text-center text-xl font-semibold text-blue-900">
+              Tournament Financials
+            </h2>
+
+            <div className="mb-4 grid gap-3 md:grid-cols-2">
+              <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-white p-4">
+                <div>
+                  <p className="font-medium">3rd & 4th same payout?</p>
+                  <p className="text-sm text-blue-700">Matches the Excel toggle.</p>
+                </div>
+                <Switch
+                  checked={payoutState.sameThirdFourth}
+                  onCheckedChange={(v) => update("sameThirdFourth", v)}
+                />
+              </div>
+
+<div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-white p-4">
+  <div>
+    <p className="font-medium">Manual percent overrides?</p>
+    <p className="text-sm text-blue-700">
+      Turn off for auto Top 4 ratios.
+    </p>
+  </div>
+
+  <Switch
+    checked={payoutState.manualOverridesEnabled}
+    onCheckedChange={(v) =>
+      update("manualOverridesEnabled", v)
+    }
+  />
+</div>
+
+<div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-white p-4">
+  <div>
+    <p className="font-medium">Manual finals games?</p>
+    <p className="text-sm text-blue-700">
+      Turn on to override automatic finals lineage.
+    </p>
+  </div>
+
+  <Switch
+    checked={payoutState.finalsGamesOverrideEnabled}
+    onCheckedChange={(v) =>
+      update("finalsGamesOverrideEnabled", v)
+    }
+  />
+</div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="flex flex-col justify-end gap-2">
+                <Label>Total Entries</Label>
+                <Input
+                  type="number"
+                  value={entries}
+                  disabled
+                  className="!border-blue-100 !bg-blue-50 text-right"
+                />
+              </div>
+
+              {financialFields.map(([key, label]) => (
+                <div key={key} className="flex flex-col justify-end gap-2">
+                  <Label>{label}</Label>
+                  <Input
+                    type="number"
+                    value={
+  key === "finalsGames" && !payoutState.finalsGamesOverrideEnabled
+    ? finalsGames
+    : payoutState[key] ?? ""
+}                    disabled={(key === "finalsGames" && !payoutState.finalsGamesOverrideEnabled) || (key === "prizeFundOverride" && payoutState.prizeFundOverrideDisabled) || (key === "cashersOverride" && payoutState.cashersOverrideDisabled)}
+                    onChange={(e) => update(key, Number(e.target.value) || 0)}
+                    className="!border-blue-100 !bg-blue-50 text-right focus:!border-blue-400 focus:!bg-white"
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </AppCard>
+
+        <AppCard className="lg:col-span-12">
+          <CardContent className="p-3 md:p-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <StatCard label="Qualifying Lineage" value={currency(qualifyingLineage)} />
+              <StatCard label="Finals Lineage" value={currency(finalsLineage)} />
+              <StatCard label="Total Lineage Owed" value={currency(totalLineageOwed)} />
+            </div>
+          </CardContent>
+        </AppCard>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-12">
+        <AppCard className="lg:col-span-4">
+          <CardContent className="p-3 md:p-5">
+            <h2 className="mb-3 text-xl font-semibold text-blue-900">
+              Percent Overrides
+            </h2>
+
+            <div className="grid gap-3">
+              {[
+                ["first", "1st %"],
+                ["second", "2nd %"],
+                ["third", payoutState.sameThirdFourth ? "3rd-4th % / Player" : "3rd %"],
+                ["fourth", "4th %"],
+                ["middle", "Middle %"],
+                ["bottom", "Bottom %"],
+              ].map(([key, label]) => (
+                <div key={key} className="grid grid-cols-2 items-center gap-3">
+                  <Label>{label}</Label>
+                  <Input
+                    type="number"
+                    disabled={
+                      !payoutState.manualOverridesEnabled ||
+                      (key === "fourth" && payoutState.sameThirdFourth)
+                    }
+                    placeholder="Auto"
+                    value={payoutState.overrides[key]}
+                    onChange={(e) => updateOverride(key, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </AppCard>
+
+        <AppCard className="lg:col-span-8">
+          <CardContent className="p-3 md:p-5">
+            <h2 className="text-xl font-semibold text-blue-900">
+              Published Payout List
+            </h2>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border border-blue-200 bg-white">
+              <table className="w-full text-sm">
+                <thead className="bg-blue-800 text-white">
+                  <tr>
+                    <th className="p-2 text-left md:p-2.5">Published</th>
+                    <th className="p-2 text-left md:p-2.5">Tier</th>
+                    <th className="p-2 text-right md:p-2.5">Players</th>
+                    <th className="p-2 text-right md:p-2.5">% / Player</th>
+                    <th className="p-2 text-right md:p-2.5">Final / Player</th>
+                    <th className="p-2 text-right md:p-2.5">Total Paid</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {payoutRows.map((row) => (
+                    <tr key={row.id} className="border-t">
+                      <td className="p-3 font-semibold">{row.label}</td>
+                      <td className="p-3">{row.tier}</td>
+                      <td className="p-3 text-right">{row.players}</td>
+                      <td className="p-3 text-right">
+                        {(row.percentPerPlayer * 100).toFixed(2)}%
+                      </td>
+                      <td className="p-3 text-right font-semibold">
+                        {currency(row.finalPerPlayer)}
+                      </td>
+                      <td className="p-3 text-right">{currency(row.totalPaid)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+
+                <tfoot className="border-t bg-blue-50">
+                  <tr>
+                    <td className="p-3 font-semibold" colSpan={3}>
+                      Checks
+                    </td>
+                    <td className="p-3 text-right">
+                      {(totalPercent * 100).toFixed(2)}%
+                    </td>
+                    <td className="p-3 text-right font-semibold">Difference</td>
+                    <td className="p-3 text-right font-semibold">
+                      {currency(difference)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </CardContent>
+        </AppCard>
+      </div>
+    </div>
+  );
+}
 function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifyingGames }) {
   const gamesCount = Math.max(1, Number(qualifyingGames || 4));
   const normalizeLane = (lane) => String(lane || "").trim().toUpperCase();
@@ -5098,7 +5457,23 @@ export default function BowlingPayoutApp() {
     setUseHandicapScores(false);
     setTournamentFormat("eliminator");
     setTournamentInfo({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true });
-    setPayoutState({ entryFee: 60, lineage: 18, ballRaffleAdded: 235, otherAddedMoney: 0, prizeFundOverride: 0, cashersOverride: 0, minCashPercent: 4, middlePercent: 5, rounding: 5, sameThirdFourth: true, manualOverridesEnabled: true, overrides: defaultOverrides });
+    setPayoutState({
+  entryFee: 60,
+  lineage: 18,
+  lineagePerGame: 4,
+  qualifyingGames: 4,
+  finalsGames: 0,
+  ballRaffleAdded: 235,
+  otherAddedMoney: 0,
+  prizeFundOverride: 0,
+  cashersOverride: 0,
+  minCashPercent: 4,
+  middlePercent: 5,
+  rounding: 5,
+  sameThirdFourth: true,
+  manualOverridesEnabled: true,
+  overrides: defaultOverrides,
+});
     setBracketState({ manualQualifiers: "", scores: {} });
     setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
     setSidePotState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: 0, highGamePrice: 10, handicapHighGamePrice: 10, entries: {}, bracketSets: { early: {}, handicapEarly: {}, middle: {}, late: {} }, brackets: [], bracketGroups: { early: [], handicapEarly: [], middle: [], late: [] }, leftovers: 0, leftoversBySet: { early: 0, handicapEarly: 0, middle: 0, late: 0 }, refunds: [], refundsBySet: { early: [], handicapEarly: [], middle: [], late: [] }, selectedPlanIds: { early: "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only" } });
@@ -5135,6 +5510,7 @@ export default function BowlingPayoutApp() {
       bowlers={bowlers}
       financials={financials}
       payoutRows={payoutRows}
+      payoutState={payoutState}
       useHandicapScores={useHandicapScores}
       tournamentFormat={tournamentFormat}
       setTournamentFormat={setTournamentFormat}
@@ -5153,7 +5529,7 @@ export default function BowlingPayoutApp() {
         {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} payoutState={payoutState} financials={financials} />}
-        {activeTab === "payouts" && <PayoutsTab entries={entries} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} />}
+        {activeTab === "payouts" && <PayoutsTab entries={entries} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} tournamentFormat={tournamentFormat} />}
         {activeTab === "summary" && <SummaryCashSheetTab entries={entries} bowlers={bowlers} payoutRows={payoutRows} financials={financials} useHandicapScores={useHandicapScores} tournamentInfo={tournamentInfo} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} paidPayouts={paidPayouts}setPaidPayouts={setPaidPayouts}/>}
  {activeTab === "bracket" && (
   <BracketTab
