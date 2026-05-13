@@ -2152,7 +2152,24 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                             {b.games.map((game, gameIndex) => (
                               <div key={`${b.seed}-public-game-${gameIndex}`} className="w-10 rounded-none bg-white p-[2px] shadow-sm first:rounded-l-md last:rounded-r-md sm:w-12 sm:rounded-md sm:p-1 md:w-[3.75rem] md:rounded-lg md:p-1.5 lg:w-[4.5rem] lg:p-2">
                                 <p className="text-[9px] font-semibold text-blue-600 sm:text-[10px] md:text-xs">G{gameIndex + 1}</p>
-                                <p className="font-bold text-[10px] text-blue-950 sm:text-xs md:text-sm lg:text-base">{Number(game || 0) > 0 ? game : "—"}</p>
+                                {Number(game || 0) > 0 ? (
+  useHandicapScores ? (
+    <>
+      <p className="text-[9px] font-semibold text-blue-700 sm:text-[10px] md:text-xs">
+        {game} + {handicapPerGame(b)}
+      </p>
+      <p className="font-bold text-[10px] text-blue-950 sm:text-xs md:text-sm lg:text-base">
+        {Number(game || 0) + handicapPerGame(b)}
+      </p>
+    </>
+  ) : (
+    <p className="font-bold text-[10px] text-blue-950 sm:text-xs md:text-sm lg:text-base">
+      {game}
+    </p>
+  )
+) : (
+  <p className="font-bold text-[10px] text-blue-950 sm:text-xs md:text-sm lg:text-base">—</p>
+)}
                               </div>
                             ))}
                           </div>
@@ -4195,7 +4212,32 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
               const playerAdvanced = winners.some((winner) => String(winner.seed) === String(player.seed));
               const tied = winners.length > 1 && playerAdvanced;
               const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
-              row.matches.push({ round: round.label, opponent: opponentText, opponentScore: opponentScoreText, playerScore: scoreForGame(player, round.gameIndex) || "—", result });
+              const isHandicapBracket = bracketSetMeta[setKey]?.scoring === "handicap";
+
+const playerScratch = Number(player.games?.[round.gameIndex] || 0);
+const playerHandicap = isHandicapBracket ? handicapPerGame(player) : 0;
+const playerTotal = scoreForGame(player, round.gameIndex) || "—";
+
+const opponentBreakdownText = isHandicapBracket && opponents.length
+  ? opponents.map((other) => {
+      const scratch = Number(other.games?.[round.gameIndex] || 0);
+      const handicap = handicapPerGame(other);
+      return scratch > 0 ? `(${scratch} + ${handicap})` : "";
+    }).join(" / ")
+  : "";
+
+row.matches.push({
+  round: round.label,
+  opponent: opponentText,
+  opponentScore: opponentScoreText,
+  opponentBreakdown: opponentBreakdownText,
+  playerScore: playerTotal,
+  playerBreakdown:
+    isHandicapBracket && playerScratch > 0
+      ? `${playerScratch} + ${playerHandicap}`
+      : "",
+  result,
+});
             });
           });
         });
@@ -4312,13 +4354,31 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
                       {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-100 text-blue-900"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
-  {match.opponentBreakdown
-    ? `${match.opponentBreakdown} ${match.opponentScore}`
-    : match.opponentScore}
-</td><td className="p-2 font-semibold">{match.opponent}</td><td className="p-2 text-right font-bold">
-  {match.playerBreakdown
-    ? `(${match.playerBreakdown}) ${match.playerScore}`
-    : match.playerScore}
+    {match.opponentBreakdown ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+      <span className="text-xs font-semibold text-blue-700">
+        {match.opponentBreakdown}
+      </span>
+      <span>{match.opponentScore}</span>
+    </span>
+  ) : (
+    match.opponentScore
+  )}
+</td>
+
+<td className="p-2 font-semibold">{match.opponent}</td>
+
+<td className="p-2 text-right font-bold">
+  {match.playerBreakdown ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+      <span className="text-xs font-semibold text-blue-700">
+        ({match.playerBreakdown})
+      </span>
+      <span>{match.playerScore}</span>
+    </span>
+  ) : (
+    match.playerScore
+  )}
 </td></tr>)}</tbody></table></div></td></tr>}
                     </React.Fragment>
                   ))}
