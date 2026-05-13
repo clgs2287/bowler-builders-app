@@ -4346,8 +4346,8 @@ function HighGameTab({ bowlers, useHandicapScores, sidePotState, qualifyingGames
   const gameCount = Math.max(1, qualifyingGames || 4);
   const highGamePot = highGameBowlers.length * highGamePrice;
   const handicapHighGamePot = handicapHighGameBowlers.length * handicapHighGamePrice;
-  const highGamePayoutPerGame = highGamePot / gameCount;
-  const handicapHighGamePayoutPerGame = handicapHighGamePot / gameCount;
+const highGamePayoutPerGame = Math.floor(highGamePot / gameCount);
+const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount);
 
   const buildResults = (enteredBowlers, perGamePayout, useHandicap) => Array.from({ length: gameCount }, (_, gameIndex) => {
     const scores = enteredBowlers
@@ -4461,8 +4461,8 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
   const gameCount = Math.max(1, qualifyingGames || 4);
   const highGamePot = highGameBowlers.length * highGamePrice;
   const handicapHighGamePot = handicapHighGameBowlers.length * handicapHighGamePrice;
-  const highGamePayoutPerGame = highGamePot / gameCount;
-  const handicapHighGamePayoutPerGame = handicapHighGamePot / gameCount;
+const highGamePayoutPerGame = Math.floor(highGamePot / gameCount);
+const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount);
 
   const resolvePlayer = (player) => {
     if (!player || player.name === "BYE") return { seed: "BYE", name: "BYE", games: [], handicapPerGame: 0 };
@@ -4874,7 +4874,9 @@ function SideActionPayoutsTab({
       }).filter((item) => item.score > 0);
       const handicapHighScore = handicapScores.length ? Math.max(...handicapScores.map((item) => item.score)) : 0;
       const handicapWinners = handicapScores.filter((item) => item.score === handicapHighScore).map((item) => item.bowler);
-      const handicapPayoutEach = handicapWinners.length ? handicapHighGamePayoutPerGame / handicapWinners.length : 0;
+      const handicapPayoutEach = handicapWinners.length
+  ? Math.floor(handicapHighGamePayoutPerGame / handicapWinners.length)
+  : 0;
       handicapWinners.forEach((winner) => addPayout(payoutMap, winner, "High Game", handicapPayoutEach, `Handicap Game ${gameIndex + 1} high game (${handicapHighScore})`));
     }
   });
