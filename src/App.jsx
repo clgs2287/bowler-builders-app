@@ -1598,7 +1598,7 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
         </div>
 
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className="w-full min-w-[980px] text-[11px] md:min-w-[1080px] md:text-xs lg:text-sm">
+          <table className="w-full min-w-[980px] text-[10px] md:min-w-[1080px] md:text-xs lg:text-sm">
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className="p-2 text-left md:p-2.5">#</th>
@@ -2194,31 +2194,74 @@ function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState }
     return <AppCard><CardContent className="p-3 md:p-5"><p className="text-blue-700">Public bracket view currently supports up to 64 qualifiers.</p></CardContent></AppCard>;
   }
 
-  const PublicBracketMatch = ({ match }) => {
-    const leftKey = `${match.id}-l`;
-    const rightKey = `${match.id}-r`;
-    const leftScore = scores[leftKey] ?? "";
-    const rightScore = scores[rightKey] ?? "";
-    const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
-    const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
-    const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
-    const playerClass = (won) => won ? "truncate rounded-xl bg-green-100 px-2 py-1 font-bold text-green-900 ring-1 ring-green-300" : "truncate px-2 py-1";
+const PublicBracketMatch = ({ match }) => {
+  const leftKey = `${match.id}-l`;
+  const rightKey = `${match.id}-r`;
+  const leftScore = scores[leftKey] ?? "";
+  const rightScore = scores[rightKey] ?? "";
+  const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
+
+  const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
+  const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
+
+  const playerClass = (won) =>
+    won
+      ? "truncate rounded-xl bg-green-100 px-2 py-1 font-bold text-green-900 ring-1 ring-green-300"
+      : "truncate px-2 py-1";
+
+  const renderPlayerName = (player) => {
+    if (!player) return "TBD";
+    if (!useHandicapScores) return player.name || "TBD";
+    return `${player.name || "TBD"} (${handicapPerGame(player)})`;
+  };
+
+  const renderScore = (player, value) => {
+    if (!player || player.name === "BYE") return "—";
+
+    const scratch = Number(value || 0);
+    const handicap = useHandicapScores ? handicapPerGame(player) : 0;
+    const total = scratch + handicap;
+
+    if (!scratch) return "—";
+
+    if (!useHandicapScores) return scratch;
 
     return (
-      <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
-        <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-          <span className={playerClass(leftWon)}>{match.left?.name || "TBD"}</span>
-          <span className="w-12 rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">{leftScore || "—"}</span>
-          <span className={playerClass(rightWon)}>{match.right?.name || "TBD"}</span>
-          <span className="w-12 rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">{rightScore || "—"}</span>
-        </div>
-      </div>
+      <span className="inline-flex flex-col items-center leading-tight">
+        <span className="text-[9px] font-semibold text-blue-700">
+          ({scratch} + {handicap})
+        </span>
+        <span>{total}</span>
+      </span>
     );
   };
 
+  return (
+    <div
+      className={
+        winner?.name && winner.name !== "TIE"
+          ? "relative rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+          : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+      }
+    >
+      <div className="grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
+        <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+        <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
+          {renderScore(match.left, leftScore)}
+        </span>
+
+        <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+        <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
+          {renderScore(match.right, rightScore)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
   const PublicBracketRoundColumn = ({ title, matches, topOffset = 0, gap = 16, roundIndex = 0 }) => {
     const matchHeight = 84;
-    const firstRoundGap = 24;
+    const firstRoundGap = 42;
     const step = matchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
@@ -2230,7 +2273,10 @@ function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState }
     return (
       <div className="min-w-[260px] flex-1">
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
-        <div className="relative" style={{ height: columnHeight }}>
+        <div
+  className="relative pb-8"
+  style={{ height: columnHeight + 32 }}
+>
           {matches.map((match, matchIndex) => (
             <div key={`public-${match.id}`} className="absolute left-0 right-0" style={{ top: getTop(matchIndex) }}>
               <PublicBracketMatch match={match} />
@@ -2510,14 +2556,14 @@ function BracketScoreInput({
   return (
     <div className="flex flex-col items-center">
       <Input
-        className="w-20 text-center"
+        className="h-7 w-14 px-1 text-center text-xs font-semibold"
         inputMode="numeric"
         value={value ?? ""}
         onChange={(e) => onScoreChange(scoreKey, e.target.value)}
       />
 
       {useHandicapScores && (
-        <div className="mt-1 text-center text-[11px] font-semibold text-blue-700">
+        <div className="mt-1 text-center text-[10px] font-semibold text-blue-700">
           {scratch || 0} + {handicap} = {total}
         </div>
       )}
@@ -2546,22 +2592,22 @@ const renderPlayerName = (player) => {
   const playerClass = (won) => won ? "truncate rounded-xl bg-green-100 px-2 py-1 font-bold text-green-900 ring-1 ring-green-300" : "truncate px-2 py-1";
 
   return (
-    <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
-      <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+    <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+      <div className="grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
         <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
         <BracketScoreInput
   scoreKey={leftKey}
   value={scores[leftKey]}
   onScoreChange={onScoreChange}
-  handicap={handicapPerGame(match.left)}
+  handicap={match.left ? handicapPerGame(match.left) : 0}
   useHandicapScores={useHandicapScores}
 />
-        <span className={playerClass(rightWon)}>{match.right?.name || "TBD"}</span>
+        <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
         <BracketScoreInput
   scoreKey={rightKey}
   value={scores[rightKey]}
   onScoreChange={onScoreChange}
-  handicap={handicapPerGame(match.right)}
+  handicap={match.right ? handicapPerGame(match.right) : 0}
   useHandicapScores={useHandicapScores}
 />
       </div>
@@ -2581,7 +2627,7 @@ function BracketRoundColumn({
   savedFinalsRounds,
   setSavedFinalsRounds,
 }) {
-  const matchHeight = 84;
+  const matchHeight = 96;
   const firstRoundGap = 24;
   const step = matchHeight + firstRoundGap;
 
@@ -2613,7 +2659,10 @@ function BracketRoundColumn({
     Save Round
   </Button>
 </div>
-      <div className="relative" style={{ height: columnHeight }}>
+      <div
+  className="relative pb-8"
+  style={{ height: columnHeight + 32 }}
+>
         {matches.map((match, matchIndex) => (
           <div key={match.id} className="absolute left-0 right-0" style={{ top: getTop(matchIndex) }}>
             <BracketMatchEditor
@@ -2699,7 +2748,7 @@ function EliminatorScoreInput({ value, onChange, locked = false }) {
 
   return (
     <Input
-      className="w-20 text-center"
+      className="h-8 w-16 text-center text-sm"
       inputMode="numeric"
       value={value ?? ""}
       autoFocus={editing}
@@ -2712,7 +2761,7 @@ function EliminatorScoreInput({ value, onChange, locked = false }) {
 function StepScore({ scoreKey, stepScores, updateStep }) {
   return (
     <Input
-      className="w-20 text-center"
+      className="h-8 w-16 text-center text-sm"
       inputMode="numeric"
       value={stepScores?.[scoreKey] ?? ""}
       onChange={(e) => updateStep(scoreKey, e.target.value)}
