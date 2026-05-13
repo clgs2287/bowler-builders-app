@@ -2480,26 +2480,73 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
   return ranked.map((row, index) => ({ ...row, finalPlace: index + 1 }));
 }
 
-function BracketScoreInput({ scoreKey, value, onScoreChange }) {
-  return <Input className="w-20 text-center" inputMode="numeric" value={value ?? ""} onChange={(e) => onScoreChange(scoreKey, e.target.value)} />;
+function BracketScoreInput({
+  scoreKey,
+  value,
+  onScoreChange,
+  handicap = 0,
+  useHandicapScores = false,
+}) {
+  const scratch = Number(value || 0);
+  const total = scratch + Number(handicap || 0);
+
+  return (
+    <div className="flex flex-col items-center">
+      <Input
+        className="w-20 text-center"
+        inputMode="numeric"
+        value={value ?? ""}
+        onChange={(e) => onScoreChange(scoreKey, e.target.value)}
+      />
+
+      {useHandicapScores && (
+        <div className="mt-1 text-center text-[11px] font-semibold text-blue-700">
+          {scratch || 0} + {handicap} = {total}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function BracketMatchEditor({ match, scores, onScoreChange }) {
+function BracketMatchEditor({ match, scores, onScoreChange, useHandicapScores }) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
   const winner = winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
   const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
+const renderPlayerName = (player) => {
+  if (!player) return "TBD";
+
+  if (!useHandicapScores) {
+    return player.name;
+  }
+
+  const handicap = Number(player.averageMinus || player.handicapPerGame || 0);
+
+  return `${player.name} (+${handicap})`;
+};
 
   const playerClass = (won) => won ? "truncate rounded-xl bg-green-100 px-2 py-1 font-bold text-green-900 ring-1 ring-green-300" : "truncate px-2 py-1";
 
   return (
     <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
       <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-        <span className={playerClass(leftWon)}>{match.left?.name || "TBD"}</span>
-        <BracketScoreInput scoreKey={leftKey} value={scores[leftKey]} onScoreChange={onScoreChange} />
+        <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+        <BracketScoreInput
+  scoreKey={leftKey}
+  value={scores[leftKey]}
+  onScoreChange={onScoreChange}
+  handicap={handicapPerGame(match.left)}
+  useHandicapScores={useHandicapScores}
+/>
         <span className={playerClass(rightWon)}>{match.right?.name || "TBD"}</span>
-        <BracketScoreInput scoreKey={rightKey} value={scores[rightKey]} onScoreChange={onScoreChange} />
+        <BracketScoreInput
+  scoreKey={rightKey}
+  value={scores[rightKey]}
+  onScoreChange={onScoreChange}
+  handicap={handicapPerGame(match.right)}
+  useHandicapScores={useHandicapScores}
+/>
       </div>
     </div>
   );
@@ -2510,6 +2557,7 @@ function BracketRoundColumn({
   matches,
   scores,
   onScoreChange,
+  useHandicapScores,
   topOffset = 0,
   gap = 16,
   roundIndex = 0,
@@ -2551,7 +2599,12 @@ function BracketRoundColumn({
       <div className="relative" style={{ height: columnHeight }}>
         {matches.map((match, matchIndex) => (
           <div key={match.id} className="absolute left-0 right-0" style={{ top: getTop(matchIndex) }}>
-            <BracketMatchEditor match={match} scores={scores} onScoreChange={onScoreChange} />
+            <BracketMatchEditor
+  match={match}
+  scores={scores}
+  onScoreChange={onScoreChange}
+  useHandicapScores={useHandicapScores}
+/>
           </div>
         ))}
       </div>
@@ -2600,6 +2653,7 @@ setSavedFinalsRounds }) {
           roundIndex={roundIndex}
           savedFinalsRounds={savedFinalsRounds}
           setSavedFinalsRounds={setSavedFinalsRounds}
+          useHandicapScores={useHandicapScores}
         />
       ))}
     </div>
@@ -3616,21 +3670,44 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
       <div className="rounded-2xl border border-blue-200 bg-white p-3 shadow-sm">
         <h4 className="mb-2 text-xs font-black uppercase tracking-wide text-blue-700">{title}</h4>
         <div className="space-y-2">
-          {safePlayers.map((player, index) => {
-            const score = playerScore(player, roundIndex, gameOffset);
-            const advanced = player.name !== "BYE" && winners.some((w) => w.seed === player.seed);
-            const rowClass = player.name === "BYE"
-              ? "grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-slate-100 px-3 py-2 text-slate-500"
-              : advanced
-                ? "grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-green-100 px-3 py-2 text-green-900 ring-1 ring-green-300"
-                : "grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-blue-950";
-            return (
-              <div key={`${title}-${player.seed}-${index}`} className={rowClass}>
-                <span className="min-w-0 whitespace-normal break-words text-sm font-bold leading-snug">{player.name}</span>
-                <span className="rounded-lg bg-white px-2 py-1 text-center text-sm font-black text-blue-950 shadow-sm">{player.name === "BYE" ? "—" : score || "—"}</span>
-              </div>
-            );
-          })}
+{safePlayers.map((player, index) => {
+  const score = playerScore(player, roundIndex, gameOffset);
+  const gameIndex = gameOffset + roundIndex;
+  const scratch = Number(player.games?.[gameIndex] || 0);
+  const handicap =
+    bracketSetMeta[activeBracketSet]?.scoring === "handicap"
+      ? handicapPerGame(player)
+      : 0;
+
+  const advanced = player.name !== "BYE" && winners.some((w) => w.seed === player.seed);
+  const rowClass = player.name === "BYE"
+    ? "grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-slate-100 px-3 py-2 text-slate-500"
+    : advanced
+      ? "grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-green-100 px-3 py-2 text-green-900 ring-1 ring-green-300"
+      : "grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-blue-950";
+
+return (
+  <div key={`${title}-${player.seed}-${index}`} className={rowClass}>
+    <span className="min-w-0 whitespace-normal break-words text-sm font-bold leading-snug">
+      {player.name}
+    </span>
+
+    <div className="flex items-center gap-3">
+      {player.name !== "BYE" && handicap > 0 && (
+        <span className="whitespace-nowrap text-xs font-semibold text-blue-700">
+          {scratch} + {handicap}
+        </span>
+      )}
+
+      <div className="min-w-[48px] rounded-lg bg-white px-2 py-1 text-center shadow-sm">
+        <span className="text-sm font-black text-blue-950">
+          {player.name === "BYE" ? "—" : score || "—"}
+        </span>
+      </div>
+    </div>
+  </div>
+);
+})}
         </div>
       </div>
     );
@@ -3666,8 +3743,40 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
           const playerAdvanced = winners.some((winner) => winner.seed === player.seed);
           const tied = winners.length > 1 && playerAdvanced;
           const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
-          row.matches.push({ round: round.label, opponent: opponentText, opponentScore: opponentScoreText, playerScore: playerScore(player, round.roundIndex, gameOffset) || "—", result });
-        });
+const playerScratch = Number(player.games?.[gameOffset + round.roundIndex] || 0);
+const playerHandicap = handicapPerGame(player);
+const playerTotal = playerScore(player, round.roundIndex, gameOffset) || "—";
+const opponentBreakdownText = opponents.length
+  ? opponents.map((other) => {
+      const scratch = Number(
+        other.games?.[gameOffset + round.roundIndex] || 0
+      );
+
+      const handicap =
+        bracketSetMeta[activeBracketSet]?.scoring === "handicap"
+          ? handicapPerGame(other)
+          : 0;
+
+      return handicap > 0
+        ? `(${scratch} + ${handicap})`
+        : `${scratch}`;
+    }).join(" / ")
+  : "";
+row.matches.push({
+  round: round.label,
+  opponent: opponentText,
+  opponentScore: opponentScoreText,
+  opponentBreakdown: opponentBreakdownText,
+  playerScore: playerTotal,
+  playerBreakdown:
+    bracketSetMeta[activeBracketSet]?.scoring === "handicap" &&
+    playerScratch > 0
+      ? `${playerScratch} + ${playerHandicap}`
+      : "",
+  result,
+});
+
+});
       }));
       let alivePlayers = [];
       if (champions.length) alivePlayers = champions;
@@ -3728,7 +3837,172 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
           </CardContent>
         </AppCard>
       )}
-      <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-2 text-xl font-semibold text-blue-900">Bracket Entries</h2><p className="text-sm text-blue-700">Bracket counts are entered on the Registration page when bowlers pay. Return here when ready to generate the brackets.</p></CardContent></AppCard>{hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><div className="mb-4"><h2 className="text-xl font-semibold text-blue-900">Public Bracket Status</h2><p className="text-sm text-blue-700">Click a bowler to see each side-pot bracket matchup and result.</p></div><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[560px] text-xs md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Alive</th></tr></thead><tbody>{publicBracketRows.map((row) => <React.Fragment key={`public-side-${row.seed}`}><tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSidePotSeed((current) => current === row.seed ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>{expandedSidePotSeed === row.seed && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-100 text-blue-900"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`matchup-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">{match.opponentScore}</td><td className="p-2 font-semibold">{match.opponent}</td><td className="p-2 text-right font-bold">{match.playerScore}</td></tr>)}</tbody></table></div></td></tr>}</React.Fragment>)}</tbody></table></div></CardContent></AppCard>}{refunds.length > 0 && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Refund Summary</h2><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[420px] text-xs md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Unused Entries</th><th className="p-2 text-right md:p-3">Refund</th></tr></thead><tbody>{refunds.map((refund) => <tr key={`refund-${refund.seed}`} className="border-t"><td className="p-2 font-semibold md:p-3">{refund.name}</td><td className="p-2 text-right md:p-3">{refund.unusedEntries}</td><td className="p-2 text-right font-bold text-red-700 md:p-3">{currency(refund.unusedEntries * bracketPrice)}</td></tr>)}</tbody><tfoot className="bg-red-50"><tr><td className="p-2 font-bold md:p-3" colSpan={2}>Total Refunds</td><td className="p-2 text-right font-bold text-red-700 md:p-3">{currency(totalRefunds)}</td></tr></tfoot></table></div></CardContent></AppCard>}{hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Generated Brackets</h2><div className="space-y-4">{brackets.map((bracket) => <BracketCard key={bracket.id} bracket={bracket} />)}</div></CardContent></AppCard>}</div>;
+<AppCard>
+  <CardContent className="p-3 md:p-5">
+    <h2 className="mb-2 text-xl font-semibold text-blue-900">Bracket Entries</h2>
+    <p className="text-sm text-blue-700">
+      Bracket counts are entered on the Registration page when bowlers pay. Return here when ready to generate the brackets.
+    </p>
+  </CardContent>
+</AppCard>
+
+{hasGeneratedBrackets && (
+  <AppCard>
+    <CardContent className="p-3 md:p-5">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-blue-900">Public Bracket Status</h2>
+        <p className="text-sm text-blue-700">Click a bowler to see each side-pot bracket matchup and result.</p>
+      </div>
+
+      <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+        <table className="w-full min-w-[560px] text-xs md:text-sm">
+          <thead className="bg-blue-800 text-white">
+            <tr>
+              <th className="p-2 text-left md:p-3">Bowler</th>
+              <th className="p-2 text-right md:p-3">Alive</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {publicBracketRows.map((row) => (
+              <React.Fragment key={`public-side-${row.seed}`}>
+                <tr className="border-t">
+                  <td className="p-2 font-semibold md:p-3">
+                    <button
+                      type="button"
+                      className="text-left underline-offset-2 hover:underline"
+                      onClick={() => setExpandedSidePotSeed((current) => current === row.seed ? null : row.seed)}
+                    >
+                      {row.name}
+                    </button>
+                  </td>
+                  <td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td>
+                </tr>
+
+                {expandedSidePotSeed === row.seed && (
+                  <tr className="border-t bg-blue-50">
+                    <td colSpan={2} className="p-2 md:p-3">
+                      <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
+                        <table className="w-full min-w-[520px] text-xs md:text-sm">
+                          <thead className="bg-blue-100 text-blue-900">
+                            <tr>
+                              <th className="p-2 text-left">Bracket / Game</th>
+                              <th className="p-2 text-center">Result</th>
+                              <th className="p-2 text-right">Opp Score</th>
+                              <th className="p-2 text-left">Opponent</th>
+                              <th className="p-2 text-right">Score</th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {row.matches.map((match, matchIndex) => (
+                              <tr key={`matchup-${row.seed}-${matchIndex}`} className="border-t">
+                                <td className="p-2">{match.round}</td>
+                                <td
+                                  className={
+                                    match.result === "W"
+                                      ? "p-2 text-center font-black text-green-700"
+                                      : match.result === "L"
+                                        ? "p-2 text-center font-black text-red-600"
+                                        : match.result === "T"
+                                          ? "p-2 text-center font-black text-amber-700"
+                                          : "p-2 text-center text-blue-400"
+                                  }
+                                >
+                                  {match.result || "—"}
+                                </td>
+<td className="p-2 text-right font-bold">
+  {match.playerBreakdown ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+      <span className="text-xs font-semibold text-blue-700">
+        ({match.playerBreakdown})
+      </span>
+      <span>{match.playerScore}</span>
+    </span>
+  ) : (
+    match.playerScore
+  )}
+</td>
+                                <td className="p-2 font-semibold">{match.opponent}</td>
+
+<td className="p-2 text-right font-bold">
+  {match.playerBreakdown ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+      <span className="text-xs font-semibold text-blue-700">
+        ({match.playerBreakdown})
+      </span>
+      <span>{match.playerScore}</span>
+    </span>
+  ) : (
+    match.playerScore
+  )}
+</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </CardContent>
+  </AppCard>
+)}
+
+{refunds.length > 0 && (
+  <AppCard>
+    <CardContent className="p-3 md:p-5">
+      <h2 className="mb-4 text-xl font-semibold text-blue-900">Refund Summary</h2>
+      <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+        <table className="w-full min-w-[420px] text-xs md:text-sm">
+          <thead className="bg-blue-800 text-white">
+            <tr>
+              <th className="p-2 text-left md:p-3">Bowler</th>
+              <th className="p-2 text-right md:p-3">Unused Entries</th>
+              <th className="p-2 text-right md:p-3">Refund</th>
+            </tr>
+          </thead>
+          <tbody>
+            {refunds.map((refund) => (
+              <tr key={`refund-${refund.seed}`} className="border-t">
+                <td className="p-2 font-semibold md:p-3">{refund.name}</td>
+                <td className="p-2 text-right md:p-3">{refund.unusedEntries}</td>
+                <td className="p-2 text-right font-bold text-red-700 md:p-3">
+                  {currency(refund.unusedEntries * bracketPrice)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="bg-red-50">
+            <tr>
+              <td className="p-2 font-bold md:p-3" colSpan={2}>Total Refunds</td>
+              <td className="p-2 text-right font-bold text-red-700 md:p-3">{currency(totalRefunds)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </CardContent>
+  </AppCard>
+)}
+
+{hasGeneratedBrackets && (
+  <AppCard>
+    <CardContent className="p-3 md:p-5">
+      <h2 className="mb-4 text-xl font-semibold text-blue-900">Generated Brackets</h2>
+      <div className="space-y-4">
+        {brackets.map((bracket) => (
+          <BracketCard key={bracket.id} bracket={bracket} />
+        ))}
+      </div>
+    </CardContent>
+  </AppCard>
+)}
+</div>;
 }
 
 function HighGameTab({ bowlers, useHandicapScores, sidePotState, qualifyingGames }) {
@@ -4037,7 +4311,15 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-100 text-blue-900"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">{match.opponentScore}</td><td className="p-2 font-semibold">{match.opponent}</td><td className="p-2 text-right font-bold">{match.playerScore}</td></tr>)}</tbody></table></div></td></tr>}
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-100 text-blue-900"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
+  {match.opponentBreakdown
+    ? `${match.opponentBreakdown} ${match.opponentScore}`
+    : match.opponentScore}
+</td><td className="p-2 font-semibold">{match.opponent}</td><td className="p-2 text-right font-bold">
+  {match.playerBreakdown
+    ? `(${match.playerBreakdown}) ${match.playerScore}`
+    : match.playerScore}
+</td></tr>)}</tbody></table></div></td></tr>}
                     </React.Fragment>
                   ))}
                   {bracketRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={2}>No generated brackets yet.</td></tr>}
