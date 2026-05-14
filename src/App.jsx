@@ -1116,6 +1116,30 @@ const totalLineageOwed =
   entries * payoutQualifyingGames * lineagePerGame +
   finalsGames * lineagePerGame;
 
+  const autoFinalsGames = (() => {
+  if (tournamentFormat === "sweeper") return 0;
+
+  if (tournamentFormat === "eliminator") {
+    const qualifiers = Math.max(4, Math.ceil(entries / 4));
+    return qualifiers + Math.ceil(qualifiers / 2) + 6;
+  }
+
+  if (tournamentFormat === "bracket") {
+    const qualifiers = Math.max(4, Math.ceil(entries / 4));
+    const bracketSize = getBracketSize(qualifiers);
+
+    if (typeof bracketSize !== "number") return 0;
+
+    return qualifiers + bracketSize - 2;
+  }
+
+  return 0;
+})();
+
+const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
+  ? Number(payoutState.finalsGames || 0)
+  : autoFinalsGames;
+
   return (
     <div className="space-y-3 md:space-y-4">
       <div className="grid gap-4 lg:grid-cols-12">
@@ -1268,23 +1292,46 @@ const totalLineageOwed =
     <div className="flex items-center justify-between border-b pb-2">
       <span className="font-semibold text-blue-900">Total Collected</span>
       <span className="font-bold text-slate-900">
-        {currency(financials.grossRevenue)}
+        {currency(
+  bowlers.filter((b) => b.paid).length *
+    Number(payoutState.entryFee || 0)
+)}
       </span>
     </div>
 
-    <div className="flex items-center justify-between border-b pb-2">
-      <span className="font-semibold text-blue-900">Lineage</span>
-      <span className="font-bold text-slate-900">
-        {currency(totalLineageOwed)}
-      </span>
+<div className="flex items-center justify-between border-b pb-2">
+  <span className="font-semibold text-blue-900">Lineage</span>
+
+<span className="font-bold text-slate-900">
+  {currency(
+    (Number(entries || 0) *
+      Number(payoutState.qualifyingGames || qualifyingGames || 4) *
+      Number(payoutState.lineagePerGame || 4)) +
+    (dashboardFinalsGames *
+      Number(payoutState.lineagePerGame || 4))
+  )}
+</span>
     </div>
 
-    <div className="flex items-center justify-between border-b pb-2">
-      <span className="font-semibold text-blue-900">Net After Lineage</span>
-      <span className="font-bold text-slate-900">
-        {currency(financials.netFromEntries)}
-      </span>
-    </div>
+<div className="flex items-center justify-between border-b pb-2">
+  <span className="font-semibold text-blue-900">
+    Net After Lineage
+  </span>
+
+  <span className="font-bold text-slate-900">
+    {currency(
+      (bowlers.filter((b) => b.paid).length *
+        Number(payoutState.entryFee || 0)) -
+      (
+        (Number(entries || 0) *
+          Number(payoutState.qualifyingGames || qualifyingGames || 4) *
+          Number(payoutState.lineagePerGame || 4)) +
+        (dashboardFinalsGames *
+          Number(payoutState.lineagePerGame || 4))
+      )
+    )}
+  </span>
+</div>
 
     <div className="flex items-center justify-between border-b pb-2">
       <span className="font-semibold text-blue-900">Ball Raffle</span>
