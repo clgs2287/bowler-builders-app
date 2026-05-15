@@ -1688,8 +1688,8 @@ console.log(
 
 const allScores = matches.flatMap(
   (result) =>
-    result.overallGames?.length
-      ? result.overallGames
+    result.qualifyingGames?.length
+      ? result.qualifyingGames
       : result.games || []
 );
 
@@ -3841,10 +3841,22 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
 function StatsHistoryTab({ tournamentHistory }) {
   const [search, setSearch] = useState("");
   const [seasonFilter, setSeasonFilter] = useState("All");
+  const [statsMode, setStatsMode] = useState("scratch");
   const [statsSort, setStatsSort] = useState({ key: "default", direction: "desc" });
   const availableSeasons = Array.from(new Set(tournamentHistory.map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
-  const filteredHistory = seasonFilter === "All" ? tournamentHistory : tournamentHistory.filter((t) => (t.season || "Unassigned") === seasonFilter);
-
+const filteredHistory =
+  (
+    seasonFilter === "All"
+      ? tournamentHistory
+      : tournamentHistory.filter(
+          (t) =>
+            (t.season || "Unassigned") === seasonFilter
+        )
+  ).filter((t) =>
+    statsMode === "scratch"
+      ? !t.useHandicapScores
+      : t.useHandicapScores
+  );
   const playerStats = filteredHistory
     .flatMap((tournament) => (tournament.results || []).map((result) => ({ ...result, tournamentName: tournament.name, tournamentDate: tournament.date, season: tournament.season || "Unassigned" })))
     .reduce((map, result) => {
@@ -4001,6 +4013,31 @@ current.results.push(result);
 
       <AppCard>
         <CardContent className="p-3 md:p-5">
+          <div className="mb-4 flex gap-2">
+  <button
+    type="button"
+    onClick={() => setStatsMode("scratch")}
+    className={
+      statsMode === "scratch"
+        ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white"
+        : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"
+    }
+  >
+    Scratch Stats
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setStatsMode("handicap")}
+    className={
+      statsMode === "handicap"
+        ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white"
+        : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"
+    }
+  >
+    Handicap Tournament Series
+  </button>
+</div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[1040px] text-xs md:text-sm">
 <thead className="bg-blue-800 text-white">
@@ -4045,6 +4082,8 @@ current.results.push(result);
       </button>
     </th>
 
+   {statsMode === "scratch" && (
+  <>
     <th className="p-2 text-right md:p-3">
       <button
         type="button"
@@ -4074,6 +4113,8 @@ current.results.push(result);
         Finals Gms{sortLabel("finalsGames")}
       </button>
     </th>
+  </>
+)}
 
     <th className="p-2 text-right md:p-3">
       <button
@@ -4145,19 +4186,23 @@ current.results.push(result);
     {p.average.toFixed(2)}
   </td>
 
-  <td className="p-2 text-right md:p-3">
-    {p.qualifyingAverage.toFixed(2)}
-  </td>
+ {statsMode === "scratch" && (
+  <>
+    <td className="p-2 text-right md:p-3">
+      {p.qualifyingAverage.toFixed(2)}
+    </td>
 
-  <td className="p-2 text-right md:p-3">
-    {p.finalsGames > 0
-      ? p.finalsAverage.toFixed(2)
-      : "—"}
-  </td>
+    <td className="p-2 text-right md:p-3">
+      {p.finalsGames > 0
+        ? p.finalsAverage.toFixed(2)
+        : "—"}
+    </td>
 
-  <td className="p-2 text-right md:p-3">
-    {p.finalsGames}
-  </td>
+    <td className="p-2 text-right md:p-3">
+      {p.finalsGames}
+    </td>
+  </>
+)}
 
   <td className="p-2 text-right md:p-3">
     {p.highGame || "—"}
@@ -4210,6 +4255,45 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     const confirmed = window.confirm("Archive this completed tournament into stats history?");
     if (!confirmed) return;
 
+    const getBracketScoresForBowler = (bowlerName) => {
+  const scores = [];
+
+  (
+  buildBracketRounds({
+    entries: bowlers.length,
+    bowlers,
+    useHandicapScores,
+    bracketState,
+  }).bracketRounds || []
+).forEach((round) => {
+    (round.matches || []).forEach((match) => {
+      const leftScore = Number(
+        bracketState?.scores?.[`${match.id}-l`] || 0
+      );
+
+      const rightScore = Number(
+        bracketState?.scores?.[`${match.id}-r`] || 0
+      );
+
+      if (
+        match.left?.name === bowlerName &&
+        leftScore > 0
+      ) {
+        scores.push(leftScore);
+      }
+
+      if (
+        match.right?.name === bowlerName &&
+        rightScore > 0
+      ) {
+        scores.push(rightScore);
+      }
+    });
+  });
+
+  return scores;
+};
+
 
     const archived = {
       id: `${Date.now()}`,
@@ -4231,13 +4315,16 @@ results: ranked.map((b, index) => {
     .filter((game) => game > 0);
 
 const finalsGameScores =
-  tournamentFormat === "bracket"
-    ? getBracketFinalsGamesForBowler(b.name)
+  !useHandicapScores
+    ? (b.finalsGames || [])
+        .map((game) => Number(game || 0))
+        .filter((game) => game > 0)
     : [];
-  const allGameScores = [
-    ...qualifyingGameScores,
-    ...finalsGameScores,
-  ];
+
+const allGameScores = [
+  ...qualifyingGameScores,
+  ...finalsGameScores,
+];
 
   return {
   bowlerId: b.name.trim().toLowerCase(),
@@ -4251,10 +4338,8 @@ const finalsGameScores =
   handicapTotal: b.handicap,
 
 finalsGames:
-  tournamentFormat === "bracket"
-    ? Object.values(
-        bracketState?.scratchScores?.[b.name] || {}
-      )
+tournamentFormat === "bracket"
+  ? getBracketScoresForBowler(b.name)
     : tournamentFormat === "eliminator"
       ? [
           ...(eliminatorState?.game1Scores?.[b.name]
@@ -4272,10 +4357,8 @@ finalsGames:
 overallGames: [
   ...(b.games || []),
 
-  ...(tournamentFormat === "bracket"
-    ? Object.values(
-        bracketState?.scratchScores?.[b.name] || {}
-      )
+ tournamentFormat === "bracket"
+  ? getBracketScoresForBowler(b.name)
     : tournamentFormat === "eliminator"
       ? [
           ...(eliminatorState?.game1Scores?.[b.name]
@@ -4288,8 +4371,8 @@ overallGames: [
             eliminatorState?.stepScores?.[b.name] || {}
           ),
         ]
-      : []),
-],
+      : [],,
+],  
 
 scratchTotal: b.scratch,
 handicapTotal: b.handicap,
@@ -4306,10 +4389,8 @@ handicapTotal: b.handicap,
 
 finalsAverage:
   (
-    tournamentFormat === "bracket"
-      ? Object.values(
-          bracketState?.scratchScores?.[b.name] || {}
-        )
+tournamentFormat === "bracket"
+  ? getBracketScoresForBowler(b.name)
       : tournamentFormat === "eliminator"
         ? [
             ...(eliminatorState?.game1Scores?.[b.name]
@@ -4373,23 +4454,21 @@ average:
   [
     ...(b.games || []),
 
-    ...(tournamentFormat === "bracket"
-      ? Object.values(
-          bracketState?.scratchScores?.[b.name] || {}
-        )
-      : tournamentFormat === "eliminator"
-        ? [
-            ...(eliminatorState?.game1Scores?.[b.name]
-              ? [eliminatorState.game1Scores[b.name]]
-              : []),
-            ...(eliminatorState?.game2Scores?.[b.name]
-              ? [eliminatorState.game2Scores[b.name]]
-              : []),
-            ...Object.values(
-              eliminatorState?.stepScores?.[b.name] || {}
-            ),
-          ]
-        : []),
+(tournamentFormat === "bracket"
+  ? getBracketScoresForBowler(b.name)
+  : tournamentFormat === "eliminator"
+    ? [
+        ...(eliminatorState?.game1Scores?.[b.name]
+          ? [eliminatorState.game1Scores[b.name]]
+          : []),
+        ...(eliminatorState?.game2Scores?.[b.name]
+          ? [eliminatorState.game2Scores[b.name]]
+          : []),
+        ...Object.values(
+          eliminatorState?.stepScores?.[b.name] || {}
+        ),
+      ]
+    : []),
   ].length > 0
     ? (
         [
@@ -4511,8 +4590,8 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
                     <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button></div></td>
                   </tr>
                 ))}
-                {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No tournaments archived for this season filter yet.</td></tr>} 
-              </tbody>
+                {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={statsMode === "scratch" ? 12 : 9}>No tournaments archived for this season filter yet.</td></tr>} 
+              </tbody>  
             </table>
           </div>
         </CardContent>
