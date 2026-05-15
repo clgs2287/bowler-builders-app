@@ -1140,6 +1140,17 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
   ? Number(payoutState.finalsGames || 0)
   : autoFinalsGames;
 
+  const dashboardPrizeFund =
+  ((bowlers.filter((b) => b.paid).length *
+    Number(payoutState.entryFee || 0)) -
+    ((Number(entries || 0) *
+      Number(payoutState.qualifyingGames || qualifyingGames || 4) *
+      Number(payoutState.lineagePerGame || 4)) +
+      (dashboardFinalsGames *
+        Number(payoutState.lineagePerGame || 4)))) +
+  Number(payoutState.ballRaffleAdded || 0) +
+  Number(payoutState.otherAddedMoney || 0);
+
   return (
     <div className="space-y-3 md:space-y-4">
       <div className="grid gap-4 lg:grid-cols-12">
@@ -1340,12 +1351,12 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
       </span>
     </div>
 
-    <div className="flex items-center justify-between border-b pb-2">
-      <span className="font-semibold text-blue-900">Total Prize Fund</span>
-      <span className="font-bold text-green-700">
-        {currency(financials.prizeFund)}
-      </span>
-    </div>
+<div className="flex items-center justify-between border-b pb-2">
+  <span className="font-semibold text-blue-900">Total Prize Fund</span>
+  <span className="font-bold text-green-700">
+    {currency(dashboardPrizeFund)}
+  </span>
+</div>
 
 
 
@@ -1608,13 +1619,23 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
 
   setBowlers((current) =>
     current.map((bowler) => {
-      if (
-        bowler.average === undefined ||
-        bowler.average === null ||
-        bowler.average === ""
-      ) {
-        return bowler;
-      }
+ const archivedAverage =
+  getArchivedAverageForBowler(
+    bowler.name
+  )?.average;
+
+const averageToUse =
+  archivedAverage ??
+  bowler.average ??
+  bowler.archivedAverage;
+
+if (
+  averageToUse === undefined ||
+  averageToUse === null ||
+  averageToUse === ""
+) {
+  return bowler;
+}
 console.log(
   bowler.name,
   bowler.average,
@@ -1666,7 +1687,10 @@ console.log(
 
 
 const allScores = matches.flatMap(
-  (result) => result.games || []
+  (result) =>
+    result.overallGames?.length
+      ? result.overallGames
+      : result.games || []
 );
 
 const numericScores = allScores
@@ -3308,7 +3332,15 @@ function BracketScoreInput({
         className="h-7 w-14 px-1 text-center text-xs font-semibold"
         inputMode="numeric"
         value={value ?? ""}
-        onChange={(e) => onScoreChange(scoreKey, e.target.value)}
+        onChange={(e) =>
+  onScoreChange(
+    scoreKey,
+    useHandicapScores
+      ? Number(e.target.value || 0) + Number(handicap || 0)
+      : e.target.value,
+    e.target.value
+  )
+}
       />
 
       {useHandicapScores && (
@@ -3430,7 +3462,24 @@ function BracketRoundColumn({
 function BracketTab({ entries, bowlers, useHandicapScores, bracketState, setBracketState,savedFinalsRounds,
 setSavedFinalsRounds }) {
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState });
-  const handleScoreChange = (scoreKey, value) => setBracketState((current) => ({ ...current, scores: { ...(current.scores || {}), [scoreKey]: value } }));
+  const handleScoreChange = (
+  scoreKey,
+  value,
+  scratchValue = value
+) =>
+  setBracketState((current) => ({
+    ...current,
+
+    scores: {
+      ...(current.scores || {}),
+      [scoreKey]: value,
+    },
+
+    scratchScores: {
+      ...(current.scratchScores || {}),
+      [scoreKey]: scratchValue,
+    },
+  }));
 
   return (
     <AppCard>
@@ -3677,6 +3726,29 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
   const totalCashPaid = cashRows.reduce((sum, row) => sum + row.payoutAmount, 0);
   const csvRows = [["Place", "Bowler", "Scratch", "Handicap Total", "Payout Label", "Payout Amount"], ...cashRows.map((row) => [row.finalPlace || row.rank, row.name, row.scratch, row.handicap, row.payoutLabel, row.payoutAmount])];
 
+  const dashboardPrizeFund =
+  (
+    (bowlers.filter((b) => b.paid).length *
+      Number(payoutState.entryFee || 0)
+    ) -
+
+    (
+      (Number(entries || 0) *
+        Number(payoutState.qualifyingGames || qualifyingGames || 4) *
+        Number(payoutState.lineagePerGame || 4)
+      ) +
+
+      (
+        dashboardFinalsGames *
+        Number(payoutState.lineagePerGame || 4)
+      )
+    )
+  ) +
+
+  Number(payoutState.ballRaffleAdded || 0) +
+
+  Number(payoutState.otherAddedMoney || 0);
+
   return (
     <div className="space-y-3 md:space-y-4">
       <AppCard>
@@ -3702,8 +3774,10 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
           <div className="mb-4 hidden print:block">
             <h1 className="text-2xl font-bold">{tournamentInfo.name || "Tournament"} Cash Sheet</h1>
             <p>{tournamentInfo.center} {tournamentInfo.date ? `• ${tournamentInfo.date}` : ""}</p>
-            <p>Prize Fund: {currency(financials.prizeFund)} • Cashers: {financials.cashers}</p>
-          </div>
+            <p>
+  Prize Fund: {currency(dashboardPrizeFund)} • Cashers: {financials.cashers}
+</p>
+          </div>  
           <h2 className="mb-4 text-xl font-semibold text-blue-900 print:text-black">Cashers</h2>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm">
@@ -3775,16 +3849,89 @@ function StatsHistoryTab({ tournamentHistory }) {
     .flatMap((tournament) => (tournament.results || []).map((result) => ({ ...result, tournamentName: tournament.name, tournamentDate: tournament.date, season: tournament.season || "Unassigned" })))
     .reduce((map, result) => {
       const key = result.bowlerId || result.name.trim().toLowerCase();
-      const current = map[key] || { name: result.name, tournaments: 0, games: 0, pins: 0, cashes: 0, titles: 0, earnings: 0, highGame: 0, bestFinish: null, results: [] };
-      current.tournaments += 1;
-      current.games += (result.games || []).filter((g) => Number(g || 0) > 0).length;
-      current.pins += Number(result.scratchTotal || 0);
-      current.cashes += result.cashed ? 1 : 0;
-      current.titles += result.title ? 1 : 0;
-      current.earnings += Number(result.payout || 0);
-      current.highGame = Math.max(current.highGame, ...(result.games || []).map((g) => Number(g || 0)));
-      current.bestFinish = current.bestFinish === null ? result.place : Math.min(current.bestFinish, result.place);
-      current.results.push(result);
+const allGames =
+  result.overallGames?.length
+    ? result.overallGames
+    : result.games || [];
+
+const qualifyingGames =
+  result.qualifyingGames?.length
+    ? result.qualifyingGames
+    : result.games || [];
+
+const finalsGames =
+  result.finalsGames || [];
+
+const numericAllGames = allGames
+  .map((g) => Number(g || 0))
+  .filter((g) => g > 0);
+
+const numericQualifyingGames = qualifyingGames
+  .map((g) => Number(g || 0))
+  .filter((g) => g > 0);
+
+const numericFinalsGames = finalsGames
+  .map((g) => Number(g || 0))
+  .filter((g) => g > 0);
+
+const current = map[key] || {
+  name: result.name,
+  tournaments: 0,
+
+  games: 0,
+  qualifyingGames: 0,
+  finalsGames: 0,
+
+  pins: 0,
+  qualifyingPins: 0,
+  finalsPins: 0,
+
+  cashes: 0,
+  titles: 0,
+  earnings: 0,
+  highGame: 0,
+  bestFinish: null,
+  results: [],
+};
+
+current.tournaments += 1;
+
+current.games += numericAllGames.length;
+current.qualifyingGames += numericQualifyingGames.length;
+current.finalsGames += numericFinalsGames.length;
+
+current.pins += numericAllGames.reduce(
+  (sum, g) => sum + g,
+  0
+);
+
+current.qualifyingPins +=
+  numericQualifyingGames.reduce(
+    (sum, g) => sum + g,
+    0
+  );
+
+current.finalsPins +=
+  numericFinalsGames.reduce(
+    (sum, g) => sum + g,
+    0
+  );
+
+current.cashes += result.cashed ? 1 : 0;
+current.titles += result.title ? 1 : 0;
+current.earnings += Number(result.payout || 0);
+
+current.highGame = Math.max(
+  current.highGame,
+  ...numericAllGames
+);
+
+current.bestFinish =
+  current.bestFinish === null
+    ? result.place
+    : Math.min(current.bestFinish, result.place);
+
+current.results.push(result);
       map[key] = current;
       return map;
     }, {});
@@ -3804,7 +3951,26 @@ function StatsHistoryTab({ tournamentHistory }) {
   const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ▲" : " ▼") : "";
 
   const playerRows = sortStatsRows(Object.values(playerStats)
-    .map((p) => ({ ...p, average: p.games > 0 ? p.pins / p.games : 0 }))
+    .map((p) => ({
+  ...p,
+
+  average:
+    p.games > 0
+      ? p.pins / p.games
+      : 0,
+
+  qualifyingAverage:
+    p.qualifyingGames > 0
+      ? p.qualifyingPins /
+        p.qualifyingGames
+      : 0,
+
+  finalsAverage:
+    p.finalsGames > 0
+      ? p.finalsPins /
+        p.finalsGames
+      : 0,
+}))
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase())));
 
   return (
@@ -3836,35 +4002,185 @@ function StatsHistoryTab({ tournamentHistory }) {
       <AppCard>
         <CardContent className="p-3 md:p-5">
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[760px] text-xs md:text-sm">
-              <thead className="bg-blue-800 text-white">
-                <tr>
-                  <th className="p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("tournaments")} className="font-bold">Events{sortLabel("tournaments")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("games")} className="font-bold">Games{sortLabel("games")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("average")} className="font-bold">Avg{sortLabel("average")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold">High Game{sortLabel("highGame")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("earnings")} className="font-bold">Earnings{sortLabel("earnings")}</button></th>
-                  <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
-                </tr>
-              </thead>
+            <table className="w-full min-w-[1040px] text-xs md:text-sm">
+<thead className="bg-blue-800 text-white">
+  <tr>
+    <th className="p-2 text-left md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("name")}
+        className="font-bold"
+      >
+        Bowler{sortLabel("name")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("tournaments")}
+        className="font-bold"
+      >
+        Events{sortLabel("tournaments")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("games")}
+        className="font-bold"
+      >
+        Games{sortLabel("games")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("average")}
+        className="font-bold"
+      >
+        Overall Avg{sortLabel("average")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("qualifyingAverage")}
+        className="font-bold"
+      >
+        Qual Avg{sortLabel("qualifyingAverage")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("finalsAverage")}
+        className="font-bold"
+      >
+        Finals Avg{sortLabel("finalsAverage")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("finalsGames")}
+        className="font-bold"
+      >
+        Finals Gms{sortLabel("finalsGames")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("highGame")}
+        className="font-bold"
+      >
+        High Game{sortLabel("highGame")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("titles")}
+        className="font-bold"
+      >
+        Titles{sortLabel("titles")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("cashes")}
+        className="font-bold"
+      >
+        Cuts Made{sortLabel("cashes")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("earnings")}
+        className="font-bold"
+      >
+        Earnings{sortLabel("earnings")}
+      </button>
+    </th>
+
+    <th className="p-2 text-right md:p-3">
+      <button
+        type="button"
+        onClick={() => toggleStatsSort("bestFinish")}
+        className="font-bold"
+      >
+        Best Finish{sortLabel("bestFinish")}
+      </button>
+    </th>
+  </tr>
+</thead>
               <tbody>
                 {playerRows.map((p) => (
-                  <tr key={`stats-${p.name}`} className="border-t">
-                    <td className="p-2 font-semibold md:p-3">{p.name}</td>
-                    <td className="p-2 text-right md:p-3">{p.tournaments}</td>
-                    <td className="p-2 text-right md:p-3">{p.games}</td>
-                    <td className="p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
-                    <td className="p-2 text-right md:p-3">{p.highGame || "—"}</td>
-                    <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
-                    <td className="p-2 text-right md:p-3">{p.cashes}</td>
-                    <td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(p.earnings)}</td>
-                    <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "—"}</td>
-                  </tr>
+<tr key={`stats-${p.name}`} className="border-t">
+  <td className="p-2 font-semibold md:p-3">
+    {p.name}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.tournaments}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.games}
+  </td>
+
+  <td className="p-2 text-right font-bold md:p-3">
+    {p.average.toFixed(2)}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.qualifyingAverage.toFixed(2)}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.finalsGames > 0
+      ? p.finalsAverage.toFixed(2)
+      : "—"}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.finalsGames}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.highGame || "—"}
+  </td>
+
+  <td className="p-2 text-right font-bold text-yellow-700 md:p-3">
+    {p.titles}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.cashes}
+  </td>
+
+  <td className="p-2 text-right font-bold text-green-700 md:p-3">
+    {currency(p.earnings)}
+  </td>
+
+  <td className="p-2 text-right md:p-3">
+    {p.bestFinish ? `#${p.bestFinish}` : "—"}
+  </td>
+</tr>
                 ))}
-                {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No archived tournament stats for this filter yet.</td></tr>}
+                {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>} 
               </tbody>
             </table>
           </div>
@@ -3894,6 +4210,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     const confirmed = window.confirm("Archive this completed tournament into stats history?");
     if (!confirmed) return;
 
+
     const archived = {
       id: `${Date.now()}`,
       name: tournamentInfo.name || "Tournament",
@@ -3908,20 +4225,226 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       cashers: financials.cashers,
       prizeFund: financials.prizeFund,
       activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState },
-      results: ranked.map((b, index) => ({
-        bowlerId: b.name.trim().toLowerCase(),
-        name: b.name,
-        place: b.finalPlace || b.rank,
-        games: b.games,
-        scratchTotal: b.scratch,
-        handicapTotal: b.handicap,
+results: ranked.map((b, index) => {
+  const qualifyingGameScores = (b.games || [])
+    .map((game) => Number(game || 0))
+    .filter((game) => game > 0);
+
+const finalsGameScores =
+  tournamentFormat === "bracket"
+    ? getBracketFinalsGamesForBowler(b.name)
+    : [];
+  const allGameScores = [
+    ...qualifyingGameScores,
+    ...finalsGameScores,
+  ];
+
+  return {
+  bowlerId: b.name.trim().toLowerCase(),
+  name: b.name,
+  place: b.finalPlace || b.rank,
+
+  games: b.games || [],
+  qualifyingGames: b.games || [],
+
+  scratchTotal: b.scratch,
+  handicapTotal: b.handicap,
+
+finalsGames:
+  tournamentFormat === "bracket"
+    ? Object.values(
+        bracketState?.scratchScores?.[b.name] || {}
+      )
+    : tournamentFormat === "eliminator"
+      ? [
+          ...(eliminatorState?.game1Scores?.[b.name]
+            ? [eliminatorState.game1Scores[b.name]]
+            : []),
+          ...(eliminatorState?.game2Scores?.[b.name]
+            ? [eliminatorState.game2Scores[b.name]]
+            : []),
+          ...Object.values(
+            eliminatorState?.stepScores?.[b.name] || {}
+          ),
+        ]
+      : [],
+
+overallGames: [
+  ...(b.games || []),
+
+  ...(tournamentFormat === "bracket"
+    ? Object.values(
+        bracketState?.scratchScores?.[b.name] || {}
+      )
+    : tournamentFormat === "eliminator"
+      ? [
+          ...(eliminatorState?.game1Scores?.[b.name]
+            ? [eliminatorState.game1Scores[b.name]]
+            : []),
+          ...(eliminatorState?.game2Scores?.[b.name]
+            ? [eliminatorState.game2Scores[b.name]]
+            : []),
+          ...Object.values(
+            eliminatorState?.stepScores?.[b.name] || {}
+          ),
+        ]
+      : []),
+],
+
+scratchTotal: b.scratch,
+handicapTotal: b.handicap,
         scoringTotal: useHandicapScores ? b.handicap : b.scratch,
-        average: completedGamesCount(b) > 0 ? b.scratch / completedGamesCount(b) : 0,
+        qualifyingAverage:
+  (b.games || []).length > 0
+    ? (
+        (b.games || []).reduce(
+          (sum, game) => sum + Number(game || 0),
+          0
+        ) / (b.games || []).length
+      )
+    : 0,
+
+finalsAverage:
+  (
+    tournamentFormat === "bracket"
+      ? Object.values(
+          bracketState?.scratchScores?.[b.name] || {}
+        )
+      : tournamentFormat === "eliminator"
+        ? [
+            ...(eliminatorState?.game1Scores?.[b.name]
+              ? [eliminatorState.game1Scores[b.name]]
+              : []),
+            ...(eliminatorState?.game2Scores?.[b.name]
+              ? [eliminatorState.game2Scores[b.name]]
+              : []),
+            ...Object.values(
+              eliminatorState?.stepScores?.[b.name] || {}
+            ),
+          ]
+        : []
+  ).length > 0
+    ? (
+        (
+          tournamentFormat === "bracket"
+            ? Object.values(
+                bracketState?.scratchScores?.[b.name] || {}
+              )
+            : tournamentFormat === "eliminator"
+              ? [
+                  ...(eliminatorState?.game1Scores?.[b.name]
+                    ? [eliminatorState.game1Scores[b.name]]
+                    : []),
+                  ...(eliminatorState?.game2Scores?.[b.name]
+                    ? [eliminatorState.game2Scores[b.name]]
+                    : []),
+                  ...Object.values(
+                    eliminatorState?.stepScores?.[b.name] || {}
+                  ),
+                ]
+              : []
+        ).reduce(
+          (sum, game) => sum + Number(game || 0),
+          0
+        ) /
+        (
+          tournamentFormat === "bracket"
+            ? Object.values(
+                bracketState?.scratchScores?.[b.name] || {}
+              )
+            : tournamentFormat === "eliminator"
+              ? [
+                  ...(eliminatorState?.game1Scores?.[b.name]
+                    ? [eliminatorState.game1Scores[b.name]]
+                    : []),
+                  ...(eliminatorState?.game2Scores?.[b.name]
+                    ? [eliminatorState.game2Scores[b.name]]
+                    : []),
+                  ...Object.values(
+                    eliminatorState?.stepScores?.[b.name] || {}
+                  ),
+                ]
+              : []
+        ).length
+      )
+    : 0,
+
+average:
+  [
+    ...(b.games || []),
+
+    ...(tournamentFormat === "bracket"
+      ? Object.values(
+          bracketState?.scratchScores?.[b.name] || {}
+        )
+      : tournamentFormat === "eliminator"
+        ? [
+            ...(eliminatorState?.game1Scores?.[b.name]
+              ? [eliminatorState.game1Scores[b.name]]
+              : []),
+            ...(eliminatorState?.game2Scores?.[b.name]
+              ? [eliminatorState.game2Scores[b.name]]
+              : []),
+            ...Object.values(
+              eliminatorState?.stepScores?.[b.name] || {}
+            ),
+          ]
+        : []),
+  ].length > 0
+    ? (
+        [
+          ...(b.games || []),
+
+          ...(tournamentFormat === "bracket"
+            ? Object.values(
+                bracketState?.scratchScores?.[b.name] || {}
+              )
+            : tournamentFormat === "eliminator"
+              ? [
+                  ...(eliminatorState?.game1Scores?.[b.name]
+                    ? [eliminatorState.game1Scores[b.name]]
+                    : []),
+                  ...(eliminatorState?.game2Scores?.[b.name]
+                    ? [eliminatorState.game2Scores[b.name]]
+                    : []),
+                  ...Object.values(
+                    eliminatorState?.stepScores?.[b.name] || {}
+                  ),
+                ]
+              : []),
+        ].reduce(
+          (sum, game) => sum + Number(game || 0),
+          0
+        ) /
+        [
+          ...(b.games || []),
+
+          ...(tournamentFormat === "bracket"
+            ? Object.values(
+                bracketState?.scratchScores?.[b.name] || {}
+              )
+            : tournamentFormat === "eliminator"
+              ? [
+                  ...(eliminatorState?.game1Scores?.[b.name]
+                    ? [eliminatorState.game1Scores[b.name]]
+                    : []),
+                  ...(eliminatorState?.game2Scores?.[b.name]
+                    ? [eliminatorState.game2Scores[b.name]]
+                    : []),
+                  ...Object.values(
+                    eliminatorState?.stepScores?.[b.name] || {}
+                  ),
+                ]
+              : []),
+        ].length
+      )
+    : 0,
         cashed: (b.finalPlace || b.rank) <= financials.cashers,
         payout: (b.finalPlace || b.rank) <= financials.cashers ? payoutAssignments[index] || 0 : 0,
         title: (b.finalPlace || b.rank) === 1 && Boolean(tournamentInfo.titleEligible ?? true),
-        tournamentWinner: (b.finalPlace || b.rank) === 1,
-      })),
+tournamentWinner: (b.finalPlace || b.rank) === 1,
+  };
+}),
     };
 
     setTournamentHistory((current) => [archived, ...current]);
@@ -3988,7 +4511,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                     <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button></div></td>
                   </tr>
                 ))}
-                {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No tournaments archived for this season filter yet.</td></tr>}
+                {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No tournaments archived for this season filter yet.</td></tr>} 
               </tbody>
             </table>
           </div>
@@ -4418,11 +4941,28 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
 }
 
 function FinanceTab({ entries, payoutState, financials }) {
-  const totalCollected = entries * Number(payoutState.entryFee || 0);
-  const lineage = entries * Number(payoutState.lineage || 0);
-  const netAfterLineage = totalCollected - lineage;
-  const ballRaffle = Number(payoutState.ballRaffleAdded || 0);
-  const totalPrizeFund = financials.prizeFund;
+  const totalCollected =
+    entries * Number(payoutState.entryFee || 0);
+
+const lineagePerGame = Number(payoutState.lineagePerGame || 4);
+const qualifyingGames = Number(payoutState.qualifyingGames || 4);
+const finalsGames = Number(payoutState.finalsGames || 0);
+
+const lineage =
+  entries * qualifyingGames * lineagePerGame +
+  finalsGames * lineagePerGame;
+
+  const netAfterLineage =
+    totalCollected - lineage;
+
+  const ballRaffle =
+    Number(payoutState.ballRaffleAdded || 0);
+
+  const otherAddedMoney =
+    Number(payoutState.otherAddedMoney || 0);
+
+  const totalPrizeFund =
+    netAfterLineage + ballRaffle + otherAddedMoney;
   const rows = [
     ["Entries", entries, "count"],
     ["Entry Fee", payoutState.entryFee, "currency"],
@@ -4430,6 +4970,7 @@ function FinanceTab({ entries, payoutState, financials }) {
     ["Lineage", lineage, "currency"],
     ["Net After Lineage", netAfterLineage, "currency"],
     ["Ball Raffle", ballRaffle, "currency"],
+    ["Other Added Money", otherAddedMoney, "currency"],
     ["Total Prize Fund", totalPrizeFund, "currency"],
   ];
   const formatValue = (value, type) => type === "count" ? value : currency(value);
