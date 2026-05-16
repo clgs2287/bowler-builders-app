@@ -2846,29 +2846,40 @@ function ReservationsTab({
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            value={reservationState.tournamentName}
-            onChange={(e) =>
-              setReservationState((current) => ({
-                ...current,
-                tournamentName: e.target.value,
-              }))
-            }
-            placeholder="Tournament Name"
-          />
+<div className="grid gap-4 md:grid-cols-2">
+  <div className="space-y-2">
+    <Label>Open Tournament</Label>
 
-          <Input
-            value={reservationState.registrationEmail}
-            onChange={(e) =>
-              setReservationState((current) => ({
-                ...current,
-                registrationEmail: e.target.value,
-              }))
-            }
-            placeholder="Registration Email"
-          />
-        </div>
+    <Input
+      value={reservationState.tournamentName}
+      onChange={(e) =>
+        setReservationState((current) => ({
+          ...current,
+          tournamentName: e.target.value,
+        }))
+      }
+      placeholder="Tournament Name"
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Max Entries</Label>
+
+    <Input
+      type="number"
+      value={reservationState.reservationLimit}
+      onChange={(e) =>
+        setReservationState((current) => ({
+          ...current,
+          reservationLimit: Number(
+            e.target.value || 0
+          ),
+        }))
+      }
+      placeholder="Reservation Limit"
+    />
+  </div>
+</div>
 
         <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
           <p className="text-sm font-semibold text-blue-900">
@@ -2890,16 +2901,17 @@ function ReservationsTab({
         <div className="mt-6 overflow-auto rounded-2xl border border-blue-200 bg-white">
   <table className="w-full min-w-[900px] text-sm">
     <thead className="bg-blue-800 text-white">
-      <tr>
-        <th className="p-3 text-left">Status</th>
-        <th className="p-3 text-left">Name</th>
-        <th className="p-3 text-left">Nickname</th>
-        <th className="p-3 text-left">Phone</th>
-        <th className="p-3 text-left">Email</th>
-        <th className="p-3 text-left">Tournament</th>
-        <th className="p-3 text-left">Note</th>
-        <th className="p-3 text-left">Submitted</th>
-      </tr>
+<tr>
+  <th className="p-3 text-left">Status</th>
+  <th className="p-3 text-left">Name</th>
+  <th className="p-3 text-left">Nickname</th>
+  <th className="p-3 text-left">Phone</th>
+  <th className="p-3 text-left">Email</th>
+  <th className="p-3 text-left">Tournament</th>
+  <th className="p-3 text-left">Note</th>
+  <th className="p-3 text-left">Submitted</th>
+  <th className="p-3 text-right">Actions</th>
+</tr>
     </thead>
 
     <tbody>
@@ -2945,13 +2957,36 @@ function ReservationsTab({
               {reservation.note || "—"}
             </td>
 
-            <td className="p-3 text-xs text-slate-500">
-              {reservation.createdAt
-                ? new Date(
-                    reservation.createdAt
-                  ).toLocaleString()
-                : "—"}
-            </td>
+<td className="p-3 text-xs text-slate-500">
+  {reservation.createdAt
+    ? new Date(
+        reservation.createdAt
+      ).toLocaleString()
+    : "—"}
+</td>
+
+<td className="p-3 text-right">
+  <Button
+    variant="outline"
+    className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+onClick={() => {
+  const confirmed = window.confirm(
+    `Delete reservation for ${reservation.name}?`
+  );
+
+  if (!confirmed) return;
+
+  setReservationState((current) => ({
+    ...current,
+    reservations: (current.reservations || []).filter(
+      (item) => item.id !== reservation.id
+    ),
+  }));
+}}
+  >
+    Delete
+  </Button>
+</td>
           </tr>
         )
       )}
@@ -2959,7 +2994,7 @@ function ReservationsTab({
       {reservationState.reservations?.length === 0 && (
         <tr>
           <td
-            colSpan={8}
+            colSpan={9}
             className="p-5 text-center text-blue-700"
           >
             No reservations submitted yet.
