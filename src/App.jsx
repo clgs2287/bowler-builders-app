@@ -681,30 +681,26 @@ const appSections = [
       { id: "payouts", label: "Payouts" },
       { id: "scoresheets", label: "Scoresheets" },
       { id: "results", label: "Score Entry" },
-      {
-  id: "schedule",
-  label: "Schedule",
-},
-{
-  id: "recap",
-  label: "Tournament Recap",
-},
-{
-  id: "reservations",
-  label: "Reservations",
-},
+            { id: "schedule", label: "Schedule" },
+      { id: "recap", label: "Tournament Recap" },
+      { id: "reservations", label: "Reservations" },
     ],
   },
+
   {
     id: "leaderboard",
     label: "Tournament Home",
-    tabs: [
-      { id: "tournamentInfo", label: "Tournament Info" },
-      { id: "public", label: "Leaderboard" },
-      { id: "publicfinals", label: "Finals", hideForSweeper: true },
-      { id: "publicsideaction", label: "Side Action" },
-    ],
+tabs: [
+  { id: "tournamentInfo", label: "Tournament Info" },
+  { id: "public", label: "Leaderboard" },
+  { id: "publicfinals", label: "Finals", hideForSweeper: true },
+  { id: "publicsideaction", label: "Side Action" },
+  { id: "publicschedule", label: "Schedule" },
+  { id: "publicrecap", label: "Recap" },
+  { id: "publicreservations", label: "Reservations" },
+],
   },
+
   {
     id: "finals",
     label: "Finals",
@@ -712,7 +708,6 @@ const appSections = [
       { id: "bracket", label: "Bracket" },
       { id: "eliminator", label: "Eliminator" },
       { id: "summary", label: "Cash Sheet" },
-
     ],
   },
 
@@ -725,6 +720,7 @@ const appSections = [
       { id: "titles", label: "Titles" },
     ],
   },
+
   {
     id: "sideaction",
     label: "Side Action",
@@ -2818,91 +2814,353 @@ function TournamentRecapTab({
   );
 }
 function ReservationsTab({
-  reservations,
-  setReservations,
+  reservationState,
+  setReservationState,
 }) {
-  const addReservation = () => {
-    setReservations((current) => [
-      ...current,
-      {
-        name: "",
-        phone: "",
-        status: "Unpaid",
-      },
-    ]);
-  };
-
-  const updateReservation = (
-    index,
-    field,
-    value
-  ) => {
-    setReservations((current) =>
-      current.map((reservation, i) =>
-        i === index
-          ? {
-              ...reservation,
-              [field]: value,
-            }
-          : reservation
-      )
-    );
-  };
-
   return (
     <AppCard>
       <CardContent className="p-3 md:p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-blue-900">
-            Reservations
-          </h2>
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900">
+              Reservations
+            </h2>
 
-          <Button
-            className="rounded-2xl bg-blue-800 hover:bg-blue-900"
-            onClick={addReservation}
+            <p className="text-sm text-blue-700">
+              Control public tournament registration.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2">
+            <Label>Entries Open</Label>
+
+            <Switch
+              checked={reservationState.entriesOpen}
+              onCheckedChange={(checked) =>
+                setReservationState((current) => ({
+                  ...current,
+                  entriesOpen: checked,
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            value={reservationState.tournamentName}
+            onChange={(e) =>
+              setReservationState((current) => ({
+                ...current,
+                tournamentName: e.target.value,
+              }))
+            }
+            placeholder="Tournament Name"
+          />
+
+          <Input
+            value={reservationState.registrationEmail}
+            onChange={(e) =>
+              setReservationState((current) => ({
+                ...current,
+                registrationEmail: e.target.value,
+              }))
+            }
+            placeholder="Registration Email"
+          />
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <p className="text-sm font-semibold text-blue-900">
+            Public registration is currently:
+          </p>
+
+          <p
+            className={`mt-2 text-lg font-black ${
+              reservationState.entriesOpen
+                ? "text-green-700"
+                : "text-red-700"
+            }`}
           >
-            Add Reservation
-          </Button>
+            {reservationState.entriesOpen
+              ? "OPEN"
+              : "CLOSED"}
+          </p>
         </div>
+        <div className="mt-6 overflow-auto rounded-2xl border border-blue-200 bg-white">
+  <table className="w-full min-w-[900px] text-sm">
+    <thead className="bg-blue-800 text-white">
+      <tr>
+        <th className="p-3 text-left">Status</th>
+        <th className="p-3 text-left">Name</th>
+        <th className="p-3 text-left">Nickname</th>
+        <th className="p-3 text-left">Phone</th>
+        <th className="p-3 text-left">Email</th>
+        <th className="p-3 text-left">Tournament</th>
+        <th className="p-3 text-left">Note</th>
+        <th className="p-3 text-left">Submitted</th>
+      </tr>
+    </thead>
 
-        <div className="space-y-3">
-          {reservations.map((reservation, index) => (
-            <div
-              key={`reservation-${index}`}
-              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-3"
-            >
-              <Input
-                value={reservation.name}
-                onChange={(e) =>
-                  updateReservation(index, "name", e.target.value)
-                }
-                placeholder="Bowler Name"
-              />
-
-              <Input
-                value={reservation.phone}
-                onChange={(e) =>
-                  updateReservation(index, "phone", e.target.value)
-                }
-                placeholder="Phone Number"
-              />
-
-              <select
-                className="rounded-2xl border border-blue-200 p-2"
-                value={reservation.status}
-                onChange={(e) =>
-                  updateReservation(index, "status", e.target.value)
-                }
+    <tbody>
+      {(reservationState.reservations || []).map(
+        (reservation) => (
+          <tr
+            key={reservation.id}
+            className="border-t"
+          >
+            <td className="p-3">
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-bold ${
+                  reservation.status === "Registered"
+                    ? "bg-green-100 text-green-800"
+                    : "bg-yellow-100 text-yellow-800"
+                }`}
               >
-                <option>Unpaid</option>
-                <option>Paid</option>
-                <option>Confirmed</option>
-              </select>
-            </div>
-          ))}
-        </div>
+                {reservation.status}
+              </span>
+            </td>
+
+            <td className="p-3 font-semibold">
+              {reservation.name}
+            </td>
+
+            <td className="p-3">
+              {reservation.nickname || "—"}
+            </td>
+
+            <td className="p-3">
+              {reservation.phone}
+            </td>
+
+            <td className="p-3">
+              {reservation.email}
+            </td>
+
+            <td className="p-3">
+              {reservation.tournament}
+            </td>
+
+            <td className="max-w-[220px] p-3">
+              {reservation.note || "—"}
+            </td>
+
+            <td className="p-3 text-xs text-slate-500">
+              {reservation.createdAt
+                ? new Date(
+                    reservation.createdAt
+                  ).toLocaleString()
+                : "—"}
+            </td>
+          </tr>
+        )
+      )}
+
+      {reservationState.reservations?.length === 0 && (
+        <tr>
+          <td
+            colSpan={8}
+            className="p-5 text-center text-blue-700"
+          >
+            No reservations submitted yet.
+          </td>
+        </tr>
+      )}
+    </tbody>
+  </table>
+</div>
       </CardContent>
     </AppCard>
+  );
+}
+function PublicReservations({
+  reservationState,
+  setReservationState,
+  tournamentInfo,
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    nickname: "",
+    phone: "",
+    email: "",
+    note: "",
+  });
+
+  const updateField = (field, value) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const emailSubject = encodeURIComponent(
+    `Tournament Reservation - ${
+      reservationState.tournamentName ||
+      tournamentInfo.name
+    }`
+  );
+
+  const emailBody = encodeURIComponent(`
+Tournament:
+${reservationState.tournamentName || tournamentInfo.name}
+
+Name:
+${form.name}
+
+Nickname:
+${form.nickname}
+
+Phone:
+${form.phone}
+
+Email:
+${form.email}
+
+Optional Note:
+${form.note}
+  `);
+
+  const formValid =
+  form.name.trim() &&
+  form.phone.trim() &&
+  form.email.trim();
+  const currentReservations =
+  reservationState.reservations || [];
+
+const registrationStatus =
+  currentReservations.length <
+  Number(reservationState.reservationLimit || 48)
+    ? "Registered"
+    : "Waitlisted";
+  const mailtoLink = `mailto:${
+    reservationState.registrationEmail
+  }?subject=${emailSubject}&body=${emailBody}`;
+
+  if (!reservationState.entriesOpen) {
+    return (
+      <Card className="rounded-2xl border border-red-200 bg-white shadow-sm">
+        <CardContent className="p-5">
+          <h2 className="text-2xl font-black text-red-700">
+            Entries Currently Closed
+          </h2>
+
+          <p className="mt-3 text-sm text-slate-700">
+            Reservations are not currently being accepted.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
+      <CardContent className="p-3 md:p-5">
+        <h2 className="mb-2 text-2xl font-black text-blue-950">
+          Tournament Reservations
+        </h2>
+
+        <p className="mb-5 text-sm text-blue-700">
+          Register for:
+          <span className="ml-1 font-bold">
+            {reservationState.tournamentName ||
+              tournamentInfo.name}
+          </span>
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            value={form.name}
+            onChange={(e) =>
+              updateField("name", e.target.value)
+            }
+            placeholder="Full Name *"
+          />
+
+          <Input
+            value={form.nickname}
+            onChange={(e) =>
+              updateField("nickname", e.target.value)
+            }
+            placeholder="Nickname"
+          />
+
+          <Input
+            value={form.phone}
+            onChange={(e) =>
+              updateField("phone", e.target.value)
+            }
+            placeholder="Phone Number *"
+          />
+
+          <Input
+            value={form.email}
+            onChange={(e) =>
+              updateField("email", e.target.value)
+            }
+            placeholder="Email Address *"
+          />
+        </div>
+
+        <textarea
+          className="mt-4 min-h-[140px] w-full rounded-2xl border border-blue-200 p-4"
+          value={form.note}
+          onChange={(e) =>
+            updateField("note", e.target.value)
+          }
+          placeholder="Optional note..."
+        />
+
+<Button
+  disabled={!formValid}
+  className={`mt-5 rounded-2xl px-5 py-3 text-sm font-bold ${
+    formValid
+      ? "bg-blue-800 hover:bg-blue-900"
+      : "cursor-not-allowed bg-slate-400"
+  }`}
+  onClick={() => {
+    const newReservation = {
+      id: Date.now(),
+      tournament:
+        reservationState.tournamentName ||
+        tournamentInfo.name,
+      name: form.name,
+      nickname: form.nickname,
+      phone: form.phone,
+      email: form.email,
+      note: form.note,
+      status: registrationStatus,
+      createdAt: new Date().toISOString(),
+    };
+
+    setReservationState((current) => ({
+      ...current,
+      reservations: [
+        ...current.reservations,
+        newReservation,
+      ],
+    }));
+
+    alert(
+      registrationStatus === "Registered"
+        ? "Registration submitted successfully!"
+        : "You have been added to the waitlist."
+    );
+
+    setForm({
+      name: "",
+      nickname: "",
+      phone: "",
+      email: "",
+      note: "",
+    });
+  }}
+>
+  {registrationStatus === "Registered"
+    ? "Register"
+    : "Join Waitlist"}
+</Button>
+      </CardContent>
+    </Card>
   );
 }
 function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifyingGames }) {
@@ -3665,6 +3923,58 @@ function PublicSchedule({ scheduleItems = [] }) {
 
           <p className="text-xs font-semibold text-slate-500">
             * FKM title event
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+function PublicTournamentRecap({
+  tournamentRecap,
+}) {
+  return (
+    <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
+      <CardContent className="p-3 md:p-5">
+        <h2 className="mb-5 text-2xl font-black text-blue-950">
+          Tournament Recap
+        </h2>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl bg-blue-50 p-4">
+            <p className="text-sm font-semibold text-blue-700">
+              Champion
+            </p>
+
+            <p className="mt-2 text-xl font-black text-blue-950">
+              {tournamentRecap.winner || "TBD"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-blue-50 p-4">
+            <p className="text-sm font-semibold text-blue-700">
+              Runner Up
+            </p>
+
+            <p className="mt-2 text-xl font-black text-blue-950">
+              {tournamentRecap.runnerUp || "TBD"}
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-blue-50 p-4">
+            <p className="text-sm font-semibold text-blue-700">
+              High Game
+            </p>
+
+            <p className="mt-2 text-xl font-black text-blue-950">
+              {tournamentRecap.highGame || "TBD"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-blue-100 bg-slate-50 p-4">
+          <p className="whitespace-pre-wrap text-sm text-slate-700">
+            {tournamentRecap.recapNotes ||
+              "Tournament recap coming soon."}
           </p>
         </div>
       </CardContent>
@@ -6838,7 +7148,13 @@ const [tournamentRecap, setTournamentRecap] = useState({
   recapNotes: "",
 });
 
-const [reservations, setReservations] = useState([]);
+const [reservationState, setReservationState] = useState({
+  entriesOpen: false,
+  registrationEmail: "",
+  tournamentName: "",
+  reservationLimit: 48,
+  reservations: [],
+});
   if (typeof window !== "undefined") window.__currentTournamentFormat = tournamentFormat;
 
   useEffect(() => {
@@ -7018,10 +7334,10 @@ const [reservations, setReservations] = useState([]);
 )}
 
 {activeTab === "reservations" && (
-  <ReservationsTab
-    reservations={reservations}
-    setReservations={setReservations}
-  />
+<ReservationsTab
+  reservationState={reservationState}
+  setReservationState={setReservationState}
+/>
 )}
  {activeTab === "bracket" && (
   <BracketTab
@@ -7069,6 +7385,27 @@ const [reservations, setReservations] = useState([]);
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} /></AppErrorBoundary>}
         {activeTab === "highgame" && <AppErrorBoundary key="highgame"><HighGameTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
         {activeTab === "sideactionpayouts" && <AppErrorBoundary key="sideactionpayouts"><SideActionPayoutsTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} paidSideActionPayouts={paidSideActionPayouts} setPaidSideActionPayouts={setPaidSideActionPayouts} /></AppErrorBoundary>}
+     {activeTab === "publicschedule" && (
+  <AppErrorBoundary key="publicschedule">
+    <PublicSchedule scheduleItems={scheduleItems} />
+  </AppErrorBoundary>
+)}
+{activeTab === "publicrecap" && (
+  <AppErrorBoundary key="publicrecap">
+    <PublicTournamentRecap
+      tournamentRecap={tournamentRecap}
+    />
+  </AppErrorBoundary>
+)}
+{activeTab === "publicreservations" && (
+  <AppErrorBoundary key="publicreservations">
+<PublicReservations
+  reservationState={reservationState}
+  setReservationState={setReservationState}
+  tournamentInfo={tournamentInfo}
+/>
+  </AppErrorBoundary>
+)}
       </div>
     </div>
   );
