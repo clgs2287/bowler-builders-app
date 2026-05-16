@@ -2644,6 +2644,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
     const match = normalizeLane(lane).match(/[0-9]+/);
     return match ? Number(match[0]) : 0;
   };
+  const [printMode, setPrintMode] = useState("scoresheets");
   const lanePairs = bowlers.filter((b) => b.name?.trim()).reduce((groups, b) => {
     const normalizedLane = normalizeLane(b.lane);
     const laneNumber = getLaneNumberFromInput(normalizedLane);
@@ -2794,7 +2795,25 @@ const byLane = lanes.reduce(
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("lane-pair-scoresheets.csv", csvRows)}>Export Lane Sheets CSV</Button>
-              <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => window.print()}>Print Scoresheets</Button>
+              <Button
+  className="rounded-2xl bg-blue-800 hover:bg-blue-900"
+  onClick={() => {
+    setPrintMode("scoresheets");
+    setTimeout(() => window.print(), 100);
+  }}
+>
+  Print Scoresheets
+</Button>
+
+<Button
+  className="rounded-2xl bg-green-700 hover:bg-green-800"
+  onClick={() => {
+    setPrintMode("finals");
+    setTimeout(() => window.print(), 100);
+  }}
+>
+  Print Finals Slips
+</Button>
             </div>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -2805,19 +2824,74 @@ const byLane = lanes.reduce(
         </CardContent>
       </AppCard>
 
-      <div className="print:block print:m-0 print:p-0">
-        {printableSheets.map((pair, index) => (
-  <div key={`print-sheet-wrap-${pair}`} className={index === 0 ? "" : "print:break-before-page"}>
-    <PrintableLaneSheet pair={pair} />
-  </div>
-))}
-      </div>
 
-      {sortedPairs.length === 0 && <AppCard><CardContent className="p-3 md:p-5"><p className="text-blue-700">No lane assignments yet. Add lanes on the Registration tab, then return here.</p></CardContent></AppCard>}
+{printMode === "finals" && (
+  <div className="grid grid-cols-2 gap-4 print:grid-cols-2">
+    {Array.from({ length: 8 }, (_, index) => (
+      <div
+        key={`finals-slip-${index}`}
+        className="rounded-2xl border-2 border-slate-900 bg-white p-5 print:break-inside-avoid"
+      >
+        <div className="mb-4 border-b-2 border-slate-900 pb-2">
+          <h2 className="text-lg font-black">
+            {tournamentInfo.name || "Tournament"}
+          </h2>
+        </div>
+
+        <div className="mb-3 flex gap-4 text-sm font-semibold">
+          <div>Round: __________________</div>
+          <div>Match #: ______</div>
+        </div>
+
+        <div className="mb-5 text-sm font-semibold">
+          Lane Pair: ____________
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between pb-2">
+            <span className="font-bold">Bowler 1:</span>
+            <div className="w-64 border-b border-slate-900" />
+            <span className="ml-4 font-bold">Score:</span>
+            <div className="w-16 border-b border-slate-900" />
+          </div>
+
+          <div className="flex items-center justify-between pb-2">
+            <span className="font-bold">Bowler 2:</span>
+            <div className="w-64 border-b border-slate-900" />
+            <span className="ml-4 font-bold">Score:</span>
+            <div className="w-16 border-b border-slate-900" />
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
+{printMode === "scoresheets" && (
+  <div className="print:block print:m-0 print:p-0">
+    {printableSheets.map((pair, index) => (
+      <div
+        key={`print-sheet-wrap-${pair}`}
+        className={index === 0 ? "" : "print:break-before-page"}
+      >
+        <PrintableLaneSheet pair={pair} />
+      </div>
+    ))}
+  </div>
+)}
+
+{sortedPairs.length === 0 && (
+  <AppCard>
+    <CardContent className="p-3 md:p-5">
+      <p className="text-blue-700">
+        No lane assignments yet. Add lanes on the Registration tab, then return here.
+      </p>
+    </CardContent>
+  </AppCard>
+)}
     </div>
   );
 }
-
 function getBracketByeRanks(qualifiers) {
   const size = getBracketSize(qualifiers);
   if (typeof size !== "number") return [];
