@@ -697,6 +697,7 @@ tabs: [
   { id: "publicsideaction", label: "Side Action" },
   { id: "publicschedule", label: "Schedule" },
   { id: "publicrecap", label: "Recap" },
+  {id: "publicstats", label: "Stats" },
   { id: "publicreservations", label: "Reservations" },
 ],
   },
@@ -901,6 +902,7 @@ const infoRows = [
         : "Eliminator",
   ],
   ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
+  ["Major", tournamentInfo.major ? "Yes" : "No"],
 ];
 
   return (
@@ -1280,6 +1282,25 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
                     <span className="text-sm font-semibold text-blue-950">{tournamentInfo.titleEligible ?? true ? "Yes" : "No"}</span>
                   </div>
                 </div>
+                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+  <Label className="text-left text-sm font-bold text-blue-900">
+    Major
+  </Label>
+
+  <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 shadow-sm">
+    <Switch
+      compact
+      checked={Boolean(tournamentInfo.major ?? false)}
+      onCheckedChange={(checked) =>
+        update("major", checked)
+      }
+    />
+
+    <span className="text-sm font-semibold text-blue-950">
+      {tournamentInfo.major ? "Yes" : "No"}
+    </span>
+  </div>
+</div>
               </div>
             </div>
           </CardContent>
@@ -3906,6 +3927,8 @@ function PublicSchedule({ scheduleItems = [] }) {
     return item.startDate;
   };
 
+  
+
   return (
     <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
       <CardContent className="p-3 md:p-5">
@@ -4012,6 +4035,752 @@ function PublicTournamentRecap({
               "Tournament recap coming soon."}
           </p>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PublicStats({ tournamentHistory, manualTitles = [] }) {
+  const [search, setSearch] = useState("");
+  const [publicStatsTab, setPublicStatsTab] = useState("bowlers");
+  const [selectedPublicArchiveId, setSelectedPublicArchiveId] = useState(null);
+const [publicArchiveSection, setPublicArchiveSection] = useState("results");
+
+  const scratchHistory = (tournamentHistory || []).filter(
+    (t) => !t.useHandicapScores
+  );
+  const selectedPublicArchive = scratchHistory.find(
+  (t) => t.id === selectedPublicArchiveId
+);
+const [expandedPublicArchiveBowler, setExpandedPublicArchiveBowler] = useState(null);
+  const archiveTitles = scratchHistory.flatMap((tournament) =>
+  (tournament.results || [])
+    .filter((result) => result.tournamentWinner)
+    .map((result) => ({
+      id: `${tournament.id}-${result.bowlerId}`,
+      bowler: result.name,
+      tournament: tournament.name,
+      date: tournament.date,
+      season: tournament.season || "Unassigned",
+      source: tournament.titleEligible
+        ? tournament.major
+          ? "Major Title"
+          : "FKM Title"
+        : "Non-FKM Title",
+      eligible: Boolean(tournament.titleEligible),
+      major: Boolean(tournament.major),
+      center: tournament.center || "",
+    }))
+);
+
+const publicMajorTitles = [
+  ...archiveTitles.filter((title) => title.major),
+  ...manualTitles.filter((title) => title.major),
+];
+
+const publicFkmTitles = [
+  ...archiveTitles.filter((title) => title.eligible && !title.major),
+  ...manualTitles.filter(
+    (title) => title.eligible !== false && !title.major
+  ),
+];
+
+const publicNonFkmTitles = [
+  ...archiveTitles.filter((title) => !title.eligible),
+  ...manualTitles.filter((title) => title.eligible === false),
+];
+
+const publicAllTitles = [
+  ...publicMajorTitles,
+  ...publicFkmTitles,
+  ...publicNonFkmTitles,
+].sort(
+  (a, b) =>
+    String(b.date || "").localeCompare(String(a.date || "")) ||
+    String(a.bowler || "").localeCompare(String(b.bowler || ""))
+);
+
+const publicTitleCounts = publicAllTitles.reduce((map, title) => {
+  const key = String(title.bowler || "").trim().toLowerCase();
+
+  const current =
+    map[key] || {
+      bowler: title.bowler,
+      titles: 0,
+      majors: 0,
+      fkmTitles: 0,
+      nonFkmTitles: 0,
+      latest: "",
+    };
+
+  current.titles += 1;
+
+  if (title.major) current.majors += 1;
+  else if (title.eligible) current.fkmTitles += 1;
+  else current.nonFkmTitles += 1;
+
+  if (!current.latest || String(title.date || "") > String(current.latest || "")) {
+    current.latest = title.date || "";
+  }
+
+  map[key] = current;
+  return map;
+}, {});
+
+const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
+  (a, b) =>
+    b.titles - a.titles ||
+    b.majors - a.majors ||
+    String(a.bowler || "").localeCompare(String(b.bowler || ""))
+);
+
+  const playerStats = scratchHistory
+    .flatMap((tournament) =>
+      (tournament.results || []).map((result) => ({
+        ...result,
+        tournamentName: tournament.name,
+        tournamentDate: tournament.date,
+      }))
+    )
+    .reduce((map, result) => {
+      const key =
+        result.bowlerId ||
+        String(result.name || "").trim().toLowerCase();
+
+      const allGames =
+        result.overallGames?.length
+          ? result.overallGames
+          : result.games || [];
+
+      const numericGames = allGames
+        .map((g) => Number(g || 0))
+        .filter((g) => g > 0);
+
+      const current =
+        map[key] || {
+          name: result.name,
+          events: 0,
+          games: 0,
+          pins: 0,
+          titles: 0,
+          cuts: 0,
+          highGame: 0,
+          bestFinish: null,
+        };
+
+      current.events += 1;
+      current.games += numericGames.length;
+      current.pins += numericGames.reduce(
+        (sum, g) => sum + g,
+        0
+      );
+      current.titles += result.title ? 1 : 0;
+      current.cuts += result.cashed ? 1 : 0;
+      current.highGame = Math.max(
+        current.highGame,
+        ...numericGames
+      );
+      current.bestFinish =
+        current.bestFinish === null
+          ? result.place
+          : Math.min(current.bestFinish, result.place);
+
+      map[key] = current;
+      return map;
+    }, {});
+
+  const rows = Object.values(playerStats)
+    .map((p) => ({
+      ...p,
+      average: p.games > 0 ? p.pins / p.games : 0,
+    }))
+    .filter((p) =>
+      p.name.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort(
+      (a, b) =>
+        b.titles - a.titles ||
+        b.average - a.average ||
+        b.cuts - a.cuts
+    );
+    
+
+  return (
+    <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
+      <CardContent className="p-3 md:p-5">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-blue-950">
+              Public Stats
+            </h2>
+            <p className="text-sm text-blue-700">
+              Scratch tournament career stats.
+            </p>
+          </div>
+
+          <Input
+            className="w-full md:w-72"
+            placeholder="Search bowler..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+<div className="mb-4 flex flex-wrap gap-2">
+  {[
+    { id: "bowlers", label: "Bowler Stats" },
+    { id: "archives", label: "Archived Tournaments" },
+    { id: "titles", label: "Title History" },
+  ].map((tab) => (
+    <button
+      key={tab.id}
+      type="button"
+      onClick={() => setPublicStatsTab(tab.id)}
+      className={
+        publicStatsTab === tab.id
+          ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white"
+          : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"
+      }
+    >
+      {tab.label}
+    </button>
+  ))}
+</div>
+
+{publicStatsTab === "bowlers" && (
+        <div className="overflow-auto rounded-2xl border border-blue-200">
+          <table className="w-full min-w-[720px] text-xs md:text-sm">
+            <thead className="bg-blue-800 text-white">
+              <tr>
+                <th className="p-3 text-left">Bowler</th>
+                <th className="p-3 text-right">Events</th>
+                <th className="p-3 text-right">Games</th>
+                <th className="p-3 text-right">Avg</th>
+                <th className="p-3 text-right">High Game</th>
+                <th className="p-3 text-right">Titles</th>
+                <th className="p-3 text-right">Cuts Made</th>
+                <th className="p-3 text-right">Best Finish</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {rows.map((p) => (
+                <tr key={`public-stats-${p.name}`} className="border-t">
+                  <td className="p-3 font-bold text-blue-950">
+                    {p.name}
+                  </td>
+                  <td className="p-3 text-right">{p.events}</td>
+                  <td className="p-3 text-right">{p.games}</td>
+                  <td className="p-3 text-right font-bold">
+                    {p.average.toFixed(2)}
+                  </td>
+                  <td className="p-3 text-right">
+                    {p.highGame || "—"}
+                  </td>
+                  <td className="p-3 text-right font-bold text-yellow-700">
+                    {p.titles}
+                  </td>
+                  <td className="p-3 text-right">{p.cuts}</td>
+                  <td className="p-3 text-right">
+                    {p.bestFinish ? `#${p.bestFinish}` : "—"}
+                  </td>
+                </tr>
+              ))}
+
+              {rows.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="p-5 text-center text-blue-700"
+                  >
+                    No public stats available yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {publicStatsTab === "archives" && (
+  <div className="overflow-auto rounded-2xl border border-blue-200">
+    <table className="w-full min-w-[720px] text-xs md:text-sm">
+      <thead className="bg-blue-800 text-white">
+        <tr>
+          <th className="p-3 text-left">
+            Tournament
+          </th>
+
+          <th className="p-3 text-left">
+            Date
+          </th>
+
+          <th className="p-3 text-left">
+            Center
+          </th>
+
+          <th className="p-3 text-right">
+            Entries
+          </th>
+
+          <th className="p-3 text-left">
+            Champion
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {scratchHistory.map((tournament, index) => {
+          const champion =
+            (tournament.results || []).find(
+              (r) => Number(r.place) === 1
+            );
+
+          return (
+            <tr
+              key={`archive-${index}`}
+              className="border-t"
+            >
+<td className="p-3 font-bold text-blue-950">
+  <button
+    type="button"
+    className="text-left underline-offset-2 hover:underline"
+    onClick={() => {
+      setSelectedPublicArchiveId(tournament.id);
+      setPublicArchiveSection("results");
+    }}
+    
+    
+  >
+    {tournament.name}
+  </button>
+</td>
+
+              <td className="p-3">
+                {tournament.date || "—"}
+              </td>
+
+              <td className="p-3">
+                {tournament.center || "—"}
+              </td>
+
+              <td className="p-3 text-right">
+                {tournament.entries || 0}
+              </td>
+
+              <td className="p-3 font-semibold">
+                {champion?.name || "—"}
+              </td>
+            </tr>
+          );
+        })}
+
+        {scratchHistory.length === 0 && (
+          <tr>
+            <td
+              colSpan={5}
+              className="p-5 text-center text-blue-700"
+            >
+              No archived tournaments available.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+)}
+{publicStatsTab === "titles" && (
+  <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+      <StatCard
+        label="Total Titles"
+        value={publicAllTitles.length}
+      />
+
+      <StatCard
+        label="Majors"
+        value={publicMajorTitles.length}
+      />
+
+      <StatCard
+        label="FKM Titles"
+        value={publicFkmTitles.length}
+      />
+
+      <StatCard
+        label="Non-FKM Titles"
+        value={publicNonFkmTitles.length}
+      />
+
+      <StatCard
+        label="Title Winners"
+        value={publicTitleLeaderRows.length}
+      />
+    </div>
+
+    <div className="overflow-auto rounded-2xl border border-blue-200">
+      <table className="w-full min-w-[760px] text-xs md:text-sm">
+        <thead className="bg-blue-800 text-white">
+          <tr>
+            <th className="p-3 text-left">
+              Bowler
+            </th>
+
+            <th className="p-3 text-right">
+              Titles
+            </th>
+
+            <th className="p-3 text-right">
+              Majors
+            </th>
+
+            <th className="p-3 text-right">
+              FKM
+            </th>
+
+            <th className="p-3 text-right">
+              Non-FKM
+            </th>
+
+            <th className="p-3 text-left">
+              Latest
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {publicTitleLeaderRows.map((row) => (
+            <tr
+              key={`public-title-row-${row.bowler}`}
+              className="border-t"
+            >
+              <td className="p-3 font-bold text-blue-950">
+                {row.bowler}
+              </td>
+
+              <td className="p-3 text-right font-black text-yellow-700">
+                {row.titles}
+              </td>
+
+              <td className="p-3 text-right font-bold text-red-700">
+                {row.majors}
+              </td>
+
+              <td className="p-3 text-right font-bold text-green-700">
+                {row.fkmTitles}
+              </td>
+
+              <td className="p-3 text-right font-bold text-slate-700">
+                {row.nonFkmTitles}
+              </td>
+
+              <td className="p-3">
+                {row.latest || "—"}
+              </td>
+            </tr>
+          ))}
+
+          {publicTitleLeaderRows.length === 0 && (
+            <tr>
+              <td
+                colSpan={6}
+                className="p-5 text-center text-blue-700"
+              >
+                No title history available yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="overflow-auto rounded-2xl border border-blue-200">
+      <table className="w-full min-w-[760px] text-xs md:text-sm">
+        <thead className="bg-blue-800 text-white">
+          <tr>
+            <th className="p-3 text-left">
+              Bowler
+            </th>
+
+            <th className="p-3 text-left">
+              Tournament
+            </th>
+
+            <th className="p-3 text-left">
+              Date
+            </th>
+
+            <th className="p-3 text-left">
+              Type
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {publicAllTitles.map((title) => (
+            <tr
+              key={`public-title-detail-${title.id}`}
+              className="border-t"
+            >
+              <td className="p-3 font-semibold">
+                {title.bowler}
+              </td>
+
+              <td className="p-3">
+                {title.tournament}
+              </td>
+
+              <td className="p-3">
+                {title.date || "—"}
+              </td>
+
+              <td className="p-3 font-bold">
+                {title.major
+                  ? "Major"
+                  : title.eligible
+                    ? "FKM"
+                    : "Non-FKM"}
+              </td>
+            </tr>
+          ))}
+
+          {publicAllTitles.length === 0 && (
+            <tr>
+              <td
+                colSpan={4}
+                className="p-5 text-center text-blue-700"
+              >
+                No titles available yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+{publicStatsTab === "archives" &&
+  selectedPublicArchive && (
+    <div className="mt-4 space-y-4">
+      <div className="rounded-2xl border border-blue-200 bg-white p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-blue-950">
+              {selectedPublicArchive.name}
+            </h2>
+
+            <p className="text-sm text-blue-700">
+              {selectedPublicArchive.date || "—"} •{" "}
+              {selectedPublicArchive.center ||
+                selectedPublicArchive.location ||
+                "No Center"}
+            </p>
+          </div>
+          
+          <Button
+            variant="outline"
+            className="rounded-2xl"
+            onClick={() =>
+              setSelectedPublicArchiveId(null)
+            }
+          >
+            Close
+          </Button>
+        </div>
+      </div>
+
+      
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: "results", label: "Results" },
+          { id: "qualifying", label: "Qualifying" },
+          { id: "finals", label: "Finals" },
+        ].map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            onClick={() =>
+              setPublicArchiveSection(section.id)
+            }
+            className={
+              publicArchiveSection === section.id
+                ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white"
+                : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"
+            }
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+      {publicArchiveSection === "results" && (
+  <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+    <table className="w-full min-w-[640px] text-xs md:text-sm">
+      <thead className="bg-blue-800 text-white">
+        <tr>
+          <th className="p-3 text-left">Place</th>
+          <th className="p-3 text-left">Bowler</th>
+          <th className="p-3 text-right">Games</th>
+          <th className="p-3 text-right">Total</th>
+          <th className="p-3 text-right">Average</th>
+          <th className="p-3 text-right">Cashed</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {(selectedPublicArchive.results || []).map((result) => (
+          <tr
+            key={`public-archive-result-${result.bowlerId}`}
+            className={
+              result.title
+                ? "border-t bg-yellow-50"
+                : result.cashed
+                  ? "border-t bg-blue-50"
+                  : "border-t"
+            }
+          >
+            <td className="p-3 font-bold">#{result.place}</td>
+
+            <td className="p-3 font-semibold">{result.name}</td>
+
+            <td className="p-3 text-right">
+              {(result.overallGames || result.games || []).length}
+            </td>
+
+            <td className="p-3 text-right font-bold">
+              {result.scratchTotal || "—"}
+            </td>
+
+            <td className="p-3 text-right">
+              {Number(result.average || 0).toFixed(2)}
+            </td>
+
+            <td className="p-3 text-right">
+              {result.cashed ? "Yes" : "No"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
+
+    </div>
+)}
+{publicArchiveSection === "qualifying" && (
+  <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+    <table className="w-full min-w-[760px] text-xs md:text-sm">
+      <thead className="bg-blue-800 text-white">
+        <tr>
+          <th className="p-3 text-left">
+            Place
+          </th>
+
+          <th className="p-3 text-left">
+            Bowler
+          </th>
+
+          <th className="p-3 text-right">
+            Games
+          </th>
+
+          <th className="p-3 text-right">
+            Total
+          </th>
+
+          <th className="p-3 text-right">
+            Average
+          </th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {(selectedPublicArchive.results || []).map(
+          (result) => {
+            const games =
+              result.overallGames ||
+              result.games ||
+              [];
+
+            const total = games.reduce(
+              (sum, game) =>
+                sum + Number(game || 0),
+              0
+            );
+
+            const avg =
+              games.length > 0
+                ? total / games.length
+                : 0;
+
+            const expanded =
+              expandedPublicArchiveBowler ===
+              result.bowlerId;
+
+            return (
+              <React.Fragment
+                key={`public-qualifying-${result.bowlerId}`}
+              >
+                <tr className="border-t">
+                  <td className="p-3 font-bold">
+                    #{result.place}
+                  </td>
+
+                  <td className="p-3 font-semibold">
+                    <button
+                      type="button"
+                      className="underline-offset-2 hover:underline"
+                      onClick={() =>
+                        setExpandedPublicArchiveBowler(
+                          expanded
+                            ? null
+                            : result.bowlerId
+                        )
+                      }
+                    >
+                      {result.name}
+                    </button>
+                  </td>
+
+                  <td className="p-3 text-right">
+                    {games.length}
+                  </td>
+
+                  <td className="p-3 text-right font-bold">
+                    {total}
+                  </td>
+
+                  <td className="p-3 text-right">
+                    {avg.toFixed(2)}
+                  </td>
+                </tr>
+
+                {expanded && (
+                  <tr className="bg-blue-50">
+                    <td
+                      colSpan={5}
+                      className="p-4"
+                    >
+                      <div className="flex flex-wrap gap-2">
+                        {games.map((game, index) => (
+                          <div
+                            key={`expanded-game-${index}`}
+                            className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 shadow-sm"
+                          >
+                            G{index + 1}: {game}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          }
+        )}
+      </tbody>
+    </table>
+  </div>
+)}
+
       </CardContent>
     </Card>
   );
@@ -5624,21 +6393,59 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
       tournament: tournament.name,
       date: tournament.date,
       season: tournament.season || "Unassigned",
-      source: tournament.titleEligible ? "FKM Title" : "Non-FKM Title",
-      eligible: Boolean(tournament.titleEligible),
+source: tournament.titleEligible
+  ? tournament.major
+    ? "Major Title"
+    : "FKM Title"
+  : "Non-FKM Title",
+
+eligible: Boolean(tournament.titleEligible),
+
+major: Boolean(tournament.major),
     })));
 
-  const fkmTitles = [...archiveTitles.filter((title) => title.eligible), ...manualTitles.filter((title) => title.eligible !== false)];
-  const nonFkmTitles = [...archiveTitles.filter((title) => !title.eligible), ...manualTitles.filter((title) => title.eligible === false)];
-  const allTitles = [...fkmTitles, ...nonFkmTitles]
+const majorTitles = [
+  ...archiveTitles.filter((title) => title.major),
+  ...manualTitles.filter((title) => title.major),
+];
+
+const fkmTitles = [
+  ...archiveTitles.filter((title) => title.eligible && !title.major),
+  ...manualTitles.filter(
+    (title) => title.eligible !== false && !title.major
+  ),
+];
+
+const nonFkmTitles = [
+  ...archiveTitles.filter((title) => !title.eligible),
+  ...manualTitles.filter((title) => title.eligible === false),
+];
+
+const allTitles = [
+  ...majorTitles,
+  ...fkmTitles,
+  ...nonFkmTitles,
+]
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || a.bowler.localeCompare(b.bowler));
 
   const titleCounts = allTitles.reduce((map, title) => {
     const key = title.bowler.trim().toLowerCase();
-    const current = map[key] || { bowler: title.bowler, titles: 0, fkmTitles: 0, nonFkmTitles: 0, seasons: new Set(), latest: "" };
-    current.titles += 1;
-    if (title.eligible) current.fkmTitles += 1;
-    else current.nonFkmTitles += 1;
+const current =
+  map[key] || {
+    bowler: title.bowler,
+    titles: 0,
+    fkmTitles: 0,
+    nonFkmTitles: 0,
+    majors: 0,
+    seasons: new Set(),
+    latest: "",
+  };
+
+current.titles += 1;
+
+if (title.major) current.majors += 1;
+else if (title.eligible) current.fkmTitles += 1;
+else current.nonFkmTitles += 1;
     if (title.season) current.seasons.add(title.season);
     if (!current.latest || String(title.date || "") > String(current.latest || "")) current.latest = title.date || "";
     map[key] = current;
@@ -5678,11 +6485,11 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
             <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("titles-won.csv", titleCsv)}>Export Titles CSV</Button>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-            <StatCard label="Total Titles" value={allTitles.length} />
-            <StatCard label="FKM Titles" value={fkmTitles.length} />
-            <StatCard label="Non-FKM Titles" value={nonFkmTitles.length} />
-            <StatCard label="Title Winners" value={titleLeaderRows.length} />
-            <StatCard label="Manual Titles" value={manualTitles.length} />
+<StatCard label="Total Titles" value={allTitles.length} />
+<StatCard label="Majors" value={majorTitles.length} />
+<StatCard label="FKM Titles" value={fkmTitles.length} />
+<StatCard label="Non-FKM Titles" value={nonFkmTitles.length} />
+<StatCard label="Title Winners" value={titleLeaderRows.length} />
           </div>
         </CardContent>
       </AppCard>
@@ -5732,7 +6539,23 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
   }
 >
   Titles
-</th> <th
+</th>
+<th
+  className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setArchiveSort((current) => ({
+      column: "majors",
+      direction:
+        current.column === "majors" &&
+        current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Majors
+</th>
+ <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
     setArchiveSort((current) => ({
@@ -5785,7 +6608,9 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
 >
   Latest
 </th></tr></thead>
-              <tbody>{titleLeaderRows.map((row) => <tr key={`title-leader-${row.bowler}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.bowler}</td><td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td><td className="p-2 text-right font-bold text-green-700 md:p-3">{row.fkmTitles}</td><td className="p-2 text-right font-bold text-slate-700 md:p-3">{row.nonFkmTitles}</td><td className="p-2 text-blue-900 md:p-3">{row.seasonsText || "—"}</td><td className="p-2 text-blue-900 md:p-3">{row.latest || "—"}</td></tr>)}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No titles entered yet.</td></tr>}</tbody>
+                                <tbody>{titleLeaderRows.map((row) => <tr key={`title-leader-${row.bowler}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.bowler}</td><td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td><td className="p-2 text-right font-bold text-red-700 md:p-3">
+  {row.majors}
+</td><td className="p-2 text-right font-bold text-green-700 md:p-3">{row.fkmTitles}</td><td className="p-2 text-right font-bold text-slate-700 md:p-3">{row.nonFkmTitles}</td><td className="p-2 text-blue-900 md:p-3">{row.seasonsText || "—"}</td><td className="p-2 text-blue-900 md:p-3">{row.latest || "—"}</td></tr>)}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No titles entered yet.</td></tr>}</tbody> 
             </table>
           </div>
         </CardContent>
@@ -7153,7 +7978,7 @@ export default function BowlingPayoutApp() {
   const entries = bowlers.length;
   const [useHandicapScores, setUseHandicapScores] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState("eliminator");
-  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true });
+  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false });
   const [payoutState, setPayoutState] = useState({ entryFee: 60, lineage: 18, ballRaffleAdded: 235, otherAddedMoney: 0, prizeFundOverride: 0, cashersOverride: 0, minCashPercent: 4, middlePercent: 5, rounding: 5, sameThirdFourth: true, manualOverridesEnabled: true, overrides: defaultOverrides });
   const [bracketState, setBracketState] = useState({ manualQualifiers: "", scores: {} });
   const [eliminatorState, setEliminatorState] = useState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
@@ -7314,10 +8139,47 @@ const [reservationState, setReservationState] = useState({
           <div className="relative bg-gradient-to-r from-blue-950 via-blue-800 to-slate-700 p-4 text-white md:p-5">
             <div className="absolute inset-x-0 bottom-0 h-3 bg-[repeating-linear-gradient(90deg,#d6b56d_0px,#d6b56d_18px,#b88f43_18px,#b88f43_21px)] opacity-70" />
             <div className="relative space-y-4">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-blue-100 shadow-sm ring-1 ring-white/20">Bowler Builders tournament tools</div>
-                <div className="hidden text-right text-xs uppercase tracking-[0.2em] text-blue-200 md:block">Tournament dashboard</div>
-              </div>
+<div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+  <div className="flex items-center gap-4">
+    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-3xl shadow-lg ring-2 ring-yellow-300">
+      🎳
+    </div>
+
+    <div>
+      <p className="text-xs font-bold uppercase tracking-[0.3em] text-yellow-300">
+        Bowler Builders
+      </p>
+
+      <h1 className="text-2xl font-black leading-tight text-white md:text-4xl">
+        Tournament Command Center
+      </h1>
+
+      <p className="mt-1 text-sm font-medium text-blue-100">
+        Live scoring • payouts • brackets • reservations • stats
+      </p>
+    </div>
+  </div>
+
+  <div className="grid grid-cols-2 gap-2 text-right text-xs md:grid-cols-1">
+    <div className="rounded-2xl bg-white/10 px-4 py-2 ring-1 ring-white/20">
+      <p className="uppercase tracking-[0.2em] text-blue-200">
+        Active Event
+      </p>
+      <p className="font-bold text-white">
+        {tournamentInfo.name || "Tournament"}
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-white/10 px-4 py-2 ring-1 ring-white/20">
+      <p className="uppercase tracking-[0.2em] text-blue-200">
+        Format
+      </p>
+      <p className="font-bold capitalize text-white">
+        {tournamentFormat}
+      </p>
+    </div>
+  </div>
+</div>
               <MobileTabSelect activeTab={activeTab} setActiveTab={setActiveTab} tournamentFormat={tournamentFormat} />
               <DesktopTabs activeTab={activeTab} setActiveTab={setActiveTab} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} />
             </div>
@@ -7430,6 +8292,14 @@ const [reservationState, setReservationState] = useState({
     <PublicTournamentRecap
       tournamentRecap={tournamentRecap}
     />
+  </AppErrorBoundary>
+)}
+{activeTab === "publicstats" && (
+  <AppErrorBoundary key="publicstats">
+    <PublicStats
+  tournamentHistory={tournamentHistory}
+  manualTitles={manualTitles}
+/>
   </AppErrorBoundary>
 )}
 {activeTab === "publicreservations" && (
