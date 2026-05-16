@@ -681,6 +681,18 @@ const appSections = [
       { id: "payouts", label: "Payouts" },
       { id: "scoresheets", label: "Scoresheets" },
       { id: "results", label: "Score Entry" },
+      {
+  id: "schedule",
+  label: "Schedule",
+},
+{
+  id: "recap",
+  label: "Tournament Recap",
+},
+{
+  id: "reservations",
+  label: "Reservations",
+},
     ],
   },
   {
@@ -2637,6 +2649,262 @@ if (tournamentFormat === "bracket") {
     </div>
   );
 }
+function ScheduleTab({ scheduleItems, setScheduleItems }) {
+  const updateItem = (index, field, value) => {
+    setScheduleItems((current) =>
+      current.map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+  const addScheduleItem = () => {
+    setScheduleItems((current) => [
+      ...current,
+      {
+        name: "",
+        format: "",
+        startDate: "",
+endDate: "",
+        center: "",
+        address: "",
+        fkmTitle: false,
+      },
+    ]);
+  };
+
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900">
+              Season Schedule
+            </h2>
+            <p className="text-sm text-blue-700">
+              List all tournaments for the season. Mark FKM title events with an asterisk.
+            </p>
+          </div>
+
+          <Button
+            className="rounded-2xl bg-blue-800 hover:bg-blue-900"
+            onClick={addScheduleItem}
+          >
+            Add Tournament
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          {scheduleItems.map((item, index) => (
+            <div
+              key={`schedule-${index}`}
+              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-7"
+            >
+              <Input
+                value={item.name}
+                onChange={(e) => updateItem(index, "name", e.target.value)}
+                placeholder="Tournament Name"
+              />
+
+              <Input
+                value={item.format}
+                onChange={(e) => updateItem(index, "format", e.target.value)}
+                placeholder="Format"
+              />
+<Input
+  type="date"
+  value={item.startDate}
+  onChange={(e) =>
+    updateItem(index, "startDate", e.target.value)
+  }
+/>
+
+<Input
+  type="date"
+  value={item.endDate}
+  onChange={(e) =>
+    updateItem(index, "endDate", e.target.value)
+  }
+/>
+
+              <Input
+                value={item.center}
+                onChange={(e) => updateItem(index, "center", e.target.value)}
+                placeholder="Bowling Center"
+              />
+
+              <Input
+                value={item.address}
+                onChange={(e) => updateItem(index, "address", e.target.value)}
+                placeholder="Address"
+              />
+
+              <div className="flex items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+                <Label className="text-xs">FKM *</Label>
+                <Switch
+                  compact
+                  checked={Boolean(item.fkmTitle)}
+                  onCheckedChange={(checked) =>
+                    updateItem(index, "fkmTitle", checked)
+                  }
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </AppCard>
+  );
+}
+function TournamentRecapTab({
+  tournamentRecap,
+  setTournamentRecap,
+}) {
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-5 space-y-4">
+        <h2 className="text-xl font-semibold text-blue-900">
+          Tournament Recap
+        </h2>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Input
+            value={tournamentRecap.winner}
+            onChange={(e) =>
+              setTournamentRecap((current) => ({
+                ...current,
+                winner: e.target.value,
+              }))
+            }
+            placeholder="Winner"
+          />
+
+          <Input
+            value={tournamentRecap.runnerUp}
+            onChange={(e) =>
+              setTournamentRecap((current) => ({
+                ...current,
+                runnerUp: e.target.value,
+              }))
+            }
+            placeholder="Runner Up"
+          />
+
+          <Input
+            value={tournamentRecap.highGame}
+            onChange={(e) =>
+              setTournamentRecap((current) => ({
+                ...current,
+                highGame: e.target.value,
+              }))
+            }
+            placeholder="High Game"
+          />
+        </div>
+
+        <textarea
+          className="min-h-[180px] w-full rounded-2xl border border-blue-200 p-4"
+          value={tournamentRecap.recapNotes}
+          onChange={(e) =>
+            setTournamentRecap((current) => ({
+              ...current,
+              recapNotes: e.target.value,
+            }))
+          }
+          placeholder="Tournament recap notes..."
+        />
+      </CardContent>
+    </AppCard>
+  );
+}
+function ReservationsTab({
+  reservations,
+  setReservations,
+}) {
+  const addReservation = () => {
+    setReservations((current) => [
+      ...current,
+      {
+        name: "",
+        phone: "",
+        status: "Unpaid",
+      },
+    ]);
+  };
+
+  const updateReservation = (
+    index,
+    field,
+    value
+  ) => {
+    setReservations((current) =>
+      current.map((reservation, i) =>
+        i === index
+          ? {
+              ...reservation,
+              [field]: value,
+            }
+          : reservation
+      )
+    );
+  };
+
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-blue-900">
+            Reservations
+          </h2>
+
+          <Button
+            className="rounded-2xl bg-blue-800 hover:bg-blue-900"
+            onClick={addReservation}
+          >
+            Add Reservation
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          {reservations.map((reservation, index) => (
+            <div
+              key={`reservation-${index}`}
+              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-3"
+            >
+              <Input
+                value={reservation.name}
+                onChange={(e) =>
+                  updateReservation(index, "name", e.target.value)
+                }
+                placeholder="Bowler Name"
+              />
+
+              <Input
+                value={reservation.phone}
+                onChange={(e) =>
+                  updateReservation(index, "phone", e.target.value)
+                }
+                placeholder="Phone Number"
+              />
+
+              <select
+                className="rounded-2xl border border-blue-200 p-2"
+                value={reservation.status}
+                onChange={(e) =>
+                  updateReservation(index, "status", e.target.value)
+                }
+              >
+                <option>Unpaid</option>
+                <option>Paid</option>
+                <option>Confirmed</option>
+              </select>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </AppCard>
+  );
+}
 function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifyingGames }) {
   const gamesCount = Math.max(1, Number(qualifyingGames || 4));
   const normalizeLane = (lane) => String(lane || "").trim().toUpperCase();
@@ -3264,12 +3532,31 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   );
 }
 
-function PublicViewTab({ entries, tournamentInfo, bowlers, financials, useHandicapScores, tournamentFormat, bracketState, eliminatorState, publicMode = "leaderboard" }) {
-  const publicTab = publicMode;
+function PublicViewTab({
+  entries,
+  tournamentInfo,
+  bowlers,
+  financials,
+  useHandicapScores,
+  tournamentFormat,
+  bracketState,
+  eliminatorState,
+  scheduleItems = [],
+  publicMode = "leaderboard",
+}) {
+ const [publicTab, setPublicTab] = useState(
+  publicMode === "finals" ? "finals" : "leaderboard"
+);
   const ranked = getRankedBowlers(bowlers, useHandicapScores);
   const cutBowler = ranked[Math.max(financials.cashers - 1, 0)];
   const cutScore = cutBowler ? (useHandicapScores ? cutBowler.handicap : cutBowler.scratch) : undefined;
-  const publicTabs = publicMode === "leaderboard" ? [{ id: "leaderboard", label: "Leaderboard" }] : [{ id: "finals", label: "Finals" }];
+  const publicTabs =
+  publicMode === "finals"
+    ? [{ id: "finals", label: "Finals" }]
+    : [
+        { id: "leaderboard", label: "Leaderboard" },
+        { id: "schedule", label: "Schedule" },
+      ];
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -3281,13 +3568,22 @@ function PublicViewTab({ entries, tournamentInfo, bowlers, financials, useHandic
               <h2 className="text-2xl font-bold md:text-4xl">{tournamentInfo.name}</h2>
               <p className="mt-1 text-sm text-blue-100 md:mt-2">{tournamentInfo.center} • {tournamentInfo.date} • {tournamentInfo.stage}</p>
             </div>
-            <div className="flex rounded-2xl bg-white/10 p-1 ring-1 ring-white/15">
-              {publicTabs.map((tab) => (
-                <span key={tab.id} className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-blue-950 md:text-sm">
-                  {tab.label}
-                </span>
-              ))}
-            </div>
+<div className="flex rounded-2xl bg-white/10 p-1 ring-1 ring-white/15">
+  {publicTabs.map((tab) => (
+    <button
+      key={tab.id}
+      type="button"
+      onClick={() => setPublicTab(tab.id)}
+      className={
+        publicTab === tab.id
+          ? "rounded-xl bg-white px-3 py-2 text-xs font-bold text-blue-950 md:text-sm"
+          : "rounded-xl px-3 py-2 text-xs font-bold text-white md:text-sm"
+      }
+    >
+      {tab.label}
+    </button>
+  ))}
+</div>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 md:mt-5 md:gap-3">
             <div className="rounded-xl bg-white/10 p-3 md:rounded-2xl md:p-4"><p className="text-xs text-blue-100 md:text-sm">Cut</p><p className="text-xl font-bold md:text-3xl">Top {financials.cashers}</p></div>
@@ -3298,9 +3594,81 @@ function PublicViewTab({ entries, tournamentInfo, bowlers, financials, useHandic
       </Card>
 
       {publicTab === "leaderboard" && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} />}
+     {publicTab === "schedule" && (
+  <PublicSchedule scheduleItems={scheduleItems} />
+)}
       {publicMode === "finals" && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} />}
       {publicMode === "finals" && tournamentFormat === "eliminator" && <PublicEliminatorView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} />}
     </div>
+  );
+}
+function PublicSchedule({ scheduleItems = [] }) {
+  const formatDateRange = (item) => {
+    if (!item.startDate) return "Date TBD";
+
+    if (item.endDate && item.endDate !== item.startDate) {
+      return `${item.startDate} - ${item.endDate}`;
+    }
+
+    return item.startDate;
+  };
+
+  return (
+    <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
+      <CardContent className="p-3 md:p-5">
+        <h2 className="mb-4 text-xl font-bold text-blue-900">
+          Season Schedule
+        </h2>
+
+        <div className="space-y-3">
+          {(scheduleItems || []).map((item, index) => (
+            <div
+              key={`public-schedule-${index}`}
+              className="rounded-2xl border border-blue-100 bg-blue-50 p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-black text-blue-950">
+                    {item.name || "Tournament"}
+                    {item.fkmTitle && (
+                      <span className="ml-1 text-yellow-600">*</span>
+                    )}
+                  </h3>
+
+                  <p className="mt-1 text-sm font-semibold text-blue-800">
+                    {item.format || "Format TBD"}
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-700">
+                    {item.center || "Bowling Center TBD"}
+                  </p>
+
+                  {item.address && (
+                    <p className="text-sm text-slate-600">
+                      {item.address}
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl bg-white px-3 py-2 text-right text-sm font-bold text-blue-900 shadow-sm">
+                  {formatDateRange(item)}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {scheduleItems.length === 0 && (
+            <p className="rounded-2xl bg-blue-50 p-4 text-blue-700">
+              Schedule coming soon.
+            </p>
+          )}
+
+          <p className="text-xs font-semibold text-slate-500">
+            * FKM title event
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -6451,6 +6819,26 @@ export default function BowlingPayoutApp() {
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [savedScoreGames, setSavedScoreGames] = useState({});
   const [savedFinalsRounds, setSavedFinalsRounds] = useState({});
+const [scheduleItems, setScheduleItems] = useState([
+  {
+    name: "",
+    format: "",
+    startDate: "",
+endDate: "",
+    center: "",
+    address: "",
+    fkmTitle: false,
+  },
+]);
+
+const [tournamentRecap, setTournamentRecap] = useState({
+  winner: "",
+  runnerUp: "",
+  highGame: "",
+  recapNotes: "",
+});
+
+const [reservations, setReservations] = useState([]);
   if (typeof window !== "undefined") window.__currentTournamentFormat = tournamentFormat;
 
   useEffect(() => {
@@ -6615,6 +7003,26 @@ export default function BowlingPayoutApp() {
         {activeTab === "finance" && <FinanceTab entries={entries} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} tournamentFormat={tournamentFormat} />}
         {activeTab === "summary" && <SummaryCashSheetTab entries={entries} bowlers={bowlers} payoutRows={payoutRows} financials={financials} useHandicapScores={useHandicapScores} tournamentInfo={tournamentInfo} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} paidPayouts={paidPayouts}setPaidPayouts={setPaidPayouts}/>}
+ {activeTab === "schedule" && (
+  <ScheduleTab
+    scheduleItems={scheduleItems}
+    setScheduleItems={setScheduleItems}
+  />
+)}
+
+{activeTab === "recap" && (
+  <TournamentRecapTab
+    tournamentRecap={tournamentRecap}
+    setTournamentRecap={setTournamentRecap}
+  />
+)}
+
+{activeTab === "reservations" && (
+  <ReservationsTab
+    reservations={reservations}
+    setReservations={setReservations}
+  />
+)}
  {activeTab === "bracket" && (
   <BracketTab
     entries={entries}
@@ -6655,7 +7063,7 @@ export default function BowlingPayoutApp() {
   bracketState={bracketState}
 />
 )}
-        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
+        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} scheduleItems={scheduleItems} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} /></AppErrorBoundary>}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} /></AppErrorBoundary>}
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} /></AppErrorBoundary>}
