@@ -3977,6 +3977,7 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
   const [publicArchiveSort, setPublicArchiveSort] = useState({ column: "place", direction: "asc" });
   const [selectedPublicArchiveId, setSelectedPublicArchiveId] = useState(null);
   const [publicArchiveSection, setPublicArchiveSection] = useState("results");
+  const [expandedPublicBowler, setExpandedPublicBowler] = useState(null);
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
   const publicArchiveHistory = seasonFilter === "All"
     ? tournamentHistory || []
@@ -4076,7 +4077,14 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
 );
 
   const playerStats = filteredPublicHistory
-    .flatMap((tournament) => (tournament.results || []).map((result) => ({ ...result, tournamentName: tournament.name, tournamentDate: tournament.date, season: tournament.season || "Unassigned" })))
+    .flatMap((tournament) => (tournament.results || []).map((result) => ({
+      ...result,
+      tournamentId: tournament.id,
+      tournamentName: tournament.name,
+      tournamentDate: tournament.date,
+      tournamentCenter: tournament.center || tournament.location || "",
+      season: tournament.season || "Unassigned",
+    })))
     .reduce((map, result) => {
       const key = result.bowlerId || String(result.name || "").trim().toLowerCase();
       const allGames = result.overallGames?.length ? result.overallGames : result.games || [];
@@ -4096,9 +4104,9 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
         finalsPins: 0,
         cashes: 0,
         titles: 0,
-        earnings: 0,
         highGame: 0,
         bestFinish: null,
+        details: [],
       };
 
       current.tournaments += 1;
@@ -4110,16 +4118,41 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
       current.finalsPins += numericFinalsGames.reduce((sum, g) => sum + g, 0);
       current.cashes += result.cashed ? 1 : 0;
       current.titles += result.title ? 1 : 0;
-      current.earnings += Number(result.payout || 0);
       current.highGame = Math.max(current.highGame, ...numericAllGames);
       current.bestFinish = current.bestFinish === null ? result.place : Math.min(current.bestFinish, result.place);
+      current.details.push({
+        id: `${result.tournamentId}-${result.bowlerId || result.name}`,
+        tournament: result.tournamentName,
+        date: result.tournamentDate,
+        center: result.tournamentCenter,
+        season: result.season,
+        place: result.place,
+        games: numericAllGames.length,
+        qualifyingGames: numericQualifyingGames.length,
+        finalsGames: numericFinalsGames.length,
+        total: numericAllGames.reduce((sum, g) => sum + g, 0),
+        qualifyingTotal: numericQualifyingGames.reduce((sum, g) => sum + g, 0),
+        finalsTotal: numericFinalsGames.reduce((sum, g) => sum + g, 0),
+        average: numericAllGames.length
+          ? numericAllGames.reduce((sum, g) => sum + g, 0) / numericAllGames.length
+          : 0,
+        qualifyingAverage: numericQualifyingGames.length
+          ? numericQualifyingGames.reduce((sum, g) => sum + g, 0) / numericQualifyingGames.length
+          : 0,
+        finalsAverage: numericFinalsGames.length
+          ? numericFinalsGames.reduce((sum, g) => sum + g, 0) / numericFinalsGames.length
+          : 0,
+        highGame: numericAllGames.length ? Math.max(...numericAllGames) : 0,
+        cashed: Boolean(result.cashed),
+        title: Boolean(result.title),
+      });
       map[key] = current;
       return map;
     }, {});
 
   const sortStatsRows = (statsRows) => {
     const direction = statsSort.direction === "asc" ? 1 : -1;
-    if (statsSort.key === "default") return [...statsRows].sort((a, b) => b.titles - a.titles || b.earnings - a.earnings || b.average - a.average);
+    if (statsSort.key === "default") return [...statsRows].sort((a, b) => b.titles - a.titles || b.cashes - a.cashes || b.average - a.average);
     return [...statsRows].sort((a, b) => {
       const aValue = a[statsSort.key];
       const bValue = b[statsSort.key];
@@ -4223,25 +4256,98 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
           </tr>
         </thead>
         <tbody>
-          {playerRows.map((p) => (
-            <tr key={`public-stats-${p.name}`} className="border-t">
-              <td className="p-2 font-semibold md:p-3">{p.name}</td>
-              <td className="p-2 text-right md:p-3">{p.tournaments}</td>
-              <td className="p-2 text-right md:p-3">{p.games}</td>
-              <td className="p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
-              {statsMode === "scratch" && (
-                <>
-                  <td className="p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
-                  <td className="p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
-                  <td className="p-2 text-right md:p-3">{p.finalsGames}</td>
-                </>
-              )}
-              <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
-              <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
-              <td className="p-2 text-right md:p-3">{p.cashes}</td>
-              <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
-            </tr>
-          ))}
+          {playerRows.map((p) => {
+            const expanded = expandedPublicBowler === p.name;
+            const publicStatsColSpan = statsMode === "scratch" ? 11 : 8;
+            const sortedDetails = [...(p.details || [])].sort(
+              (a, b) => String(b.date || "").localeCompare(String(a.date || ""))
+            );
+
+            return (
+              <React.Fragment key={`public-stats-${p.name}`}>
+                <tr className={expanded ? "border-t bg-blue-50" : "border-t"}>
+                  <td className="p-2 font-semibold md:p-3">
+                    <button
+                      type="button"
+                      className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
+                      onClick={() =>
+                        setExpandedPublicBowler(expanded ? null : p.name)
+                      }
+                    >
+                      {expanded ? "- " : "+ "}
+                      {p.name}
+                    </button>
+                  </td>
+                  <td className="p-2 text-right md:p-3">{p.tournaments}</td>
+                  <td className="p-2 text-right md:p-3">{p.games}</td>
+                  <td className="p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
+                  {statsMode === "scratch" && (
+                    <>
+                      <td className="p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
+                      <td className="p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
+                      <td className="p-2 text-right md:p-3">{p.finalsGames}</td>
+                    </>
+                  )}
+                  <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
+                  <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
+                  <td className="p-2 text-right md:p-3">{p.cashes}</td>
+                  <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
+                </tr>
+                {expanded && (
+                  <tr className="border-t bg-blue-50/60">
+                    <td colSpan={publicStatsColSpan} className="p-3">
+                      <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                        <table className="w-full min-w-[820px] text-xs md:text-sm">
+                          <thead className="bg-blue-100 text-blue-950">
+                            <tr>
+                              <th className="p-2 text-left md:p-3">Tournament</th>
+                              <th className="p-2 text-left md:p-3">Date</th>
+                              <th className="p-2 text-left md:p-3">Center</th>
+                              <th className="p-2 text-right md:p-3">Place</th>
+                              <th className="p-2 text-right md:p-3">Games</th>
+                              <th className="p-2 text-right md:p-3">Total</th>
+                              <th className="p-2 text-right md:p-3">Average</th>
+                              {statsMode === "scratch" && (
+                                <>
+                                  <th className="p-2 text-right md:p-3">Qual Avg</th>
+                                  <th className="p-2 text-right md:p-3">Finals Avg</th>
+                                </>
+                              )}
+                              <th className="p-2 text-right md:p-3">High</th>
+                              <th className="p-2 text-right md:p-3">Cashed</th>
+                              <th className="p-2 text-right md:p-3">Title</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedDetails.map((detail) => (
+                              <tr key={detail.id} className="border-t">
+                                <td className="p-2 font-semibold text-blue-950 md:p-3">{detail.tournament}</td>
+                                <td className="p-2 text-blue-900 md:p-3">{detail.date || "-"}</td>
+                                <td className="p-2 text-blue-900 md:p-3">{detail.center || "-"}</td>
+                                <td className="p-2 text-right font-bold md:p-3">#{detail.place}</td>
+                                <td className="p-2 text-right md:p-3">{detail.games}</td>
+                                <td className="p-2 text-right md:p-3">{detail.total || "-"}</td>
+                                <td className="p-2 text-right font-semibold md:p-3">{detail.average ? detail.average.toFixed(2) : "-"}</td>
+                                {statsMode === "scratch" && (
+                                  <>
+                                    <td className="p-2 text-right md:p-3">{detail.qualifyingAverage ? detail.qualifyingAverage.toFixed(2) : "-"}</td>
+                                    <td className="p-2 text-right md:p-3">{detail.finalsAverage ? detail.finalsAverage.toFixed(2) : "-"}</td>
+                                  </>
+                                )}
+                                <td className="p-2 text-right md:p-3">{detail.highGame || "-"}</td>
+                                <td className="p-2 text-right md:p-3">{detail.cashed ? "Yes" : "No"}</td>
+                                <td className="p-2 text-right md:p-3">{detail.title ? "Yes" : "No"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
           {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={statsMode === "scratch" ? 11 : 8}>No archived tournament stats for this filter yet.</td></tr>}
         </tbody>
       </table>
