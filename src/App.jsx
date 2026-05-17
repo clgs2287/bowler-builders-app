@@ -791,10 +791,15 @@ function StatCard({ label, value }) {
   return <div className="rounded-xl border border-blue-100 bg-white p-3 shadow-sm md:rounded-2xl md:p-4"><p className="text-xs text-blue-700 md:text-sm">{label}</p><p className="text-lg font-bold text-blue-950 md:text-2xl">{value}</p></div>;
 }
 
-function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, colIndex, scoreNavigation = false }) {
+function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, colIndex, scoreNavigation = false, max }) {
   const handleChange = (e) => {
     const raw = e.target.value;
-    onChange(Number(raw || 0));
+    const numericValue = Number(raw || 0);
+    const cappedValue =
+      max === undefined || max === null
+        ? numericValue
+        : Math.min(Number(max), numericValue);
+    onChange(cappedValue);
   };
 
   const handleKeyDown = (e) => {
@@ -834,6 +839,7 @@ function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, c
     <Input
       type="number"
       inputMode="numeric"
+      max={max}
       data-score-cell={scoreNavigation ? `${rowIndex}-${colIndex}` : undefined}
       className={`${width} text-center`}
       value={value === 0 ? "" : value}
@@ -2134,6 +2140,7 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }
       rowIndex={rowIndex}
       colIndex={colIndex}
       scoreNavigation
+      max={300}
     />
   );
 }
@@ -2141,6 +2148,7 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }
 function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, }) {
   
  const updateGame = (index, gameIndex, value) => {
+  const score = Math.max(0, Math.min(300, Number(value || 0)));
   setBowlers((current) =>
     current.map((b, i) =>
       i === index
@@ -2148,7 +2156,7 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
             ...b,
             games: Array.from(
               { length: qualifyingGames },
-              (_, gi) => gi === gameIndex ? value : Number(b.games?.[gi] || 0)
+              (_, gi) => gi === gameIndex ? score : Number(b.games?.[gi] || 0)
             ),
           }
         : b
@@ -2200,10 +2208,7 @@ const saveCurrentGame = () => {
                 <th className="p-2 text-left md:p-2.5">Rank</th>
                 <th className="p-2 text-left md:p-2.5">Name</th>
                 {useHandicapScores && (
-  <>
-    <th className="p-2 text-center md:p-2.5">Hdcp</th>
-    <th className="p-2 text-center md:p-2.5">Lane</th>
-  </>
+                  <th className="p-2 text-center md:p-2.5">Hdcp</th>
 )}
                 {Array.from({ length: qualifyingGames }, (_, gi) => <th key={`score-head-${gi}`} className="p-3 text-center">G{gi + 1}</th>)}
                 <th className="p-2 text-center md:p-2.5">Scratch</th>
