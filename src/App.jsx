@@ -4661,7 +4661,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
                 if (publicArchiveSort.column === "name") return String(a.name || "").localeCompare(String(b.name || "")) * dir;
                 if (publicArchiveSort.column === "scratch") return (Number(a.scratchTotal || 0) - Number(b.scratchTotal || 0)) * dir;
                 if (publicArchiveSort.column === "handicap") {
-                  const getHdcpTotal = (result) => Number(result.scratchTotal || 0) + (selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0) * ((result.games || []).length || 0);
+                  const getHdcpTotal = (result) => Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0);
                   return (getHdcpTotal(a) - getHdcpTotal(b)) * dir;
                 }
                 if (publicArchiveSort.column === "average") return (Number(a.average || 0) - Number(b.average || 0)) * dir;
@@ -4671,11 +4671,11 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
                   <td className="p-2 font-bold md:p-3">#{result.place}</td>
                   <td className="p-2 font-semibold md:p-3">
                     {result.name}
-                    {selectedPublicArchiveSnapshot?.useHandicapScores && <span className="ml-2 text-xs font-semibold text-blue-700">(+{selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0})</span>}
+                    {selectedPublicArchiveSnapshot?.useHandicapScores && <span className="ml-2 text-xs font-semibold text-blue-700">(+{handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {})})</span>}
                   </td>
                   <td className="p-2 text-right md:p-3">{(result.games || []).join("-")}</td>
                   <td className="p-2 text-right md:p-3">{result.scratchTotal}</td>
-                  {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + (selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0) * ((result.games || []).length || 0)}</td>}
+                  {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0)}</td>}
                   <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
                   <td className="p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
                 </tr>
@@ -6180,7 +6180,7 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
     if (archiveSort.column === "handicap") {
   const getHdcpTotal = (result) =>
     Number(result.scratchTotal || 0) +
-    ((selectedSnapshot?.bowlers?.find((b) => b.name === result.name)?.handicapPerGame || 0) *
+    (handicapPerGame(selectedSnapshot?.bowlers?.find((b) => b.name === result.name) || {}) *
       ((result.games || []).length || 0));
 
   return (getHdcpTotal(a) - getHdcpTotal(b)) * dir;
@@ -6216,9 +6216,9 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
 
   {selectedSnapshot?.useHandicapScores && (
     <span className="ml-2 text-xs font-semibold text-blue-700">
-(+{selectedSnapshot?.bowlers?.find(
+(+{handicapPerGame(selectedSnapshot?.bowlers?.find(
   (b) => b.name === result.name
-)?.handicapPerGame || 0})
+) || {})})
     </span>
   )}
 </td>
@@ -6235,9 +6235,9 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
   <td className="p-2 text-right font-semibold text-blue-700 md:p-3">
     {Number(result.scratchTotal || 0) +
       (
-        (selectedSnapshot?.bowlers?.find(
+        handicapPerGame(selectedSnapshot?.bowlers?.find(
           (b) => b.name === result.name
-        )?.handicapPerGame || 0) *
+        ) || {}) *
         ((result.games || []).length || 0)
       )}
   </td>
