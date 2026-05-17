@@ -302,21 +302,24 @@ if (savedFinalsRounds.stepladderFinal) {
     seedMap[4],
     seedMap[3],
     stepScores["step-1-l"],
-    stepScores["step-1-r"]
+    stepScores["step-1-r"],
+    false
   );
 
   const stepWinner2 = winnerFromMatch(
     stepWinner1,
     seedMap[2],
     stepScores["step-2-l"],
-    stepScores["step-2-r"]
+    stepScores["step-2-r"],
+    false
   );
 
   const champion = winnerFromMatch(
     stepWinner2,
     seedMap[1],
     stepScores["step-3-l"],
-    stepScores["step-3-r"]
+    stepScores["step-3-r"],
+    false
   );
 
   return `Winner - ${champion?.name || "Champion TBD"}`;
@@ -624,11 +627,12 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState 
   return { manualQualifiers, scores, suggested, qualifiers, size, seeded, bracketRounds, champion: previousWinners?.[0] || null };
 }
 
-function winnerFromMatch(left, right, leftScore, rightScore) {
+function winnerFromMatch(left, right, leftScore, rightScore, advanceByes = true) {
   const leftIsBye = !left || left.name === "BYE";
   const rightIsBye = !right || right.name === "BYE";
 
   if (leftIsBye && rightIsBye) return null;
+  if (!advanceByes && (leftIsBye || rightIsBye)) return null;
   if (!leftIsBye && rightIsBye) return left;
   if (leftIsBye && !rightIsBye) return right;
 
@@ -3704,7 +3708,7 @@ const PublicBracketMatch = ({ match }) => {
 function StepMatchPublic({ title, match, stepScores }) {
   const leftScore = stepScores[`${match.id}-l`] ?? "";
   const rightScore = stepScores[`${match.id}-r`] ?? "";
-  const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
+  const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore, false);
 
   return (
     <div className="rounded-xl border border-blue-200 bg-white p-3 shadow-sm">
@@ -3747,11 +3751,11 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   const finalists = game2Ranked.slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
   const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-  const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "");
+  const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
   const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-  const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "");
+  const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-  const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
+  const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "", false);
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -4774,11 +4778,11 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
     const finalists = game2Ranked.slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
     const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
     const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-    const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "");
+    const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
     const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-    const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "");
+    const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
     const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-    const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
+    const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "", false);
     const finalOrder = [];
     addUnique(finalOrder, champion);
     addUnique(finalOrder, championship.left && champion && String(championship.left.seed) === String(champion.seed) ? championship.right : championship.left);
@@ -5103,11 +5107,11 @@ setSavedFinalsRounds }) {
   const updateGame2 = (seed, value) => setEliminatorState((current) => ({ ...current, game2Scores: { ...(current.game2Scores || {}), [seed]: value } }));
   const updateStep = (key, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value } }));
   const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-  const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "");
+  const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
   const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-  const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "");
+  const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-  const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
+  const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "", false);
   return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label="Cut Bowlers" value={cutCount} /><StatCard label="Game 1 Advancers" value={game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} /></div><p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler’s 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
 
 <p className="mb-4 text-sm text-blue-700">
