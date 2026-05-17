@@ -3400,7 +3400,25 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   const [search, setSearch] = useState("");
   const [bigScreen, setBigScreen] = useState(false);
   const [expandedSeed, setExpandedSeed] = useState(null);
+  const [leaderboardSort, setLeaderboardSort] = useState({ key: "rank", direction: "asc" });
   const filtered = ranked.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()));
+  const sortLeaderboard = (key) =>
+    setLeaderboardSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === "desc" ? "asc" : "desc",
+    }));
+  const sortLabel = (key) =>
+    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ▲" : " ▼") : "";
+  const displayedRows = [...filtered].sort((a, b) => {
+    const direction = leaderboardSort.direction === "asc" ? 1 : -1;
+    if (leaderboardSort.key === "scratch") {
+      return (Number(a.scratch || 0) - Number(b.scratch || 0)) * direction;
+    }
+    if (leaderboardSort.key === "handicap") {
+      return (Number(a.handicap || 0) - Number(b.handicap || 0)) * direction;
+    }
+    return (Number(a.rank || 0) - Number(b.rank || 0)) * direction;
+  });
   const bubbleRank = financials.cashers + 1;
   const byeRanks = getBracketByeRanks(financials.cashers);
   const cutBowler = ranked[Math.max(financials.cashers - 1, 0)];
@@ -3449,16 +3467,30 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
           <table className={bigScreen ? "w-full min-w-[760px] text-2xl" : "w-full min-w-[460px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
-                <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">#</th>
+                <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">
+                  <button type="button" className="font-bold" onClick={() => sortLeaderboard("rank")}>
+                    #{sortLabel("rank")}
+                  </button>
+                </th>
                 <th className="sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">Bowler</th>
-                <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">Scratch</th>
-                {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp</th>}
+                <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">
+                  <button type="button" className="font-bold" onClick={() => sortLeaderboard("scratch")}>
+                    Scratch{sortLabel("scratch")}
+                  </button>
+                </th>
+                {useHandicapScores && (
+                  <th className="hidden p-2 text-right md:table-cell md:p-3">
+                    <button type="button" className="font-bold" onClick={() => sortLeaderboard("handicap")}>
+                      Hdcp{sortLabel("handicap")}
+                    </button>
+                  </th>
+                )}
                 <th className="p-2 text-right md:p-3">+/-</th>
                 <th className="p-2 text-right md:p-3">Status</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.slice(0, bigScreen ? 30 : 50).map((b, index) => {
+              {displayedRows.slice(0, bigScreen ? 30 : 50).map((b, index) => {
                 const score = useHandicapScores ? b.handicap : b.scratch;
                 const gamesCompleted = completedGamesCount(b);
                 const diff = gamesCompleted > 0 ? Number(score - gamesCompleted * 200) : null;
@@ -3467,7 +3499,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
 
                 return (
                   <React.Fragment key={`${b.seed}-${b.name}`}>
-                    {!search && index === financials.cashers && (
+                    {!search && leaderboardSort.key === "rank" && index === financials.cashers && (
                       <tr className="border-t-4 border-dotted border-red-500">
                         <td colSpan={colspan} className="p-0" />
                       </tr>
