@@ -3974,9 +3974,13 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
   const [seasonFilter, setSeasonFilter] = useState("All");
   const [statsMode, setStatsMode] = useState("scratch");
   const [statsSort, setStatsSort] = useState({ key: "default", direction: "desc" });
+  const [publicArchiveSort, setPublicArchiveSort] = useState({ column: "place", direction: "asc" });
   const [selectedPublicArchiveId, setSelectedPublicArchiveId] = useState(null);
-const [publicArchiveSection, setPublicArchiveSection] = useState("results");
+  const [publicArchiveSection, setPublicArchiveSection] = useState("results");
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
+  const publicArchiveHistory = seasonFilter === "All"
+    ? tournamentHistory || []
+    : (tournamentHistory || []).filter((t) => (t.season || "Unassigned") === seasonFilter);
   const filteredPublicHistory = (
     seasonFilter === "All"
       ? tournamentHistory || []
@@ -3986,10 +3990,10 @@ const [publicArchiveSection, setPublicArchiveSection] = useState("results");
   const scratchHistory = (tournamentHistory || []).filter(
     (t) => !t.useHandicapScores
   );
-  const selectedPublicArchive = scratchHistory.find(
-  (t) => t.id === selectedPublicArchiveId
-);
-const [expandedPublicArchiveBowler, setExpandedPublicArchiveBowler] = useState(null);
+  const selectedPublicArchive = (tournamentHistory || []).find(
+    (t) => t.id === selectedPublicArchiveId
+  );
+  const selectedPublicArchiveSnapshot = selectedPublicArchive?.activeSnapshot || null;
   const archiveTitles = scratchHistory.flatMap((tournament) =>
   (tournament.results || [])
     .filter((result) => result.tournamentWinner)
@@ -4230,15 +4234,15 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
               {statsMode === "scratch" && (
                 <>
                   <td className="p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
-                  <td className="p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "???"}</td>
+                  <td className="p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
                   <td className="p-2 text-right md:p-3">{p.finalsGames}</td>
                 </>
               )}
-              <td className="p-2 text-right md:p-3">{p.highGame || "???"}</td>
+              <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
               <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
               <td className="p-2 text-right md:p-3">{p.cashes}</td>
               <td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(p.earnings)}</td>
-              <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "???"}</td>
+              <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
             </tr>
           ))}
           {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>}
@@ -4248,90 +4252,45 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
   </div>
 )}
       {publicStatsTab === "archives" && (
-  <div className="overflow-auto rounded-2xl border border-blue-200">
-    <table className="w-full min-w-[720px] text-xs md:text-sm">
-      <thead className="bg-blue-800 text-white">
-        <tr>
-          <th className="p-3 text-left">
-            Tournament
-          </th>
-
-          <th className="p-3 text-left">
-            Date
-          </th>
-
-          <th className="p-3 text-left">
-            Center
-          </th>
-
-          <th className="p-3 text-right">
-            Entries
-          </th>
-
-          <th className="p-3 text-left">
-            Champion
-          </th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {scratchHistory.map((tournament, index) => {
-          const champion =
-            (tournament.results || []).find(
-              (r) => Number(r.place) === 1
-            );
-
-          return (
-            <tr
-              key={`archive-${index}`}
-              className="border-t"
-            >
-<td className="p-3 font-bold text-blue-950">
-  <button
-    type="button"
-    className="text-left underline-offset-2 hover:underline"
-    onClick={() => {
-      setSelectedPublicArchiveId(tournament.id);
-      setPublicArchiveSection("results");
-    }}
-    
-    
-  >
-    {tournament.name}
-  </button>
-</td>
-
-              <td className="p-3">
-                {tournament.date || "—"}
-              </td>
-
-              <td className="p-3">
-                {tournament.center || "—"}
-              </td>
-
-              <td className="p-3 text-right">
-                {tournament.entries || 0}
-              </td>
-
-              <td className="p-3 font-semibold">
-                {champion?.name || "—"}
-              </td>
-            </tr>
-          );
-        })}
-
-        {scratchHistory.length === 0 && (
+  <div className="space-y-3 md:space-y-4">
+    <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+      <table className="w-full min-w-[760px] text-xs md:min-w-[840px] md:text-sm">
+        <thead className="bg-blue-800 text-white">
           <tr>
-            <td
-              colSpan={5}
-              className="p-5 text-center text-blue-700"
-            >
-              No archived tournaments available.
-            </td>
+            <th className="p-2 text-left md:p-3">Tournament Name</th>
+            <th className="p-2 text-left md:p-3">Season</th>
+            <th className="p-2 text-left md:p-3">Date</th>
+            <th className="p-2 text-left md:p-3">Center</th>
+            <th className="p-2 text-center md:p-3">FKM</th>
+            <th className="p-2 text-right md:p-3">Entries</th>
+            <th className="p-2 text-right md:p-3">Cashers</th>
+            <th className="p-2 text-left md:p-3">Winner</th>
           </tr>
-        )}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {publicArchiveHistory.map((tournament) => {
+            const champion = (tournament.results || []).find((r) => Number(r.place) === 1);
+            return (
+              <tr key={tournament.id} className="border-t">
+                <td className="p-2 font-bold text-blue-950 md:p-3">
+                  <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => { setSelectedPublicArchiveId(tournament.id); setPublicArchiveSection("results"); }}>
+                    {tournament.name}
+                  </button>
+                </td>
+                <td className="p-2 text-blue-900 md:p-3">{tournament.season || "Unassigned"}</td>
+                <td className="p-2 text-blue-900 md:p-3">{tournament.date || "-"}</td>
+                <td className="p-2 text-blue-900 md:p-3">{tournament.center || tournament.location || "-"}</td>
+                <td className="p-2 text-center font-bold md:p-3">{tournament.titleEligible ? "Yes" : "No"}</td>
+                <td className="p-2 text-right font-semibold md:p-3">{tournament.entries || 0}</td>
+                <td className="p-2 text-right font-semibold md:p-3">{tournament.cashers || 0}</td>
+                <td className="p-2 font-semibold text-green-700 md:p-3">{champion?.name || "-"}</td>
+              </tr>
+            );
+          })}
+          {publicArchiveHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No tournaments archived for this season filter yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
   </div>
 )}
 {publicStatsTab === "titles" && (
@@ -4513,219 +4472,93 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
             <h2 className="text-2xl font-black text-blue-950">
               {selectedPublicArchive.name}
             </h2>
-
             <p className="text-sm text-blue-700">
-              {selectedPublicArchive.date || "—"} •{" "}
-              {selectedPublicArchive.center ||
-                selectedPublicArchive.location ||
-                "No Center"}
+              {selectedPublicArchive.date || "-"} -{" "}
+              {selectedPublicArchive.center || selectedPublicArchive.location || "No Center"}{" "}
+              - Season {selectedPublicArchive.season || "Unassigned"}
             </p>
           </div>
-          
-          <Button
-            variant="outline"
-            className="rounded-2xl"
-            onClick={() =>
-              setSelectedPublicArchiveId(null)
-            }
-          >
-            Close
+          <Button variant="outline" className="rounded-2xl" onClick={() => setSelectedPublicArchiveId(null)}>
+            Close Tournament
           </Button>
         </div>
       </div>
 
-      
       <div className="flex flex-wrap gap-2">
         {[
-          { id: "results", label: "Results" },
-          { id: "qualifying", label: "Qualifying" },
+          { id: "results", label: "Final Results" },
+          { id: "qualifying", label: "Qualifying Scores" },
           { id: "finals", label: "Finals" },
+          { id: "sideaction", label: "Side Action" },
         ].map((section) => (
           <button
             key={section.id}
             type="button"
-            onClick={() =>
-              setPublicArchiveSection(section.id)
-            }
-            className={
-              publicArchiveSection === section.id
-                ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white"
-                : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"
-            }
+            onClick={() => setPublicArchiveSection(section.id)}
+            className={publicArchiveSection === section.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}
           >
             {section.label}
           </button>
         ))}
       </div>
+
       {publicArchiveSection === "results" && (
-  <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-    <table className="w-full min-w-[640px] text-xs md:text-sm">
-      <thead className="bg-blue-800 text-white">
-        <tr>
-          <th className="p-3 text-left">Place</th>
-          <th className="p-3 text-left">Bowler</th>
-          <th className="p-3 text-right">Games</th>
-          <th className="p-3 text-right">Total</th>
-          <th className="p-3 text-right">Average</th>
-          <th className="p-3 text-right">Cashed</th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {(selectedPublicArchive.results || []).map((result) => (
-          <tr
-            key={`public-archive-result-${result.bowlerId}`}
-            className={
-              result.title
-                ? "border-t bg-yellow-50"
-                : result.cashed
-                  ? "border-t bg-blue-50"
-                  : "border-t"
-            }
-          >
-            <td className="p-3 font-bold">#{result.place}</td>
-
-            <td className="p-3 font-semibold">{result.name}</td>
-
-            <td className="p-3 text-right">
-              {(result.overallGames || result.games || []).length}
-            </td>
-
-            <td className="p-3 text-right font-bold">
-              {result.scratchTotal || "—"}
-            </td>
-
-            <td className="p-3 text-right">
-              {Number(result.average || 0).toFixed(2)}
-            </td>
-
-            <td className="p-3 text-right">
-              {result.cashed ? "Yes" : "No"}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)}
-
-    </div>
-)}
-{publicArchiveSection === "qualifying" && (
-  <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-    <table className="w-full min-w-[760px] text-xs md:text-sm">
-      <thead className="bg-blue-800 text-white">
-        <tr>
-          <th className="p-3 text-left">
-            Place
-          </th>
-
-          <th className="p-3 text-left">
-            Bowler
-          </th>
-
-          <th className="p-3 text-right">
-            Games
-          </th>
-
-          <th className="p-3 text-right">
-            Total
-          </th>
-
-          <th className="p-3 text-right">
-            Average
-          </th>
-        </tr>
-      </thead>
-
-      <tbody>
-        {(selectedPublicArchive.results || []).map(
-          (result) => {
-            const games =
-              result.overallGames ||
-              result.games ||
-              [];
-
-            const total = games.reduce(
-              (sum, game) =>
-                sum + Number(game || 0),
-              0
-            );
-
-            const avg =
-              games.length > 0
-                ? total / games.length
-                : 0;
-
-            const expanded =
-              expandedPublicArchiveBowler ===
-              result.bowlerId;
-
-            return (
-              <React.Fragment
-                key={`public-qualifying-${result.bowlerId}`}
-              >
-                <tr className="border-t">
-                  <td className="p-3 font-bold">
-                    #{result.place}
+        <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+          <table className="w-full min-w-[760px] text-xs md:text-sm">
+            <thead className="bg-blue-800 text-white">
+              <tr>
+                <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "place", direction: current.column === "place" && current.direction === "asc" ? "desc" : "asc" }))}>Place</th>
+                <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "name", direction: current.column === "name" && current.direction === "asc" ? "desc" : "asc" }))}>Bowler</th>
+                <th className="p-2 text-right md:p-3">Games</th>
+                <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "scratch", direction: current.column === "scratch" && current.direction === "asc" ? "desc" : "asc" }))}>{selectedPublicArchiveSnapshot?.useHandicapScores ? "Scratch" : "Total"}</th>
+                {selectedPublicArchiveSnapshot?.useHandicapScores && <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "handicap", direction: current.column === "handicap" && current.direction === "asc" ? "desc" : "asc" }))}>Hdcp</th>}
+                <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "average", direction: current.column === "average" && current.direction === "asc" ? "desc" : "asc" }))}>Average</th>
+                <th className="p-2 text-right md:p-3">Cashed</th>
+                <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "payout", direction: current.column === "payout" && current.direction === "asc" ? "desc" : "asc" }))}>Payout</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...(selectedPublicArchive.results || [])].sort((a, b) => {
+                const dir = publicArchiveSort.direction === "asc" ? 1 : -1;
+                if (publicArchiveSort.column === "name") return String(a.name || "").localeCompare(String(b.name || "")) * dir;
+                if (publicArchiveSort.column === "scratch") return (Number(a.scratchTotal || 0) - Number(b.scratchTotal || 0)) * dir;
+                if (publicArchiveSort.column === "handicap") {
+                  const getHdcpTotal = (result) => Number(result.scratchTotal || 0) + (selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0) * ((result.games || []).length || 0);
+                  return (getHdcpTotal(a) - getHdcpTotal(b)) * dir;
+                }
+                if (publicArchiveSort.column === "average") return (Number(a.average || 0) - Number(b.average || 0)) * dir;
+                if (publicArchiveSort.column === "payout") return (Number(a.payout || 0) - Number(b.payout || 0)) * dir;
+                return (Number(a.place || 0) - Number(b.place || 0)) * dir;
+              }).map((result) => (
+                <tr key={selectedPublicArchive.id + "-" + result.bowlerId} className={result.title ? "border-t bg-yellow-50" : result.cashed ? "border-t bg-blue-50" : "border-t"}>
+                  <td className="p-2 font-bold md:p-3">#{result.place}</td>
+                  <td className="p-2 font-semibold md:p-3">
+                    {result.name}
+                    {selectedPublicArchiveSnapshot?.useHandicapScores && <span className="ml-2 text-xs font-semibold text-blue-700">(+{selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0})</span>}
                   </td>
-
-                  <td className="p-3 font-semibold">
-                    <button
-                      type="button"
-                      className="underline-offset-2 hover:underline"
-                      onClick={() =>
-                        setExpandedPublicArchiveBowler(
-                          expanded
-                            ? null
-                            : result.bowlerId
-                        )
-                      }
-                    >
-                      {result.name}
-                    </button>
-                  </td>
-
-                  <td className="p-3 text-right">
-                    {games.length}
-                  </td>
-
-                  <td className="p-3 text-right font-bold">
-                    {total}
-                  </td>
-
-                  <td className="p-3 text-right">
-                    {avg.toFixed(2)}
-                  </td>
+                  <td className="p-2 text-right md:p-3">{(result.games || []).join("-")}</td>
+                  <td className="p-2 text-right md:p-3">{result.scratchTotal}</td>
+                  {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + (selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0) * ((result.games || []).length || 0)}</td>}
+                  <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
+                  <td className="p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
+                  <td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(result.payout || 0)}</td>
                 </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-                {expanded && (
-                  <tr className="bg-blue-50">
-                    <td
-                      colSpan={5}
-                      className="p-4"
-                    >
-                      <div className="flex flex-wrap gap-2">
-                        {games.map((game, index) => (
-                          <div
-                            key={`expanded-game-${index}`}
-                            className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 shadow-sm"
-                          >
-                            G{index + 1}: {game}
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            );
-          }
-        )}
-      </tbody>
-    </table>
-  </div>
-)}
+      {publicArchiveSection === "qualifying" && selectedPublicArchiveSnapshot && <StandingsPublic ranked={getRankedBowlers(selectedPublicArchiveSnapshot.bowlers || [], Boolean(selectedPublicArchiveSnapshot.useHandicapScores))} financials={calculateFinancials({ entries: (selectedPublicArchiveSnapshot.bowlers || []).length, ...(selectedPublicArchiveSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} tournamentFormat={selectedPublicArchiveSnapshot.tournamentFormat || "eliminator"} />}
+      {publicArchiveSection === "qualifying" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with full scoring snapshots.</p>}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && selectedPublicArchiveSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={(selectedPublicArchiveSnapshot.bowlers || []).length} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} bracketState={selectedPublicArchiveSnapshot.bracketState || { manualQualifiers: "", scores: {} }} />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && selectedPublicArchiveSnapshot.tournamentFormat === "eliminator" && <PublicEliminatorView entries={(selectedPublicArchiveSnapshot.bowlers || []).length} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} eliminatorState={selectedPublicArchiveSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && selectedPublicArchiveSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format - no finals bracket.</p>}
+      {publicArchiveSection === "finals" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with full scoring snapshots.</p>}
+      {publicArchiveSection === "sideaction" && selectedPublicArchiveSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} sidePotState={selectedPublicArchiveSnapshot.sidePotState} qualifyingGames={selectedPublicArchiveSnapshot.qualifyingGames || 4} />}
+      {publicArchiveSection === "sideaction" && !selectedPublicArchiveSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
+    </div>
+  )}
 
       </CardContent>
     </Card>
