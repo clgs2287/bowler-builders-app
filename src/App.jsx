@@ -4837,7 +4837,7 @@ const renderPlayerName = (player) => {
     return player.name;
   }
 
-  const handicap = Number(player.averageMinus || player.handicapPerGame || 0);
+  const handicap = handicapPerGame(player);
 
   return `${player.name} (+${handicap})`;
 };
