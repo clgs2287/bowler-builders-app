@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
 }
@@ -3733,8 +3733,8 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   });
   const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
     ? rankRows(baseRows, "game1Total")
-    : baseRows
-        .sort((a, b) => b.average - a.average || a.name.localeCompare(b.name))
+    : [...baseRows]
+        .sort((a, b) => Number(b.average || 0) - Number(a.average || 0) || a.name.localeCompare(b.name))
         .map((row, index) => ({ ...row, rank: index + 1 }));
   const game1AdvancersCount = Math.max(4, Math.ceil(cutBowlers.length / 2));
   const game1Advancers = game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
@@ -3753,47 +3753,32 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
   const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
 
-
   return (
     <div className="space-y-3 md:space-y-4">
       <AppCard>
         <CardContent className="p-3 md:p-5">
-          <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+          <h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2>
+          <div className="grid gap-3 md:grid-cols-6">
             <StatCard label="Cut Bowlers" value={cutCount} />
             <StatCard label="Game 1 Advancers" value={game1AdvancersCount} />
             <StatCard label="Game 2 Advancers" value={4} />
-            <StatCard label="Top Seed" value={seedMap[1]?.name || "TBD"} />
+            <StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} />
             <StatCard label="Champion" value={champion?.name || "TBD"} />
           </div>
-          <h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Standings</h2>
+          <p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler's 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p>
+        </CardContent>
+      </AppCard>
+
+      <AppCard>
+        <CardContent className="p-3 md:p-5">
+          <h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
+          <p className="mb-4 text-sm text-blue-700">Average + Game 1. Top half advances.</p>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[620px] text-xs md:text-sm">
+            <table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm">
               <thead className="bg-blue-800 text-white">
-                <tr>
-                  <th className="p-2 text-left md:p-3">Rank</th>
-                  <th className="p-2 text-left md:p-3">Bowler</th>
-                  <th className="p-2 text-right md:p-3">Avg</th>
-                  <th className="p-2 text-right md:p-3">G1</th>
-                  <th className="p-2 text-right md:p-3">G1 Total</th>
-                  <th className="p-2 text-right md:p-3">G2</th>
-                  <th className="p-2 text-right md:p-3">Total</th>
-                  <th className="p-2 text-right md:p-3">Status</th>
-                </tr>
+                <tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr>
               </thead>
-              <tbody>
-                {game2Ranked.map((row) => (
-                  <tr key={`public-elim-row-${row.seed}`} className={row.rank <= 4 ? "border-t bg-yellow-50" : "border-t"}>
-                    <td className="p-2 font-bold md:p-3">{row.rank}</td>
-                    <td className="max-w-[140px] truncate p-2 font-semibold md:max-w-none md:p-3">{row.name}</td>
-                    <td className="p-2 text-right md:p-3">{row.average.toFixed(2)}</td>
-                    <td className="p-2 text-right md:p-3">{row.elimGame1 || "—"}</td>
-                    <td className="p-2 text-right md:p-3">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td>
-                    <td className="p-2 text-right md:p-3">{row.elimGame2 || "—"}</td>
-                    <td className="p-2 text-right font-bold md:p-3">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td>
-                    <td className="p-2 text-right md:p-3">{row.rank <= 4 ? <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-[10px] font-bold text-yellow-900">STEPLADDER</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">OUT</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
+              <tbody>{game1Ranked.map((row) => <tr key={`public-elim-g1-${row.seed}`} className={row.rank <= game1AdvancersCount ? "border-t bg-blue-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-3 text-center font-semibold">{game1Scores[row.seed] || "-"}</td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody>
             </table>
           </div>
         </CardContent>
@@ -3801,18 +3786,32 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
 
       <AppCard>
         <CardContent className="p-3 md:p-5">
-          <h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Stepladder</h2>
-          <div className="grid gap-3 md:grid-cols-3">
-            <StepMatchPublic title="#4 vs #3" match={stepMatch1} stepScores={stepScores} />
-            <StepMatchPublic title="Winner vs #2" match={stepMatch2} stepScores={stepScores} />
-            <StepMatchPublic title="Championship" match={championship} stepScores={stepScores} />
+          <h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 2</h2>
+          <p className="mb-4 text-sm text-blue-700">Game 1 total + Game 2. Top 4 advance to stepladder.</p>
+          <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+            <table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm">
+              <thead className="bg-blue-800 text-white">
+                <tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr>
+              </thead>
+              <tbody>{game2Ranked.map((row) => <tr key={`public-elim-g2-${row.seed}`} className={row.rank <= 4 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-center font-semibold">{game2Scores[row.seed] || "-"}</td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody>
+            </table>
+          </div>
+        </CardContent>
+      </AppCard>
+
+      <AppCard>
+        <CardContent className="p-3 md:p-5">
+          <h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2>
+          <div className="grid gap-4 lg:grid-cols-4">
+            <StepMatchPublic title="Match 1: Winner vs #4" match={stepMatch1} stepScores={stepScores} />
+            <StepMatchPublic title="Match 2: Winner vs #2" match={stepMatch2} stepScores={stepScores} />
+            <StepMatchPublic title="Championship: Winner vs #1" match={championship} stepScores={stepScores} />
           </div>
         </CardContent>
       </AppCard>
     </div>
   );
 }
-
 function PublicViewTab({
   entries,
   tournamentInfo,
