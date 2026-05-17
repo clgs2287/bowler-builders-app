@@ -2104,7 +2104,7 @@ averageSource: archivedData?.eligible
   );
 }
 
-function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }) {
+function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false, allowLockedEdit = true }) {
   const [editing, setEditing] = useState(!locked);
 
   useEffect(() => {
@@ -2115,9 +2115,11 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }
     return (
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          if (allowLockedEdit) setEditing(true);
+        }}
         className="w-12 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-center font-bold text-blue-950 shadow-sm hover:bg-blue-100 md:w-14"
-        title="Click to edit saved score"
+        title={allowLockedEdit ? "Click to edit saved score" : "Click the game header to enter scores"}
       >
         {value || "—"}
       </button>
@@ -2138,6 +2140,7 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false }
 }
 
 function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, }) {
+  const [activeScoreGameIndex, setActiveScoreGameIndex] = useState(null);
   
  const updateGame = (index, gameIndex, value) => {
   const score = Math.max(0, Math.min(300, Number(value || 0)));
@@ -2155,6 +2158,8 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     )
   );
 
+  if (activeScoreGameIndex !== gameIndex) return;
+
   setSavedScoreGames((current) => {
     if (!current[gameIndex]) return current;
 
@@ -2163,19 +2168,24 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     return updated;
   });
 };
+  useEffect(() => {
+    if (activeScoreGameIndex !== null && activeScoreGameIndex >= qualifyingGames) {
+      setActiveScoreGameIndex(null);
+    }
+  }, [activeScoreGameIndex, qualifyingGames]);
+
   const sorted = getRankedBowlers(bowlers, useHandicapScores);
   const exportRows = [["Rank", "Name", ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", "Handicap Total"], ...sorted.map((b) => [b.rank, b.name, ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, b.handicap])];
-  const nextUnsavedGameIndex = Array.from({ length: qualifyingGames }, (_, gi) => gi).find(
-  (gi) => !savedScoreGames[gi]
-);
+  const activeGameIsSaved = activeScoreGameIndex !== null && Boolean(savedScoreGames[activeScoreGameIndex]);
 
 const saveCurrentGame = () => {
-  if (nextUnsavedGameIndex === undefined) return;
+  if (activeScoreGameIndex === null) return;
 
   setSavedScoreGames((current) => ({
     ...current,
-    [nextUnsavedGameIndex]: true,
+    [activeScoreGameIndex]: true,
   }));
+  setActiveScoreGameIndex(null);
 };
 
   return (
@@ -2202,7 +2212,18 @@ const saveCurrentGame = () => {
                 {useHandicapScores && (
                   <th className="p-2 text-center md:p-2.5">Hdcp</th>
 )}
-                {Array.from({ length: qualifyingGames }, (_, gi) => <th key={`score-head-${gi}`} className="p-3 text-center">G{gi + 1}</th>)}
+                {Array.from({ length: qualifyingGames }, (_, gi) => (
+                  <th key={`score-head-${gi}`} className="p-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setActiveScoreGameIndex((current) => current === gi ? null : gi)}
+                      className={activeScoreGameIndex === gi ? "rounded-xl bg-white px-3 py-1 font-black text-blue-900" : "rounded-xl px-3 py-1 font-black text-white hover:bg-blue-700"}
+                      title={`Unlock Game ${gi + 1} scores`}
+                    >
+                      G{gi + 1}
+                    </button>
+                  </th>
+                ))}
                 <th className="p-2 text-center md:p-2.5">Scratch</th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp Total</th>}
               </tr>
@@ -2241,7 +2262,8 @@ const saveCurrentGame = () => {
     onChange={(value) => updateGame(originalIndex, gi, value)}
     rowIndex={index}
     colIndex={gi}
-    locked={Boolean(savedScoreGames[gi])}
+    locked={activeScoreGameIndex !== gi}
+    allowLockedEdit={Boolean(savedScoreGames[gi])}
   />
 </td>
                     ))}
@@ -2306,12 +2328,14 @@ const saveCurrentGame = () => {
 
   <Button
     className="rounded-2xl bg-blue-800 hover:bg-blue-900"
-    disabled={nextUnsavedGameIndex === undefined}
+    disabled={activeScoreGameIndex === null}
     onClick={saveCurrentGame}
   >
-    {nextUnsavedGameIndex === undefined
-      ? "All Games Saved"
-      : `Save Game ${nextUnsavedGameIndex + 1}`}
+    {activeScoreGameIndex === null
+      ? "Select a Game to Enter Scores"
+      : activeGameIsSaved
+        ? `Save Game ${activeScoreGameIndex + 1} Edits`
+        : `Save Game ${activeScoreGameIndex + 1}`}
   </Button>
 </div>
       </CardContent>
@@ -5759,7 +5783,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       cashers: financials.cashers,
       prizeFund: financials.prizeFund,
       tournamentRecap: { ...(tournamentRecap || {}) },
-      activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState, tournamentRecap: { ...(tournamentRecap || {}) } },
+      activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, savedScoreGames, savedFinalsRounds, payoutState, bracketState, eliminatorState, sidePotState, tournamentRecap: { ...(tournamentRecap || {}) } },
 results: ranked.map((b, index) => ({
   bowlerId: b.name.trim().toLowerCase(),
   name: b.name,
@@ -7958,7 +7982,7 @@ const [reservationState, setReservationState] = useState({
   useEffect(() => {
     if (!hasLoadedSavedData) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ qualifyingGames, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, payoutState, bracketState, eliminatorState, sidePotState, paidPayouts }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ qualifyingGames, savedScoreGames, savedFinalsRounds, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, payoutState, bracketState, eliminatorState, sidePotState, paidPayouts }));
     } catch (error) {
       console.warn("Could not auto-save tournament data", error);
     }
@@ -7979,6 +8003,8 @@ const [reservationState, setReservationState] = useState({
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
     setTournamentFormat(snapshot.tournamentFormat || archivedTournament.format || "eliminator");
     if (Number(snapshot.qualifyingGames)) setQualifyingGames(Number(snapshot.qualifyingGames));
+    setSavedScoreGames(snapshot.savedScoreGames || {});
+    setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
     if (snapshot.payoutState) setPayoutState({ ...snapshot.payoutState, overrides: { ...defaultOverrides, ...(snapshot.payoutState.overrides || {}) } });
     if (snapshot.bracketState) setBracketState({ manualQualifiers: "", scores: {}, ...snapshot.bracketState });
     if (snapshot.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...snapshot.eliminatorState });
@@ -7996,6 +8022,8 @@ const [reservationState, setReservationState] = useState({
     setTournamentFormat("eliminator");
     setTournamentInfo({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
+    setSavedScoreGames({});
+    setSavedFinalsRounds({});
     setPayoutState({
   entryFee: 60,
   lineage: 18,
