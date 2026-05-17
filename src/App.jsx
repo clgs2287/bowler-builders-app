@@ -855,6 +855,11 @@ function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, c
   );
 }
 
+function clampBowlingScoreInput(value, min = 1, max = 300) {
+  if (value === "" || value === undefined || value === null) return "";
+  return Math.max(min, Math.min(max, Number(value || 0)));
+}
+
 function TournamentInfoTab({
   tournamentInfo,
   qualifyingGames,
@@ -4785,18 +4790,22 @@ function BracketScoreInput({
   return (
     <div className="flex flex-col items-center">
       <Input
+        type="number"
+        min={1}
+        max={300}
         className="h-7 w-14 px-1 text-center text-xs font-semibold"
         inputMode="numeric"
         value={value ?? ""}
-        onChange={(e) =>
-  onScoreChange(
-    scoreKey,
-    useHandicapScores
-      ? Number(e.target.value || 0) + Number(handicap || 0)
-      : e.target.value,
-    e.target.value
-  )
-}
+        onChange={(e) => {
+          const scratchValue = clampBowlingScoreInput(e.target.value);
+          onScoreChange(
+            scoreKey,
+            useHandicapScores && scratchValue !== ""
+              ? Number(scratchValue || 0) + Number(handicap || 0)
+              : scratchValue,
+            scratchValue
+          );
+        }}
       />
 
       {useHandicapScores && (
@@ -4995,11 +5004,14 @@ function EliminatorScoreInput({ value, onChange, locked = false }) {
 
   return (
     <Input
+      type="number"
+      min={1}
+      max={300}
       className="h-8 w-16 text-center text-sm"
       inputMode="numeric"
       value={value ?? ""}
       autoFocus={editing}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(clampBowlingScoreInput(e.target.value))}
       onBlur={() => setEditing(false)}
     />
   );
@@ -5008,10 +5020,13 @@ function EliminatorScoreInput({ value, onChange, locked = false }) {
 function StepScore({ scoreKey, stepScores, updateStep }) {
   return (
     <Input
+      type="number"
+      min={1}
+      max={300}
       className="h-8 w-16 text-center text-sm"
       inputMode="numeric"
       value={stepScores?.[scoreKey] ?? ""}
-      onChange={(e) => updateStep(scoreKey, e.target.value)}
+      onChange={(e) => updateStep(scoreKey, clampBowlingScoreInput(e.target.value))}
     />
   );
 }
