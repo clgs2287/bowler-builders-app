@@ -3971,8 +3971,17 @@ function PublicTournamentRecap({
 function PublicStats({ tournamentHistory, manualTitles = [] }) {
   const [search, setSearch] = useState("");
   const [publicStatsTab, setPublicStatsTab] = useState("bowlers");
+  const [seasonFilter, setSeasonFilter] = useState("All");
+  const [statsMode, setStatsMode] = useState("scratch");
+  const [statsSort, setStatsSort] = useState({ key: "default", direction: "desc" });
   const [selectedPublicArchiveId, setSelectedPublicArchiveId] = useState(null);
 const [publicArchiveSection, setPublicArchiveSection] = useState("results");
+  const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
+  const filteredPublicHistory = (
+    seasonFilter === "All"
+      ? tournamentHistory || []
+      : (tournamentHistory || []).filter((t) => (t.season || "Unassigned") === seasonFilter)
+  ).filter((t) => (statsMode === "scratch" ? !t.useHandicapScores : t.useHandicapScores));
 
   const scratchHistory = (tournamentHistory || []).filter(
     (t) => !t.useHandicapScores
@@ -4062,75 +4071,69 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
     String(a.bowler || "").localeCompare(String(b.bowler || ""))
 );
 
-  const playerStats = scratchHistory
-    .flatMap((tournament) =>
-      (tournament.results || []).map((result) => ({
-        ...result,
-        tournamentName: tournament.name,
-        tournamentDate: tournament.date,
-      }))
-    )
+  const playerStats = filteredPublicHistory
+    .flatMap((tournament) => (tournament.results || []).map((result) => ({ ...result, tournamentName: tournament.name, tournamentDate: tournament.date, season: tournament.season || "Unassigned" })))
     .reduce((map, result) => {
-      const key =
-        result.bowlerId ||
-        String(result.name || "").trim().toLowerCase();
+      const key = result.bowlerId || String(result.name || "").trim().toLowerCase();
+      const allGames = result.overallGames?.length ? result.overallGames : result.games || [];
+      const qualifyingGames = result.qualifyingGames?.length ? result.qualifyingGames : result.games || [];
+      const finalsGames = result.finalsGames || [];
+      const numericAllGames = allGames.map((g) => Number(g || 0)).filter((g) => g > 0);
+      const numericQualifyingGames = qualifyingGames.map((g) => Number(g || 0)).filter((g) => g > 0);
+      const numericFinalsGames = finalsGames.map((g) => Number(g || 0)).filter((g) => g > 0);
+      const current = map[key] || {
+        name: result.name,
+        tournaments: 0,
+        games: 0,
+        qualifyingGames: 0,
+        finalsGames: 0,
+        pins: 0,
+        qualifyingPins: 0,
+        finalsPins: 0,
+        cashes: 0,
+        titles: 0,
+        earnings: 0,
+        highGame: 0,
+        bestFinish: null,
+      };
 
-      const allGames =
-        result.overallGames?.length
-          ? result.overallGames
-          : result.games || [];
-
-      const numericGames = allGames
-        .map((g) => Number(g || 0))
-        .filter((g) => g > 0);
-
-      const current =
-        map[key] || {
-          name: result.name,
-          events: 0,
-          games: 0,
-          pins: 0,
-          titles: 0,
-          cuts: 0,
-          highGame: 0,
-          bestFinish: null,
-        };
-
-      current.events += 1;
-      current.games += numericGames.length;
-      current.pins += numericGames.reduce(
-        (sum, g) => sum + g,
-        0
-      );
+      current.tournaments += 1;
+      current.games += numericAllGames.length;
+      current.qualifyingGames += numericQualifyingGames.length;
+      current.finalsGames += numericFinalsGames.length;
+      current.pins += numericAllGames.reduce((sum, g) => sum + g, 0);
+      current.qualifyingPins += numericQualifyingGames.reduce((sum, g) => sum + g, 0);
+      current.finalsPins += numericFinalsGames.reduce((sum, g) => sum + g, 0);
+      current.cashes += result.cashed ? 1 : 0;
       current.titles += result.title ? 1 : 0;
-      current.cuts += result.cashed ? 1 : 0;
-      current.highGame = Math.max(
-        current.highGame,
-        ...numericGames
-      );
-      current.bestFinish =
-        current.bestFinish === null
-          ? result.place
-          : Math.min(current.bestFinish, result.place);
-
+      current.earnings += Number(result.payout || 0);
+      current.highGame = Math.max(current.highGame, ...numericAllGames);
+      current.bestFinish = current.bestFinish === null ? result.place : Math.min(current.bestFinish, result.place);
       map[key] = current;
       return map;
     }, {});
 
-  const rows = Object.values(playerStats)
+  const sortStatsRows = (statsRows) => {
+    const direction = statsSort.direction === "asc" ? 1 : -1;
+    if (statsSort.key === "default") return [...statsRows].sort((a, b) => b.titles - a.titles || b.earnings - a.earnings || b.average - a.average);
+    return [...statsRows].sort((a, b) => {
+      const aValue = a[statsSort.key];
+      const bValue = b[statsSort.key];
+      if (typeof aValue === "string" || typeof bValue === "string") return String(aValue || "").localeCompare(String(bValue || "")) * direction;
+      return (Number(aValue || 0) - Number(bValue || 0)) * direction;
+    });
+  };
+
+  const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " â–²" : " â–¼") : "";
+  const playerRows = sortStatsRows(Object.values(playerStats)
     .map((p) => ({
       ...p,
       average: p.games > 0 ? p.pins / p.games : 0,
+      qualifyingAverage: p.qualifyingGames > 0 ? p.qualifyingPins / p.qualifyingGames : 0,
+      finalsAverage: p.finalsGames > 0 ? p.finalsPins / p.finalsGames : 0,
     }))
-    .filter((p) =>
-      p.name.toLowerCase().includes(search.toLowerCase())
-    )
-    .sort(
-      (a, b) =>
-        b.titles - a.titles ||
-        b.average - a.average ||
-        b.cuts - a.cuts
-    );
+    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase())));
     
 
   return (
@@ -4138,20 +4141,30 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
       <CardContent className="p-3 md:p-5">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-black text-blue-950">
-              Public Stats
+            <h2 className="text-xl font-semibold text-blue-900">
+              Bowler Stats
             </h2>
-            <p className="text-sm text-blue-700">
-              Scratch tournament career stats.
-            </p>
           </div>
 
-          <Input
-            className="w-full md:w-72"
-            placeholder="Search bowler..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row">
+            <select value={seasonFilter} onChange={(e) => setSeasonFilter(e.target.value)} className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none">
+              <option value="All">All Seasons</option>
+              {availableSeasons.map((season) => <option key={season} value={season}>{season}</option>)}
+            </select>
+            <Input
+              className="w-full md:w-72"
+              placeholder="Search bowler..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <StatCard label="Archived Events" value={filteredPublicHistory.length} />
+          <StatCard label="Tracked Bowlers" value={playerRows.length} />
+          <StatCard label="Total Games" value={playerRows.reduce((sum, p) => sum + p.games, 0)} />
+          <StatCard label="Total Earnings" value={currency(playerRows.reduce((sum, p) => sum + p.earnings, 0))} />
         </div>
 
 <div className="mb-4 flex flex-wrap gap-2">
@@ -4176,59 +4189,64 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
 </div>
 
 {publicStatsTab === "bowlers" && (
-        <div className="overflow-auto rounded-2xl border border-blue-200">
-          <table className="w-full min-w-[720px] text-xs md:text-sm">
-            <thead className="bg-blue-800 text-white">
-              <tr>
-                <th className="p-3 text-left">Bowler</th>
-                <th className="p-3 text-right">Events</th>
-                <th className="p-3 text-right">Games</th>
-                <th className="p-3 text-right">Avg</th>
-                <th className="p-3 text-right">High Game</th>
-                <th className="p-3 text-right">Titles</th>
-                <th className="p-3 text-right">Cuts Made</th>
-                <th className="p-3 text-right">Best Finish</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {rows.map((p) => (
-                <tr key={`public-stats-${p.name}`} className="border-t">
-                  <td className="p-3 font-bold text-blue-950">
-                    {p.name}
-                  </td>
-                  <td className="p-3 text-right">{p.events}</td>
-                  <td className="p-3 text-right">{p.games}</td>
-                  <td className="p-3 text-right font-bold">
-                    {p.average.toFixed(2)}
-                  </td>
-                  <td className="p-3 text-right">
-                    {p.highGame || "—"}
-                  </td>
-                  <td className="p-3 text-right font-bold text-yellow-700">
-                    {p.titles}
-                  </td>
-                  <td className="p-3 text-right">{p.cuts}</td>
-                  <td className="p-3 text-right">
-                    {p.bestFinish ? `#${p.bestFinish}` : "—"}
-                  </td>
-                </tr>
-              ))}
-
-              {rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="p-5 text-center text-blue-700"
-                  >
-                    No public stats available yet.
-                  </td>
-                </tr>
+  <div>
+    <div className="mb-4 flex gap-2">
+      <button type="button" onClick={() => setStatsMode("scratch")} className={statsMode === "scratch" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>
+        Scratch Stats
+      </button>
+      <button type="button" onClick={() => setStatsMode("handicap")} className={statsMode === "handicap" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>
+        Handicap Tournament Series
+      </button>
+    </div>
+    <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+      <table className="w-full min-w-[1040px] text-xs md:text-sm">
+        <thead className="bg-blue-800 text-white">
+          <tr>
+            <th className="p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("tournaments")} className="font-bold">Events{sortLabel("tournaments")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("games")} className="font-bold">Games{sortLabel("games")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("average")} className="font-bold">Overall Avg{sortLabel("average")}</button></th>
+            {statsMode === "scratch" && (
+              <>
+                <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("qualifyingAverage")} className="font-bold">Qual Avg{sortLabel("qualifyingAverage")}</button></th>
+                <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsAverage")} className="font-bold">Finals Avg{sortLabel("finalsAverage")}</button></th>
+                <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsGames")} className="font-bold">Finals Gms{sortLabel("finalsGames")}</button></th>
+              </>
+            )}
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold">High Game{sortLabel("highGame")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("earnings")} className="font-bold">Earnings{sortLabel("earnings")}</button></th>
+            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
+          </tr>
+        </thead>
+        <tbody>
+          {playerRows.map((p) => (
+            <tr key={`public-stats-${p.name}`} className="border-t">
+              <td className="p-2 font-semibold md:p-3">{p.name}</td>
+              <td className="p-2 text-right md:p-3">{p.tournaments}</td>
+              <td className="p-2 text-right md:p-3">{p.games}</td>
+              <td className="p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
+              {statsMode === "scratch" && (
+                <>
+                  <td className="p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
+                  <td className="p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "???"}</td>
+                  <td className="p-2 text-right md:p-3">{p.finalsGames}</td>
+                </>
               )}
-            </tbody>
-          </table>
-        </div>
-      )}
+              <td className="p-2 text-right md:p-3">{p.highGame || "???"}</td>
+              <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
+              <td className="p-2 text-right md:p-3">{p.cashes}</td>
+              <td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(p.earnings)}</td>
+              <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "???"}</td>
+            </tr>
+          ))}
+          {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
       {publicStatsTab === "archives" && (
   <div className="overflow-auto rounded-2xl border border-blue-200">
     <table className="w-full min-w-[720px] text-xs md:text-sm">
