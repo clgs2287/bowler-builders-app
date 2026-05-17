@@ -4164,11 +4164,10 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3">
           <StatCard label="Archived Events" value={filteredPublicHistory.length} />
           <StatCard label="Tracked Bowlers" value={playerRows.length} />
           <StatCard label="Total Games" value={playerRows.reduce((sum, p) => sum + p.games, 0)} />
-          <StatCard label="Total Earnings" value={currency(playerRows.reduce((sum, p) => sum + p.earnings, 0))} />
         </div>
 
 <div className="mb-4 flex flex-wrap gap-2">
@@ -4203,7 +4202,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
       </button>
     </div>
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-      <table className="w-full min-w-[1040px] text-xs md:text-sm">
+      <table className="w-full min-w-[960px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
@@ -4220,7 +4219,6 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold">High Game{sortLabel("highGame")}</button></th>
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("earnings")} className="font-bold">Earnings{sortLabel("earnings")}</button></th>
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
           </tr>
         </thead>
@@ -4241,11 +4239,10 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
               <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
               <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
               <td className="p-2 text-right md:p-3">{p.cashes}</td>
-              <td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(p.earnings)}</td>
               <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
             </tr>
           ))}
-          {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>}
+          {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={statsMode === "scratch" ? 11 : 8}>No archived tournament stats for this filter yet.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -4514,7 +4511,6 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
                 {selectedPublicArchiveSnapshot?.useHandicapScores && <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "handicap", direction: current.column === "handicap" && current.direction === "asc" ? "desc" : "asc" }))}>Hdcp</th>}
                 <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "average", direction: current.column === "average" && current.direction === "asc" ? "desc" : "asc" }))}>Average</th>
                 <th className="p-2 text-right md:p-3">Cashed</th>
-                <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "payout", direction: current.column === "payout" && current.direction === "asc" ? "desc" : "asc" }))}>Payout</th>
               </tr>
             </thead>
             <tbody>
@@ -4527,7 +4523,6 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
                   return (getHdcpTotal(a) - getHdcpTotal(b)) * dir;
                 }
                 if (publicArchiveSort.column === "average") return (Number(a.average || 0) - Number(b.average || 0)) * dir;
-                if (publicArchiveSort.column === "payout") return (Number(a.payout || 0) - Number(b.payout || 0)) * dir;
                 return (Number(a.place || 0) - Number(b.place || 0)) * dir;
               }).map((result) => (
                 <tr key={selectedPublicArchive.id + "-" + result.bowlerId} className={result.title ? "border-t bg-yellow-50" : result.cashed ? "border-t bg-blue-50" : "border-t"}>
@@ -4541,7 +4536,6 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
                   {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + (selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name)?.handicapPerGame || 0) * ((result.games || []).length || 0)}</td>}
                   <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
                   <td className="p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
-                  <td className="p-2 text-right font-bold text-green-700 md:p-3">{currency(result.payout || 0)}</td>
                 </tr>
               ))}
             </tbody>
