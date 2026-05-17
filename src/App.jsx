@@ -411,7 +411,7 @@ function getBracketSize(qualifiers) {
 }
 
 function parseLaneNumbers(lanesUsed) {
-  return String(lanesUsed || "")
+  const laneNumbers = String(lanesUsed || "")
     .split(",")
     .flatMap((part) => {
       const trimmed = part.trim();
@@ -438,6 +438,8 @@ function parseLaneNumbers(lanesUsed) {
     })
     .filter((n) => n > 0)
     .sort((a, b) => a - b);
+
+  return Array.from(new Set(laneNumbers));
 }
 
 function buildLanePairs(lanesUsed) {
@@ -506,6 +508,8 @@ const customLanes = String(rotationSource || "")
 const rawMovedLane = startingLane + relativeMoves[gameIndex % relativeMoves.length];
 
 const availableLanes = parseLaneNumbers(lanesUsed);
+if (!availableLanes.length) return String(rawMovedLane || startingLane);
+
 const lowLane = Math.min(...availableLanes);
 const highLane = Math.max(...availableLanes);
 const laneCount = highLane - lowLane + 1;
@@ -519,6 +523,11 @@ while (movedLane > highLane) {
 while (movedLane < lowLane) {
   movedLane += laneCount;
 }
+if (!availableLanes.includes(movedLane)) {
+  const matchingSideLanes = availableLanes.filter((lane) => lane % 2 === startingLane % 2);
+  const laneChoices = matchingSideLanes.length ? matchingSideLanes : availableLanes;
+  movedLane = laneChoices.find((lane) => lane > movedLane) || laneChoices[0] || movedLane;
+}
   return String(movedLane || startingLane);
 }
 
@@ -530,6 +539,7 @@ while (movedLane < lowLane) {
     return pairs[next % pairs.length];
   }
 
+  return pairs[(startIndex + step) % pairs.length];
 }
 
 function bracketSeedOrder(size) {
@@ -1163,7 +1173,7 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
                 <LockedTextField label="Center" value={tournamentInfo.center || ""} onChange={(value) => update("center", value)} />
                 <LockedTextField label="Address" value={tournamentInfo.location} onChange={(value) => update("location", value)} />
                 <LockedTextField label="Season" value={tournamentInfo.season || ""} onChange={(value) => update("season", value)} />
-                  <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
+                  <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} placeholder="Example: 1-8, 11-18" />
 
 <LockedTextField
   label="Current Stage"
@@ -1567,22 +1577,7 @@ function LaneSelector({ value, onChange }) {
 }
 
 function buildLaneAssignments(lanesUsed, count) {
-  const raw = String(lanesUsed || "").trim();
-  const rangeMatch = raw.match(/([0-9]+) *- *([0-9]+)/);
-  const laneNumbers = [];
-
-  if (rangeMatch) {
-    const start = Number(rangeMatch[1]);
-    const end = Number(rangeMatch[2]);
-    const low = Math.min(start, end);
-    const high = Math.max(start, end);
-    for (let lane = low; lane <= high; lane += 1) laneNumbers.push(lane);
-  } else {
-    raw.split(/[ ,]+/).forEach((part) => {
-      const lane = Number(part.replace(/[^0-9]/g, ""));
-      if (lane) laneNumbers.push(lane);
-    });
-  }
+  const laneNumbers = parseLaneNumbers(lanesUsed);
 
   if (!laneNumbers.length) return [];
 
