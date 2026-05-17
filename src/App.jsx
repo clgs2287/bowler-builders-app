@@ -4029,6 +4029,7 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
     (t) => t.id === selectedPublicArchiveId
   );
   const selectedPublicArchiveSnapshot = selectedPublicArchive?.activeSnapshot || null;
+  const selectedPublicArchiveRecap = selectedPublicArchive?.tournamentRecap || selectedPublicArchiveSnapshot?.tournamentRecap || {};
   const archiveTitles = scratchHistory.flatMap((tournament) =>
   (tournament.results || [])
     .filter((result) => result.tournamentWinner)
@@ -4627,6 +4628,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
           { id: "qualifying", label: "Qualifying Scores" },
           { id: "finals", label: "Finals" },
           { id: "sideaction", label: "Side Action" },
+          { id: "recap", label: "Recap" },
         ].map((section) => (
           <button
             key={section.id}
@@ -4691,6 +4693,8 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
       {publicArchiveSection === "finals" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with full scoring snapshots.</p>}
       {publicArchiveSection === "sideaction" && selectedPublicArchiveSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} sidePotState={selectedPublicArchiveSnapshot.sidePotState} qualifyingGames={selectedPublicArchiveSnapshot.qualifyingGames || 4} />}
       {publicArchiveSection === "sideaction" && !selectedPublicArchiveSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
+      {publicArchiveSection === "recap" && (selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedPublicArchiveRecap} />}
+      {publicArchiveSection === "recap" && !(selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
     </div>
   )}
 
@@ -5699,7 +5703,7 @@ current.results.push(result);
   );
 }
 
-function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, payoutRows, financials, tournamentFormat, tournamentHistory, setTournamentHistory, restoreTournament, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState }) {
+function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, payoutRows, financials, tournamentFormat, tournamentHistory, setTournamentHistory, restoreTournament, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState, tournamentRecap = {} }) {
   const [seasonFilter, setSeasonFilter] = useState("All");
   const [selectedArchivedTournamentId, setSelectedArchivedTournamentId] = useState(null);
   const [archivedDetailSection, setArchivedDetailSection] = useState("results");
@@ -5708,6 +5712,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   const filteredHistory = seasonFilter === "All" ? tournamentHistory : tournamentHistory.filter((t) => (t.season || "Unassigned") === seasonFilter);
   const selectedArchivedTournament = tournamentHistory.find((t) => t.id === selectedArchivedTournamentId);
   const selectedSnapshot = selectedArchivedTournament?.activeSnapshot || null;
+  const selectedArchivedRecap = selectedArchivedTournament?.tournamentRecap || selectedSnapshot?.tournamentRecap || {};
   const payoutAssignments = [];
   const [archiveSort, setArchiveSort] = useState({ column: "place", direction: "asc" });
 
@@ -5772,7 +5777,8 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       entries: bowlers.length,
       cashers: financials.cashers,
       prizeFund: financials.prizeFund,
-      activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState },
+      tournamentRecap: { ...(tournamentRecap || {}) },
+      activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState, tournamentRecap: { ...(tournamentRecap || {}) } },
 results: ranked.map((b, index) => ({
   bowlerId: b.name.trim().toLowerCase(),
   name: b.name,
@@ -6056,6 +6062,7 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
                 { id: "qualifying", label: "Qualifying Scores" },
                 { id: "finals", label: "Finals" },
                 { id: "sideaction", label: "Side Action" },
+                { id: "recap", label: "Recap" },
               ].map((section) => <button key={section.id} type="button" onClick={() => setArchivedDetailSection(section.id)} className={archivedDetailSection === section.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}>{section.label}</button>)}
             </div>
             {archivedDetailSection === "results" && (
@@ -6262,6 +6269,8 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
             {archivedDetailSection === "finals" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "sideaction" && selectedSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} sidePotState={selectedSnapshot.sidePotState} qualifyingGames={selectedSnapshot.qualifyingGames || 4} />}
             {archivedDetailSection === "sideaction" && !selectedSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
+            {archivedDetailSection === "recap" && (selectedArchivedRecap.winner || selectedArchivedRecap.runnerUp || selectedArchivedRecap.highGame || selectedArchivedRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedArchivedRecap} />}
+            {archivedDetailSection === "recap" && !(selectedArchivedRecap.winner || selectedArchivedRecap.runnerUp || selectedArchivedRecap.highGame || selectedArchivedRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
           </CardContent>
         </AppCard>
       )}
@@ -7950,6 +7959,7 @@ const [reservationState, setReservationState] = useState({
         if (typeof parsed.useHandicapScores === "boolean") setUseHandicapScores(parsed.useHandicapScores);
         if (parsed.tournamentFormat) setTournamentFormat(parsed.tournamentFormat);
         if (parsed.tournamentInfo) setTournamentInfo(parsed.tournamentInfo);
+        if (parsed.tournamentRecap) setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...parsed.tournamentRecap });
         if (parsed.payoutState) setPayoutState({ ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
         if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, ...parsed.bracketState });
         if (parsed.savedScoreGames) setSavedScoreGames(parsed.savedScoreGames);
@@ -7967,11 +7977,11 @@ const [reservationState, setReservationState] = useState({
   useEffect(() => {
     if (!hasLoadedSavedData) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ qualifyingGames, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, payoutState, bracketState, eliminatorState, sidePotState, paidPayouts }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ qualifyingGames, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, payoutState, bracketState, eliminatorState, sidePotState, paidPayouts }));
     } catch (error) {
       console.warn("Could not auto-save tournament data", error);
     }
-  }, [qualifyingGames, savedScoreGames, savedFinalsRounds, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, payoutState, bracketState, eliminatorState, sidePotState, hasLoadedSavedData]); 
+  }, [qualifyingGames, savedScoreGames, savedFinalsRounds, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, payoutState, bracketState, eliminatorState, sidePotState, hasLoadedSavedData]);
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
     if (!confirmed) return;
@@ -7983,6 +7993,7 @@ const [reservationState, setReservationState] = useState({
     }
 
     setTournamentInfo(snapshot.tournamentInfo || { name: archivedTournament.name || "Tournament", date: archivedTournament.date || "", center: archivedTournament.center || "", location: archivedTournament.location || "", director: "Cory Lagner", lanesUsed: "", stage: "Qualifying" });
+    setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || archivedTournament.tournamentRecap || {}) });
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers : buildInitialBowlers(48, qualifyingGames));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
     setTournamentFormat(snapshot.tournamentFormat || archivedTournament.format || "eliminator");
@@ -8003,6 +8014,7 @@ const [reservationState, setReservationState] = useState({
     setUseHandicapScores(false);
     setTournamentFormat("eliminator");
     setTournamentInfo({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true });
+    setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setPayoutState({
   entryFee: 60,
   lineage: 18,
@@ -8158,7 +8170,7 @@ const [reservationState, setReservationState] = useState({
   />
 )}
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
-        {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} /></AppErrorBoundary>}
+        {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
 <TournamentInfoTab
