@@ -5765,6 +5765,69 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   return scores;
 };
 
+    const getEliminatorScoresForBowler = (bowler) => {
+      const scores = [];
+      const game1Score = Number(eliminatorState?.game1Scores?.[bowler.seed] || 0);
+
+      if (game1Score > 0) scores.push(game1Score);
+
+      const game1Scores = eliminatorState?.game1Scores || {};
+      const game2Scores = eliminatorState?.game2Scores || {};
+      const stepScores = eliminatorState?.stepScores || {};
+      const cutCount = Math.ceil(bowlers.length / 4);
+      const cutBowlers = getRankedBowlers(bowlers, useHandicapScores).slice(0, cutCount);
+      const baseRows = cutBowlers.map((row) => {
+        const average = completedGamesCount(row) > 0 ? (useHandicapScores ? row.handicap : row.scratch) / completedGamesCount(row) : 0;
+        const g1 = Number(game1Scores[row.seed] || 0);
+        const game1Total = g1 > 0 ? average + g1 : 0;
+        return { ...row, average, elimGame1: g1, game1Total };
+      });
+      const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
+        ? rankRows(baseRows, "game1Total")
+        : [...baseRows]
+            .sort((a, b) => Number(b.average || 0) - Number(a.average || 0) || a.name.localeCompare(b.name))
+            .map((row, index) => ({ ...row, rank: index + 1 }));
+      const game1AdvancersCount = Math.max(4, Math.ceil(cutBowlers.length / 2));
+      const game1Advancers = game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
+      const game2Rows = game1Advancers.map((row) => {
+        const g2 = Number(game2Scores[row.seed] || 0);
+        const game2Total = g2 > 0 ? row.game1Total + g2 : row.game1Total;
+        return { ...row, elimGame2: g2, game2Total };
+      });
+      const game2Ranked = rankRows(game2Rows, "game2Total");
+      const game2Score = Number(game2Scores[bowler.seed] || 0);
+
+      if (game2Score > 0 && game2Ranked.some((row) => String(row.seed) === String(bowler.seed))) {
+        scores.push(game2Score);
+      }
+
+      const finalists = game2Ranked.slice(0, 4).map((row, index) => ({ ...row, stepSeed: index + 1 }));
+      const seedMap = Object.fromEntries(finalists.map((row) => [row.stepSeed, row]));
+      const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
+      const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
+      const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
+      const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
+      const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
+
+      [stepMatch1, stepMatch2, championship].forEach((match) => {
+        const leftScore = Number(stepScores[`${match.id}-l`] || 0);
+        const rightScore = Number(stepScores[`${match.id}-r`] || 0);
+
+        if (String(match.left?.seed || "") === String(bowler.seed) && leftScore > 0) scores.push(leftScore);
+        if (String(match.right?.seed || "") === String(bowler.seed) && rightScore > 0) scores.push(rightScore);
+      });
+
+      return scores;
+    };
+
+    const getFinalsScoresForBowler = (bowler) => (
+      tournamentFormat === "bracket"
+        ? getBracketScoresForBowler(bowler.name)
+        : tournamentFormat === "eliminator"
+          ? getEliminatorScoresForBowler(bowler)
+          : []
+    );
+
 
     const archived = {
       id: `${Date.now()}`,
@@ -5781,201 +5844,37 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       prizeFund: financials.prizeFund,
       tournamentRecap: { ...(tournamentRecap || {}) },
       activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, savedScoreGames, savedFinalsRounds, payoutState, bracketState, eliminatorState, sidePotState, tournamentRecap: { ...(tournamentRecap || {}) } },
-results: ranked.map((b, index) => ({
-  bowlerId: b.name.trim().toLowerCase(),
-  name: b.name,
-  place: b.finalPlace || b.rank,
+results: ranked.map((b, index) => {
+  const qualifyingScores = (b.games || []).map((game) => Number(game || 0)).filter((game) => game > 0);
+  const finalsScores = getFinalsScoresForBowler(b).map((game) => Number(game || 0)).filter((game) => game > 0);
+  const overallScores = [...qualifyingScores, ...finalsScores];
 
-  games: b.games || [],
-  qualifyingGames: b.games || [],
-
-finalsGames:
-tournamentFormat === "bracket"
-  ? getBracketScoresForBowler(b.name)
-    : tournamentFormat === "eliminator"
-      ? [
-          ...(eliminatorState?.game1Scores?.[b.name]
-            ? [eliminatorState.game1Scores[b.name]]
-            : []),
-          ...(eliminatorState?.game2Scores?.[b.name]
-            ? [eliminatorState.game2Scores[b.name]]
-            : []),
-          ...Object.values(
-            eliminatorState?.stepScores?.[b.name] || {}
-          ),
-        ]
-      : [],
-
-overallGames: [
-  ...(b.games || []),
-
- tournamentFormat === "bracket"
-  ? getBracketScoresForBowler(b.name)
-    : tournamentFormat === "eliminator"
-      ? [
-          ...(eliminatorState?.game1Scores?.[b.name]
-            ? [eliminatorState.game1Scores[b.name]]
-            : []),
-          ...(eliminatorState?.game2Scores?.[b.name]
-            ? [eliminatorState.game2Scores[b.name]]
-            : []),
-          ...Object.values(
-            eliminatorState?.stepScores?.[b.name] || {}
-          ),
-        ]
-      : [],
-],
-
-        scratchTotal: b.scratch,
-        handicapTotal: b.handicap,
-        scoringTotal: useHandicapScores ? b.handicap : b.scratch,
-        qualifyingAverage:
-  (b.games || []).length > 0
-    ? (
-        (b.games || []).reduce(
-          (sum, game) => sum + Number(game || 0),
-          0
-        ) / (b.games || []).length
-      )
-    : 0,
-
-finalsAverage:
-  (
-tournamentFormat === "bracket"
-  ? getBracketScoresForBowler(b.name)
-      : tournamentFormat === "eliminator"
-        ? [
-            ...(eliminatorState?.game1Scores?.[b.name]
-              ? [eliminatorState.game1Scores[b.name]]
-              : []),
-            ...(eliminatorState?.game2Scores?.[b.name]
-              ? [eliminatorState.game2Scores[b.name]]
-              : []),
-            ...Object.values(
-              eliminatorState?.stepScores?.[b.name] || {}
-            ),
-          ]
-        : []
-  ).length > 0
-    ? (
-        (
-          tournamentFormat === "bracket"
-            ? Object.values(
-                bracketState?.scratchScores?.[b.name] || {}
-              )
-            : tournamentFormat === "eliminator"
-              ? [
-                  ...(eliminatorState?.game1Scores?.[b.name]
-                    ? [eliminatorState.game1Scores[b.name]]
-                    : []),
-                  ...(eliminatorState?.game2Scores?.[b.name]
-                    ? [eliminatorState.game2Scores[b.name]]
-                    : []),
-                  ...Object.values(
-                    eliminatorState?.stepScores?.[b.name] || {}
-                  ),
-                ]
-              : []
-        ).reduce(
-          (sum, game) => sum + Number(game || 0),
-          0
-        ) /
-        (
-          tournamentFormat === "bracket"
-            ? Object.values(
-                bracketState?.scratchScores?.[b.name] || {}
-              )
-            : tournamentFormat === "eliminator"
-              ? [
-                  ...(eliminatorState?.game1Scores?.[b.name]
-                    ? [eliminatorState.game1Scores[b.name]]
-                    : []),
-                  ...(eliminatorState?.game2Scores?.[b.name]
-                    ? [eliminatorState.game2Scores[b.name]]
-                    : []),
-                  ...Object.values(
-                    eliminatorState?.stepScores?.[b.name] || {}
-                  ),
-                ]
-              : []
-        ).length
-      )
-    : 0,
-
-average:
-  [
-    ...(b.games || []),
-
-(tournamentFormat === "bracket"
-  ? getBracketScoresForBowler(b.name)
-  : tournamentFormat === "eliminator"
-    ? [
-        ...(eliminatorState?.game1Scores?.[b.name]
-          ? [eliminatorState.game1Scores[b.name]]
-          : []),
-        ...(eliminatorState?.game2Scores?.[b.name]
-          ? [eliminatorState.game2Scores[b.name]]
-          : []),
-        ...Object.values(
-          eliminatorState?.stepScores?.[b.name] || {}
-        ),
-      ]
-    : []),
-  ].length > 0
-    ? (
-        [
-          ...(b.games || []),
-
-          ...(tournamentFormat === "bracket"
-            ? Object.values(
-                bracketState?.scratchScores?.[b.name] || {}
-              )
-            : tournamentFormat === "eliminator"
-              ? [
-                  ...(eliminatorState?.game1Scores?.[b.name]
-                    ? [eliminatorState.game1Scores[b.name]]
-                    : []),
-                  ...(eliminatorState?.game2Scores?.[b.name]
-                    ? [eliminatorState.game2Scores[b.name]]
-                    : []),
-                  ...Object.values(
-                    eliminatorState?.stepScores?.[b.name] || {}
-                  ),
-                ]
-              : []),
-        ].reduce(
-          (sum, game) => sum + Number(game || 0),
-          0
-        ) /
-        [
-          ...(b.games || []),
-
-          ...(tournamentFormat === "bracket"
-            ? Object.values(
-                bracketState?.scratchScores?.[b.name] || {}
-              )
-            : tournamentFormat === "eliminator"
-              ? [
-                  ...(eliminatorState?.game1Scores?.[b.name]
-                    ? [eliminatorState.game1Scores[b.name]]
-                    : []),
-                  ...(eliminatorState?.game2Scores?.[b.name]
-                    ? [eliminatorState.game2Scores[b.name]]
-                    : []),
-                  ...Object.values(
-                    eliminatorState?.stepScores?.[b.name] || {}
-                  ),
-                ]
-              : []),
-        ].length
-      )
-    : 0,
-        cashed: (b.finalPlace || b.rank) <= financials.cashers,
-        payout: (b.finalPlace || b.rank) <= financials.cashers ? payoutAssignments[index] || 0 : 0,
-        title: (b.finalPlace || b.rank) === 1 && Boolean(tournamentInfo.titleEligible ?? true),
-tournamentWinner: (b.finalPlace || b.rank) === 1,
-  })),
-    };
+  return {
+    bowlerId: b.name.trim().toLowerCase(),
+    name: b.name,
+    place: b.finalPlace || b.rank,
+    games: qualifyingScores,
+    qualifyingGames: qualifyingScores,
+    finalsGames: finalsScores,
+    overallGames: overallScores,
+    scratchTotal: b.scratch,
+    handicapTotal: b.handicap,
+    scoringTotal: useHandicapScores ? b.handicap : b.scratch,
+    qualifyingAverage: qualifyingScores.length
+      ? qualifyingScores.reduce((sum, game) => sum + game, 0) / qualifyingScores.length
+      : 0,
+    finalsAverage: finalsScores.length
+      ? finalsScores.reduce((sum, game) => sum + game, 0) / finalsScores.length
+      : 0,
+    average: overallScores.length
+      ? overallScores.reduce((sum, game) => sum + game, 0) / overallScores.length
+      : 0,
+    cashed: (b.finalPlace || b.rank) <= financials.cashers,
+    payout: (b.finalPlace || b.rank) <= financials.cashers ? payoutAssignments[index] || 0 : 0,
+    title: (b.finalPlace || b.rank) === 1 && Boolean(tournamentInfo.titleEligible ?? true),
+    tournamentWinner: (b.finalPlace || b.rank) === 1,
+  };
+}),    };
 
     setTournamentHistory((current) => [archived, ...current]);
   };
