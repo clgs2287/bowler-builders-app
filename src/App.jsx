@@ -1174,8 +1174,6 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
 />
               </div>
               <div className="space-y-3">
-                <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} />
-
 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
   <Label className="text-left text-sm font-bold text-blue-900">
     Movement
