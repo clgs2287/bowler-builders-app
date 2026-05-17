@@ -3837,10 +3837,7 @@ function PublicViewTab({
   const publicTabs =
   publicMode === "finals"
     ? [{ id: "finals", label: "Finals" }]
-    : [
-        { id: "leaderboard", label: "Leaderboard" },
-        { id: "schedule", label: "Schedule" },
-      ];
+    : [{ id: "leaderboard", label: "Leaderboard" }];
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -3878,9 +3875,6 @@ function PublicViewTab({
       </Card>
 
       {publicTab === "leaderboard" && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} />}
-     {publicTab === "schedule" && (
-  <PublicSchedule scheduleItems={scheduleItems} />
-)}
       {publicMode === "finals" && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} />}
       {publicMode === "finals" && tournamentFormat === "eliminator" && <PublicEliminatorView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} />}
     </div>
