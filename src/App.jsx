@@ -1608,6 +1608,13 @@ function RosterSizeInput({ entries, onSave }) {
 
 function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {} }) {
   const laneAssignments = buildLaneAssignments(tournamentInfo.lanesUsed, bowlers.length);
+  const handicapBase = Number(sidePotState.handicapBase ?? 200);
+  const handicapPercent = Number(sidePotState.handicapPercent ?? 90);
+  const calculateRegistrationHandicap = (average) =>
+    Math.max(
+      0,
+      Math.round((handicapBase - Number(average || 0)) * (handicapPercent / 100))
+    );
   useEffect(() => {
     if (!laneAssignments.some(Boolean)) return;
     setBowlers((current) => current.map((bowler, index) => ({ ...bowler, lane: laneAssignments[index] || bowler.lane || "" })));
@@ -1635,24 +1642,7 @@ if (
 ) {
   return bowler;
 }
-console.log(
-  bowler.name,
-  bowler.average,
-  sidePotState.handicapBase,
-  sidePotState.handicapPercent
-);
-      const handicap = Math.max(
-        0,
-        Math.round(
-          (Number(sidePotState.handicapBase ?? 200) -
-            Number(
-  getArchivedAverageForBowler(bowler.name)?.average ??
-    bowler.average ??
-    0
-)) *
-            (Number(sidePotState.handicapPercent ?? 90) / 100)
-        )
-      );
+      const handicap = calculateRegistrationHandicap(averageToUse);
 
       return {
         ...bowler,
@@ -1662,8 +1652,8 @@ console.log(
     })
   );
 }, [
-  sidePotState.handicapBase,
-  sidePotState.handicapPercent,
+  handicapBase,
+  handicapPercent,
   useHandicapScores,
 ]);
 
@@ -1734,22 +1724,14 @@ const updateBowler = (index, field, value) => {
           getArchivedAverageForBowler(value);
 
         if (archivedData?.eligible) {
-const handicapBase = Number(sidePotState.handicapBase ?? 200);
-const handicapPercent = Number(sidePotState.handicapPercent ?? 90);
-
-          const handicap = Math.max(
-            0,
-            Math.round(
-              (handicapBase -
-                archivedData.average) *
-                (handicapPercent / 100)
-            )
-          );
+          const handicap = calculateRegistrationHandicap(archivedData.average);
 
           updatedBowler.average =
             archivedData.average;
 
           updatedBowler.handicap =
+            handicap;
+          updatedBowler.handicapPerGame =
             handicap;
 
           updatedBowler.averageSource =
@@ -1847,10 +1829,7 @@ const handicapPercent = Number(sidePotState.handicapPercent ?? 90);
 
 const archivedHandicap =
   useHandicapScores && archivedData?.eligible
-    ? Math.max(
-        0,
-        Math.round((200 - archivedData.average) * 0.9)
-      )
+    ? calculateRegistrationHandicap(archivedData.average)
     : 0;
 
      if (useHandicapScores && archivedData && !archivedData.eligible) {
@@ -1868,6 +1847,7 @@ const archivedHandicap =
   : "",
 
 handicap: archivedHandicap,
+handicapPerGame: archivedHandicap,
 
 averageSource: archivedData?.eligible
   ? `${archivedData.totalGames} archived games`
