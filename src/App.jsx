@@ -35,7 +35,7 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 
 // Logo temporarily disabled for stability in this environment
 
-const numberInputStyles = `
+const numberInputStyles = String.raw`
   input.no-number-arrows[type="number"]::-webkit-outer-spin-button,
   input.no-number-arrows[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -395,13 +395,6 @@ function buildPayoutRows({ financials, middlePercent, minCashPercent, rounding, 
   return withRounded.filter((row) => row.players > 0);
 }
 
-function getLanePair(lane) {
-  const n = Number(lane || 0);
-  if (!n || n < 1) return "Unassigned";
-  const low = n % 2 === 0 ? n - 1 : n;
-  return `${low}-${low + 1}`;
-}
-
 function getBracketSize(qualifiers) {
   if (qualifiers <= 4) return 4;
   if (qualifiers <= 8) return 8;
@@ -531,15 +524,7 @@ while (movedLane < lowLane) {
     return pairs[next % pairs.length];
   }
 
-
-function getBracketSize(qualifiers) {
-  if (qualifiers <= 4) return 4;
-  if (qualifiers <= 8) return 8;
-  if (qualifiers <= 16) return 16;
-  if (qualifiers <= 32) return 32;
-  if (qualifiers <= 64) return 64;
-  return "Over 64";
-}}
+}
 
 function bracketSeedOrder(size) {
   let seeds = [1, 2];
@@ -732,8 +717,6 @@ tabs: [
     ],
   },
 ];
-
-const appTabs = appSections.flatMap((section) => section.tabs);
 
 function getSectionForTab(activeTab) {
   return appSections.find((section) => section.tabs.some((tab) => tab.id === activeTab)) || appSections[0];
@@ -1096,7 +1079,6 @@ function DashboardTab({
   entries,
   bowlers,
   financials,
-  payoutRows,
   useHandicapScores,
   tournamentFormat,
   setTournamentFormat,
@@ -1116,16 +1098,6 @@ function DashboardTab({
     setQualifyingGames(next);
     setBowlers((current) => current.map((bowler) => normalizeBowlerGames(bowler, next)));
   };
-  const nonFkmTitles = [];
-  const deleteManualTitle = () => {};
-  const lineagePerGame = Number(payoutState.lineagePerGame || 4);
-const payoutQualifyingGames = Number(payoutState.qualifyingGames || qualifyingGames || 4);
-const finalsGames = Number(payoutState.finalsGames || 0);
-
-const totalLineageOwed =
-  entries * payoutQualifyingGames * lineagePerGame +
-  finalsGames * lineagePerGame;
-
   const autoFinalsGames = (() => {
   if (tournamentFormat === "sweeper") return 0;
 
@@ -1697,7 +1669,7 @@ console.log(
   useHandicapScores,
 ]);
 
-  const getArchivedAverageForBowler = (name) => {
+  function getArchivedAverageForBowler(name) {
   const normalizedName = String(name || "").trim().toLowerCase();
   if (!normalizedName) return null;
 
@@ -1745,7 +1717,7 @@ return {
   totalGames,
   average: calculatedAverage,
 };
-  };
+  }
 const updateBowler = (index, field, value) => {
   setBowlers((current) =>
     current.map((b, i) => {
@@ -1837,6 +1809,15 @@ const handicapPercent = Number(sidePotState.handicapPercent ?? 90);
       [setKey]: { ...(((current.bracketSets || {})[setKey]) || {}), [seed]: Math.max(0, Number(value || 0)) },
     },
   }));
+  const updateSidePot = (index, key, value) => {
+    setBowlers((current) =>
+      current.map((bowler, bowlerIndex) =>
+        bowlerIndex === index
+          ? { ...bowler, sidePots: { ...(bowler.sidePots || {}), [key]: value } }
+          : bowler
+      )
+    );
+  };
   const updateBracketPrice = (value) => setSidePotState((current) => ({ ...current, bracketPrice: Number(value || 0) }));
   const updateHighGamePrice = (value) => setSidePotState((current) => ({ ...current, highGamePrice: Number(value || 0) }));
   const updateHandicapHighGamePrice = (value) => setSidePotState((current) => ({ ...current, handicapHighGamePrice: Number(value || 0) }));
@@ -2431,31 +2412,6 @@ if (tournamentFormat === "bracket") {
 
   const totalLineageOwed =
     qualifyingLineage + finalsLineage;
-  const suggestedFinalsGames = (() => {
-  if (payoutState.finalsGamesOverrideEnabled) {
-    return Number(payoutState.finalsGames || 0);
-  }
-
-  if (payoutState.tournamentFormat === "sweeper") {
-    return 0;
-  }
-
-  if (payoutState.tournamentFormat === "eliminator") {
-    return 18;
-  }
-
-  if (payoutState.tournamentFormat === "bracket") {
-    const suggestedQualifiers = Math.ceil(entries / 4);
-    const bracketSize = getBracketSize(suggestedQualifiers);
-
-    return typeof bracketSize === "number"
-      ? (bracketSize - 1) * 2
-      : 0;
-  }
-
-  return 0;
-})();
-
   const update = (key, value) =>
     setPayoutState((current) => ({ ...current, [key]: value }));
 
@@ -3049,33 +3005,6 @@ function PublicReservations({
     }));
   };
 
-  const emailSubject = encodeURIComponent(
-    `Tournament Reservation - ${
-      reservationState.tournamentName ||
-      tournamentInfo.name
-    }`
-  );
-
-  const emailBody = encodeURIComponent(`
-Tournament:
-${reservationState.tournamentName || tournamentInfo.name}
-
-Name:
-${form.name}
-
-Nickname:
-${form.nickname}
-
-Phone:
-${form.phone}
-
-Email:
-${form.email}
-
-Optional Note:
-${form.note}
-  `);
-
   const formValid =
   form.name.trim() &&
   form.phone.trim() &&
@@ -3088,9 +3017,6 @@ const registrationStatus =
   Number(reservationState.reservationLimit || 48)
     ? "Registered"
     : "Waitlisted";
-  const mailtoLink = `mailto:${
-    reservationState.registrationEmail
-  }?subject=${emailSubject}&body=${emailBody}`;
 
   if (!reservationState.entriesOpen) {
     return (
@@ -3688,7 +3614,7 @@ const PublicBracketMatch = ({ match }) => {
   );
 };
 
-  const PublicBracketRoundColumn = ({ title, matches, topOffset = 0, gap = 16, roundIndex = 0 }) => {
+  const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0 }) => {
     const matchHeight = 84;
     const firstRoundGap = 42;
     const step = matchHeight + firstRoundGap;
@@ -3728,11 +3654,29 @@ const PublicBracketMatch = ({ match }) => {
         </div>
         <div className="overflow-x-auto rounded-2xl border bg-blue-50 p-4">
           <div className="flex min-w-max items-start gap-8">
-            {bracketRounds.map((round, roundIndex) => <PublicBracketRoundColumn key={`public-${round.title}`} title={round.title} matches={round.matches} topOffset={round.topOffset} gap={round.gap} roundIndex={roundIndex} />)}
+            {bracketRounds.map((round, roundIndex) => <PublicBracketRoundColumn key={`public-${round.title}`} title={round.title} matches={round.matches} roundIndex={roundIndex} />)}
           </div>
         </div>
       </CardContent>
     </AppCard>
+  );
+}
+
+function StepMatchPublic({ title, match, stepScores }) {
+  const leftScore = stepScores[`${match.id}-l`] ?? "";
+  const rightScore = stepScores[`${match.id}-r`] ?? "";
+  const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
+
+  return (
+    <div className="rounded-xl border border-blue-200 bg-white p-3 shadow-sm">
+      <h3 className="mb-2 font-bold text-blue-900">{title}</h3>
+      <div className="grid grid-cols-[1fr_auto] gap-2 text-sm">
+        <span className={winner?.seed === match.left?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{match.left?.name || "TBD"}</span>
+        <span className="font-bold">{leftScore || "â€”"}</span>
+        <span className={winner?.seed === match.right?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{match.right?.name || "TBD"}</span>
+        <span className="font-bold">{rightScore || "â€”"}</span>
+      </div>
+    </div>
   );
 }
 
@@ -3770,22 +3714,6 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
   const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "");
 
-  const StepMatchPublic = ({ title, match }) => {
-    const leftScore = stepScores[`${match.id}-l`] ?? "";
-    const rightScore = stepScores[`${match.id}-r`] ?? "";
-    const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
-    return (
-      <div className="rounded-xl border border-blue-200 bg-white p-3 shadow-sm">
-        <h3 className="mb-2 font-bold text-blue-900">{title}</h3>
-        <div className="grid grid-cols-[1fr_auto] gap-2 text-sm">
-          <span className={winner?.seed === match.left?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{match.left?.name || "TBD"}</span>
-          <span className="font-bold">{leftScore || "—"}</span>
-          <span className={winner?.seed === match.right?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{match.right?.name || "TBD"}</span>
-          <span className="font-bold">{rightScore || "—"}</span>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -3836,9 +3764,9 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
         <CardContent className="p-3 md:p-5">
           <h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Stepladder</h2>
           <div className="grid gap-3 md:grid-cols-3">
-            <StepMatchPublic title="#4 vs #3" match={stepMatch1} />
-            <StepMatchPublic title="Winner vs #2" match={stepMatch2} />
-            <StepMatchPublic title="Championship" match={championship} />
+            <StepMatchPublic title="#4 vs #3" match={stepMatch1} stepScores={stepScores} />
+            <StepMatchPublic title="Winner vs #2" match={stepMatch2} stepScores={stepScores} />
+            <StepMatchPublic title="Championship" match={championship} stepScores={stepScores} />
           </div>
         </CardContent>
       </AppCard>
@@ -4958,15 +4886,11 @@ function BracketRoundColumn({
   scores,
   onScoreChange,
   useHandicapScores,
-  topOffset = 0,
-  gap = 16,
   roundIndex = 0,
-  savedFinalsRounds,
   setSavedFinalsRounds,
 }) {
   const matchHeight = 96;
   const firstRoundGap = 24;
-  const step = matchHeight + firstRoundGap;
 
   const getTop = (matchIndex) => {
     if (roundIndex === 0) {
@@ -5015,7 +4939,7 @@ function BracketRoundColumn({
   );
 }
 
-function BracketTab({ entries, bowlers, useHandicapScores, bracketState, setBracketState,savedFinalsRounds,
+function BracketTab({ entries, bowlers, useHandicapScores, bracketState, setBracketState,
 setSavedFinalsRounds }) {
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState });
   const handleScoreChange = (
@@ -5068,10 +4992,7 @@ setSavedFinalsRounds }) {
           matches={round.matches}
           scores={scores}
           onScoreChange={handleScoreChange}
-          topOffset={round.topOffset}
-          gap={round.gap}
           roundIndex={roundIndex}
-          savedFinalsRounds={savedFinalsRounds}
           setSavedFinalsRounds={setSavedFinalsRounds}
           useHandicapScores={useHandicapScores}
         />
@@ -5282,28 +5203,7 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
   const totalCashPaid = cashRows.reduce((sum, row) => sum + row.payoutAmount, 0);
   const csvRows = [["Place", "Bowler", "Scratch", "Handicap Total", "Payout Label", "Payout Amount"], ...cashRows.map((row) => [row.finalPlace || row.rank, row.name, row.scratch, row.handicap, row.payoutLabel, row.payoutAmount])];
 
-  const dashboardPrizeFund =
-  (
-    (bowlers.filter((b) => b.paid).length *
-      Number(payoutState.entryFee || 0)
-    ) -
-
-    (
-      (Number(entries || 0) *
-        Number(payoutState.qualifyingGames || qualifyingGames || 4) *
-        Number(payoutState.lineagePerGame || 4)
-      ) +
-
-      (
-        dashboardFinalsGames *
-        Number(payoutState.lineagePerGame || 4)
-      )
-    )
-  ) +
-
-  Number(payoutState.ballRaffleAdded || 0) +
-
-  Number(payoutState.otherAddedMoney || 0);
+  const dashboardPrizeFund = financials.prizeFund;
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -5801,7 +5701,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   const selectedArchivedTournament = tournamentHistory.find((t) => t.id === selectedArchivedTournamentId);
   const selectedSnapshot = selectedArchivedTournament?.activeSnapshot || null;
   const payoutAssignments = [];
-  const [archiveSort, setArchiveSort] = useState({ key: "place", direction: "asc" });
+  const [archiveSort, setArchiveSort] = useState({ column: "place", direction: "asc" });
 
   payoutRows.forEach((row) => {
     for (let i = 0; i < row.players; i += 1) payoutAssignments.push(row.finalPerPlayer);
@@ -5865,33 +5765,13 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       cashers: financials.cashers,
       prizeFund: financials.prizeFund,
       activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, payoutState, bracketState, eliminatorState, sidePotState },
-results: ranked.map((b, index) => {
-  const qualifyingGameScores = (b.games || [])
-    .map((game) => Number(game || 0))
-    .filter((game) => game > 0);
-
-const finalsGameScores =
-  !useHandicapScores
-    ? (b.finalsGames || [])
-        .map((game) => Number(game || 0))
-        .filter((game) => game > 0)
-    : [];
-
-const allGameScores = [
-  ...qualifyingGameScores,
-  ...finalsGameScores,
-];
-
-  return {
+results: ranked.map((b, index) => ({
   bowlerId: b.name.trim().toLowerCase(),
   name: b.name,
   place: b.finalPlace || b.rank,
 
   games: b.games || [],
   qualifyingGames: b.games || [],
-
-  scratchTotal: b.scratch,
-  handicapTotal: b.handicap,
 
 finalsGames:
 tournamentFormat === "bracket"
@@ -5927,11 +5807,11 @@ overallGames: [
             eliminatorState?.stepScores?.[b.name] || {}
           ),
         ]
-      : [],,
-],  
+      : [],
+],
 
-scratchTotal: b.scratch,
-handicapTotal: b.handicap,
+        scratchTotal: b.scratch,
+        handicapTotal: b.handicap,
         scoringTotal: useHandicapScores ? b.handicap : b.scratch,
         qualifyingAverage:
   (b.games || []).length > 0
@@ -6078,8 +5958,7 @@ average:
         payout: (b.finalPlace || b.rank) <= financials.cashers ? payoutAssignments[index] || 0 : 0,
         title: (b.finalPlace || b.rank) === 1 && Boolean(tournamentInfo.titleEligible ?? true),
 tournamentWinner: (b.finalPlace || b.rank) === 1,
-  };
-}),
+  })),
     };
 
     setTournamentHistory((current) => [archived, ...current]);
@@ -6146,7 +6025,7 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
                     <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button></div></td>
                   </tr>
                 ))}
-                {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={statsMode === "scratch" ? 12 : 9}>No tournaments archived for this season filter yet.</td></tr>} 
+                {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No tournaments archived for this season filter yet.</td></tr>}
               </tbody>  
             </table>
           </div>
@@ -6216,7 +6095,7 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
     }))
   }
 >
-  {Boolean(selectedSnapshot?.useHandicapScores)
+  {selectedSnapshot?.useHandicapScores
     ? "Scratch"
     : "Total"}
 </th>
@@ -6320,7 +6199,7 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
 <td className="p-2 font-semibold md:p-3">
   {result.name}
 
-  {Boolean(selectedSnapshot?.useHandicapScores) && (
+  {selectedSnapshot?.useHandicapScores && (
     <span className="ml-2 text-xs font-semibold text-blue-700">
 (+{selectedSnapshot?.bowlers?.find(
   (b) => b.name === result.name
@@ -6384,6 +6263,7 @@ tournamentWinner: (b.finalPlace || b.rank) === 1,
 
 function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
   const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History" });
+  const [titleSort, setTitleSort] = useState({ column: "titles", direction: "desc" });
 
   const archiveTitles = tournamentHistory.flatMap((tournament) => (tournament.results || [])
     .filter((result) => result.tournamentWinner)
@@ -6454,7 +6334,15 @@ else current.nonFkmTitles += 1;
 
   const titleLeaderRows = Object.values(titleCounts)
     .map((row) => ({ ...row, seasonsText: Array.from(row.seasons).sort((a, b) => String(b).localeCompare(String(a))).join(", ") }))
-    .sort((a, b) => b.titles - a.titles || a.bowler.localeCompare(b.bowler));
+    .sort((a, b) => {
+      const direction = titleSort.direction === "asc" ? 1 : -1;
+      const aValue = a[titleSort.column];
+      const bValue = b[titleSort.column];
+      if (typeof aValue === "string" || typeof bValue === "string") {
+        return String(aValue || "").localeCompare(String(bValue || "")) * direction || a.bowler.localeCompare(b.bowler);
+      }
+      return (Number(aValue || 0) - Number(bValue || 0)) * direction || a.bowler.localeCompare(b.bowler);
+    });
 
   const addManualTitle = () => {
     if (!newTitle.bowler.trim()) {
@@ -6516,7 +6404,7 @@ else current.nonFkmTitles += 1;
               <thead className="bg-blue-800 text-white"><tr><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "name",
       direction:
         current.column === "name" && current.direction === "asc"
@@ -6529,7 +6417,7 @@ else current.nonFkmTitles += 1;
 </th> <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "titles",
       direction:
         current.column === "titles" && current.direction === "asc"
@@ -6543,7 +6431,7 @@ else current.nonFkmTitles += 1;
 <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "majors",
       direction:
         current.column === "majors" &&
@@ -6558,7 +6446,7 @@ else current.nonFkmTitles += 1;
  <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "fkmTitles",
       direction:
         current.column === "fkmTitles" && current.direction === "asc"
@@ -6571,7 +6459,7 @@ else current.nonFkmTitles += 1;
 </th> <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "nonFkmTitles",
       direction:
         current.column === "nonFkmTitles" && current.direction === "asc"
@@ -6584,7 +6472,7 @@ else current.nonFkmTitles += 1;
 </th> <th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "seasonsText",
       direction:
         current.column === "seasonsText" && current.direction === "asc"
@@ -6597,7 +6485,7 @@ else current.nonFkmTitles += 1;
 </th> <th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
-    setArchiveSort((current) => ({
+    setTitleSort((current) => ({
       column: "latest",
       direction:
         current.column === "latest" && current.direction === "asc"
@@ -6631,7 +6519,7 @@ else current.nonFkmTitles += 1;
   );
 }
 
-function FinanceTab({ entries, payoutState, financials }) {
+function FinanceTab({ entries, payoutState }) {
   const totalCollected =
     entries * Number(payoutState.entryFee || 0);
 
@@ -7092,12 +6980,15 @@ row.matches.push({
 
 });
       }));
-      let alivePlayers = [];
-      if (champions.length) alivePlayers = champions;
-      else if (finalPlayers.length) alivePlayers = finalPlayers.filter((player) => player && player.name !== "BYE");
-      else if (r2Winners.flat().length) alivePlayers = r2Winners.flat();
-      else if (r1Winners.flat().length) alivePlayers = r1Winners.flat();
-      else alivePlayers = bracket.players.filter((player) => player && player.name !== "BYE");
+      const alivePlayers = champions.length
+        ? champions
+        : finalPlayers.length
+          ? finalPlayers.filter((player) => player && player.name !== "BYE")
+          : r2Winners.flat().length
+            ? r2Winners.flat()
+            : r1Winners.flat().length
+              ? r1Winners.flat()
+              : bracket.players.filter((player) => player && player.name !== "BYE");
       alivePlayers.forEach((player) => {
         const row = ensurePlayer(player);
         if (row) row.alive += 1;
@@ -7363,7 +7254,7 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
     )),
   ];
 
-  const HighGameSection = ({ title, results, entries, price, pot, perGame }) => (
+  const renderHighGameSection = ({ title, results, entries, price, pot, perGame }) => (
     <AppCard>
       <CardContent className="p-3 md:p-5">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -7418,8 +7309,8 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
           </div>
         </CardContent>
       </AppCard>
-      <HighGameSection title="Scratch High Game" results={highGameResults} entries={highGameBowlers.length} price={highGamePrice} pot={highGamePot} perGame={highGamePayoutPerGame} />
-      {useHandicapScores && <HighGameSection title="Handicap High Game" results={handicapHighGameResults} entries={handicapHighGameBowlers.length} price={handicapHighGamePrice} pot={handicapHighGamePot} perGame={handicapHighGamePayoutPerGame} />}
+      {renderHighGameSection({ title: "Scratch High Game", results: highGameResults, entries: highGameBowlers.length, price: highGamePrice, pot: highGamePot, perGame: highGamePayoutPerGame })}
+      {useHandicapScores && renderHighGameSection({ title: "Handicap High Game", results: handicapHighGameResults, entries: handicapHighGameBowlers.length, price: handicapHighGamePrice, pot: handicapHighGamePot, perGame: handicapHighGamePayoutPerGame })}
     </div>
   );
 }
@@ -7539,12 +7430,15 @@ row.matches.push({
           });
         });
 
-        let alivePlayers = [];
-        if (champions.length) alivePlayers = champions;
-        else if (finalPlayers.length) alivePlayers = finalPlayers.filter((player) => player && player.name !== "BYE");
-        else if (r2Winners.flat().length) alivePlayers = r2Winners.flat();
-        else if (r1Winners.flat().length) alivePlayers = r1Winners.flat();
-        else alivePlayers = players.filter((player) => player && player.name !== "BYE");
+        const alivePlayers = champions.length
+          ? champions
+          : finalPlayers.length
+            ? finalPlayers.filter((player) => player && player.name !== "BYE")
+            : r2Winners.flat().length
+              ? r2Winners.flat()
+              : r1Winners.flat().length
+                ? r1Winners.flat()
+                : players.filter((player) => player && player.name !== "BYE");
 
         alivePlayers.forEach((player) => {
           const row = ensurePlayer(player);
@@ -7933,12 +7827,6 @@ function SideActionPayoutsTab({
   );
 }
 
-function PlaceholderTab({ title, note }) {
-  return <AppCard><CardContent className="p-3 md:p-5"><h2 className="text-xl font-semibold text-blue-900">{title}</h2><p className="mt-2 text-sm text-blue-700">{note}</p></CardContent></AppCard>;
-}
-
-
-
 class AppErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -8015,7 +7903,9 @@ const [reservationState, setReservationState] = useState({
   reservationLimit: 48,
   reservations: [],
 });
-  if (typeof window !== "undefined") window.__currentTournamentFormat = tournamentFormat;
+  useEffect(() => {
+    window.__currentTournamentFormat = tournamentFormat;
+  }, [tournamentFormat]);
 
   useEffect(() => {
     try {
