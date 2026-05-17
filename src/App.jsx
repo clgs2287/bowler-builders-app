@@ -4040,13 +4040,13 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
       tournament: tournament.name,
       date: tournament.date,
       season: tournament.season || "Unassigned",
-      source: tournament.titleEligible
-        ? tournament.major
+      source: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true)
+        ? Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false)
           ? "Major Title"
           : "FKM Title"
         : "Non-FKM Title",
-      eligible: Boolean(tournament.titleEligible),
-      major: Boolean(tournament.major),
+      eligible: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true),
+      major: Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false),
       center: tournament.center || "",
     }))
 );
@@ -5915,6 +5915,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       season: tournamentInfo.season || new Date().getFullYear().toString(),
       format: tournamentFormat,
       titleEligible: Boolean(tournamentInfo.titleEligible ?? true),
+      major: Boolean(tournamentInfo.major ?? false),
       useHandicapScores,
       entries: bowlers.length,
       cashers: financials.cashers,
@@ -6269,15 +6270,15 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
       tournament: tournament.name,
       date: tournament.date,
       season: tournament.season || "Unassigned",
-source: tournament.titleEligible
-  ? tournament.major
+source: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true)
+  ? Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false)
     ? "Major Title"
     : "FKM Title"
   : "Non-FKM Title",
 
-eligible: Boolean(tournament.titleEligible),
+eligible: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true),
 
-major: Boolean(tournament.major),
+major: Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false),
     })));
 
 const majorTitles = [
@@ -8052,7 +8053,7 @@ const [reservationState, setReservationState] = useState({
     setBowlers(buildInitialBowlers(48, 4));
     setUseHandicapScores(false);
     setTournamentFormat("eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", center: "", location: "", director: "Cory Lagner", lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
     setSavedFinalsRounds({});
