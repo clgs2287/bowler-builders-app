@@ -4015,6 +4015,7 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
   const [publicArchiveSection, setPublicArchiveSection] = useState("results");
   const [expandedPublicBowler, setExpandedPublicBowler] = useState(null);
   const [expandedPublicTitleBowler, setExpandedPublicTitleBowler] = useState(null);
+  const [publicTitleFilter, setPublicTitleFilter] = useState("all");
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
   const publicArchiveHistory = seasonFilter === "All"
     ? tournamentHistory || []
@@ -4025,15 +4026,12 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
       : (tournamentHistory || []).filter((t) => (t.season || "Unassigned") === seasonFilter)
   ).filter((t) => (statsMode === "scratch" ? !t.useHandicapScores : t.useHandicapScores));
 
-  const scratchHistory = (tournamentHistory || []).filter(
-    (t) => !t.useHandicapScores
-  );
   const selectedPublicArchive = (tournamentHistory || []).find(
     (t) => t.id === selectedPublicArchiveId
   );
   const selectedPublicArchiveSnapshot = selectedPublicArchive?.activeSnapshot || null;
   const selectedPublicArchiveRecap = selectedPublicArchive?.tournamentRecap || selectedPublicArchiveSnapshot?.tournamentRecap || {};
-  const archiveTitles = scratchHistory.flatMap((tournament) =>
+  const archiveTitles = (tournamentHistory || []).flatMap((tournament) =>
   (tournament.results || [])
     .filter((result) => result.tournamentWinner)
     .map((result) => ({
@@ -4080,7 +4078,15 @@ const publicAllTitles = [
     String(a.bowler || "").localeCompare(String(b.bowler || ""))
 );
 
-const publicTitleCounts = publicAllTitles.reduce((map, title) => {
+const filteredPublicTitles = publicAllTitles.filter((title) => {
+  if (publicTitleFilter === "major") return Boolean(title.major);
+  if (publicTitleFilter === "fkm") return Boolean(title.eligible) && !title.major;
+  if (publicTitleFilter === "fkmMajor") return Boolean(title.eligible);
+  if (publicTitleFilter === "nonFkm") return !title.eligible;
+  return true;
+});
+
+const publicTitleCounts = filteredPublicTitles.reduce((map, title) => {
   const key = String(title.bowler || "").trim().toLowerCase();
 
   const current =
@@ -4450,28 +4456,47 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
     <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
       <StatCard
         label="Total Titles"
-        value={publicAllTitles.length}
+        value={filteredPublicTitles.length}
       />
 
       <StatCard
         label="Majors"
-        value={publicMajorTitles.length}
+        value={filteredPublicTitles.filter((title) => title.major).length}
       />
 
       <StatCard
         label="FKM Titles"
-        value={publicFkmTitles.length}
+        value={filteredPublicTitles.filter((title) => title.eligible && !title.major).length}
       />
 
       <StatCard
         label="Non-FKM Titles"
-        value={publicNonFkmTitles.length}
+        value={filteredPublicTitles.filter((title) => !title.eligible).length}
       />
 
       <StatCard
         label="Title Winners"
         value={publicTitleLeaderRows.length}
       />
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      {[
+        { id: "all", label: "All Titles" },
+        { id: "fkmMajor", label: "FKM + Majors" },
+        { id: "fkm", label: "FKM Only" },
+        { id: "major", label: "Majors Only" },
+        { id: "nonFkm", label: "Non-FKM" },
+      ].map((filter) => (
+        <button
+          key={filter.id}
+          type="button"
+          onClick={() => setPublicTitleFilter(filter.id)}
+          className={publicTitleFilter === filter.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}
+        >
+          {filter.label}
+        </button>
+      ))}
     </div>
 
     <div className="overflow-auto rounded-2xl border border-blue-200">
@@ -4613,7 +4638,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         </thead>
 
         <tbody>
-          {publicAllTitles.map((title) => (
+          {filteredPublicTitles.map((title) => (
             <tr
               key={`public-title-detail-${title.id}`}
               className="border-t"
@@ -4640,7 +4665,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             </tr>
           ))}
 
-          {publicAllTitles.length === 0 && (
+          {filteredPublicTitles.length === 0 && (
             <tr>
               <td
                 colSpan={4}
