@@ -1390,13 +1390,13 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
             <StatCard label="Cut Line" value={`Top ${financials.cashers}`} />
             <StatCard label="Scoring Mode" value={useHandicapScores ? "Handicap" : "Scratch"} />
             <StatCard label="Format" value={tournamentFormat === "bracket" ? "Bracket" : tournamentFormat === "sweeper" ? "Sweeper" : "Eliminator"} />
-            
+
           </div>
 
         </CardContent>
       </AppCard>
 
-      
+
     </div>
   );
 }
@@ -1821,7 +1821,7 @@ const updateBowler = (index, field, value) => {
         name: r.name,
         phone: snapshotBowler.phone || previousBowlerMap[key]?.phone || "",
         email: snapshotBowler.email || previousBowlerMap[key]?.email || "",
-        
+
       };
     });
   });
@@ -1856,7 +1856,7 @@ averageSource: archivedData?.eligible
   : archivedData
     ? `Only ${archivedData.totalGames} archived games`
     : "Average required manually",
-      
+
     } : b));
   };
   const rosterCsv = [["#", "Name", "Hdcp", "Lane", "Paid", "Scratch Brackets", "Hdcp Brackets", "HG Scratch", "HG Hdcp", "Phone", "Email"], ...bowlers.map((b, i) => [i + 1, b.name, handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", Number(bracketSets.early?.[b.seed] || 0), Number(bracketSets.handicapEarly?.[b.seed] || 0), b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
@@ -2010,7 +2010,7 @@ averageSource: archivedData?.eligible
           }
         />
       </div>
-</div>   
+</div>
 )}
 
  </div>
@@ -2029,7 +2029,7 @@ averageSource: archivedData?.eligible
           <StatCard label="Scratch HG Pot" value={currency(highGameEntries * highGamePrice)} />
           {useHandicapScores && <div className="space-y-2"><Label>Hdcp HG Price</Label><Input type="number" value={handicapHighGamePrice} onChange={(e) => updateHandicapHighGamePrice(e.target.value)} /></div>}
           {useHandicapScores && <StatCard label="Hdcp HG Pot" value={currency(handicapHighGameEntries * handicapHighGamePrice)} />}
-          
+
         </div>
 
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
@@ -2145,7 +2145,7 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false, 
 
 function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, }) {
   const [activeScoreGameIndex, setActiveScoreGameIndex] = useState(null);
-  
+
  const updateGame = (index, gameIndex, value) => {
   const score = Math.max(0, Math.min(300, Number(value || 0)));
   setBowlers((current) =>
@@ -3164,7 +3164,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
     return groups;
   }, {});
   const sortedPairs = Object.keys(lanePairs).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : Number(a.split("-")[0]) - Number(b.split("-")[0]));
-  
+
   const publicUrl = `${window.location.origin}${window.location.pathname}?view=public`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(publicUrl)}`;
 const printableSheets =
@@ -3891,7 +3891,7 @@ function PublicSchedule({ scheduleItems = [] }) {
     return item.startDate;
   };
 
-  
+
 
   return (
     <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
@@ -4208,7 +4208,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
       finalsAverage: p.finalsGames > 0 ? p.finalsPins / p.finalsGames : 0,
     }))
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase())));
-    
+
 
   return (
     <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
@@ -4519,7 +4519,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
               </td>
 
               <td className="p-3">
-                {row.latest || "—"}
+                {row.latest || "-"}
               </td>
             </tr>
           ))}
@@ -4575,7 +4575,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
               </td>
 
               <td className="p-3">
-                {title.date || "—"}
+                {title.date || "-"}
               </td>
 
               <td className="p-3 font-bold">
@@ -5129,7 +5129,7 @@ setSavedFinalsRounds }) {
   value={game1Scores[row.seed] ?? ""}
   onChange={(value) => updateGame1(row.seed, value)}
   locked={Boolean(savedFinalsRounds?.eliminatorGame1)}
-/></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900"> 
+/></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">
 </h2>
 
 <p className="mb-4 text-sm text-blue-700">
@@ -5153,7 +5153,7 @@ setSavedFinalsRounds }) {
   value={game2Scores[row.seed] ?? ""}
   onChange={(value) => updateGame2(row.seed, value)}
   locked={Boolean(savedFinalsRounds?.eliminatorGame2)}
-/></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700"> 
+/></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">
 </p>
 
 <div className="mb-4">
@@ -5247,7 +5247,7 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
             <p>
   Prize Fund: {currency(dashboardPrizeFund)} • Cashers: {financials.cashers}
 </p>
-          </div>  
+          </div>
           <h2 className="mb-4 text-xl font-semibold text-blue-900 print:text-black">Cashers</h2>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm">
@@ -5695,7 +5695,7 @@ current.results.push(result);
   </td>
 </tr>
                 ))}
-                {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>} 
+                {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -5941,7 +5941,7 @@ results: ranked.map((b, index) => {
                   </tr>
                 ))}
                 {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No tournaments archived for this season filter yet.</td></tr>}
-              </tbody>  
+              </tbody>
             </table>
           </div>
         </CardContent>
@@ -6182,6 +6182,7 @@ results: ranked.map((b, index) => {
 function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
   const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History" });
   const [titleSort, setTitleSort] = useState({ column: "titles", direction: "desc" });
+  const [expandedTitleBowler, setExpandedTitleBowler] = useState(null);
 
   const archiveTitles = tournamentHistory.flatMap((tournament) => (tournament.results || [])
     .filter((result) => result.tournamentWinner)
@@ -6237,9 +6238,11 @@ const current =
     majors: 0,
     seasons: new Set(),
     latest: "",
+    titleList: [],
   };
 
 current.titles += 1;
+current.titleList.push(title);
 
 if (title.major) current.majors += 1;
 else if (title.eligible) current.fkmTitles += 1;
@@ -6251,7 +6254,11 @@ else current.nonFkmTitles += 1;
   }, {});
 
   const titleLeaderRows = Object.values(titleCounts)
-    .map((row) => ({ ...row, seasonsText: Array.from(row.seasons).sort((a, b) => String(b).localeCompare(String(a))).join(", ") }))
+    .map((row) => ({
+      ...row,
+      seasonsText: Array.from(row.seasons).sort((a, b) => String(b).localeCompare(String(a))).join(", "),
+      titleList: [...row.titleList].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(a.tournament || "").localeCompare(String(b.tournament || ""))),
+    }))
     .sort((a, b) => {
       const direction = titleSort.direction === "asc" ? 1 : -1;
       const aValue = a[titleSort.column];
@@ -6414,9 +6421,61 @@ else current.nonFkmTitles += 1;
 >
   Latest
 </th></tr></thead>
-                                <tbody>{titleLeaderRows.map((row) => <tr key={`title-leader-${row.bowler}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.bowler}</td><td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td><td className="p-2 text-right font-bold text-red-700 md:p-3">
-  {row.majors}
-</td><td className="p-2 text-right font-bold text-green-700 md:p-3">{row.fkmTitles}</td><td className="p-2 text-right font-bold text-slate-700 md:p-3">{row.nonFkmTitles}</td><td className="p-2 text-blue-900 md:p-3">{row.seasonsText || "—"}</td><td className="p-2 text-blue-900 md:p-3">{row.latest || "—"}</td></tr>)}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No titles entered yet.</td></tr>}</tbody> 
+                                <tbody>{titleLeaderRows.map((row) => {
+                                  const isExpanded = expandedTitleBowler === row.bowler;
+
+                                  return (
+                                    <React.Fragment key={`title-leader-${row.bowler}`}>
+                                      <tr className="border-t">
+                                        <td className="p-2 font-semibold md:p-3">
+                                          <button
+                                            type="button"
+                                            onClick={() => setExpandedTitleBowler((current) => current === row.bowler ? null : row.bowler)}
+                                            className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
+                                          >
+                                            {isExpanded ? "-" : "+"} {row.bowler}
+                                          </button>
+                                        </td>
+                                        <td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td>
+                                        <td className="p-2 text-right font-bold text-red-700 md:p-3">{row.majors}</td>
+                                        <td className="p-2 text-right font-bold text-green-700 md:p-3">{row.fkmTitles}</td>
+                                        <td className="p-2 text-right font-bold text-slate-700 md:p-3">{row.nonFkmTitles}</td>
+                                        <td className="p-2 text-blue-900 md:p-3">{row.seasonsText || "-"}</td>
+                                        <td className="p-2 text-blue-900 md:p-3">{row.latest || "-"}</td>
+                                      </tr>
+                                      {isExpanded && (
+                                        <tr className="border-t bg-blue-50/70">
+                                          <td className="p-3" colSpan={7}>
+                                            <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
+                                              <table className="w-full min-w-[640px] text-xs md:text-sm">
+                                                <thead className="bg-blue-50 text-blue-900">
+                                                  <tr>
+                                                    <th className="p-2 text-left md:p-3">Tournament</th>
+                                                    <th className="p-2 text-left md:p-3">Date</th>
+                                                    <th className="p-2 text-left md:p-3">Season</th>
+                                                    <th className="p-2 text-left md:p-3">Type</th>
+                                                    <th className="p-2 text-left md:p-3">Source</th>
+                                                  </tr>
+                                                </thead>
+                                                <tbody>
+                                                  {row.titleList.map((title) => (
+                                                    <tr key={`title-detail-${title.id}`} className="border-t">
+                                                      <td className="p-2 font-semibold text-blue-950 md:p-3">{title.tournament || "Historical Title"}</td>
+                                                      <td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td>
+                                                      <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
+                                                      <td className="p-2 font-semibold text-blue-900 md:p-3">{title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM"}</td>
+                                                      <td className="p-2 text-blue-900 md:p-3">{title.source}</td>
+                                                    </tr>
+                                                  ))}
+                                                </tbody>
+                                              </table>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No titles entered yet.</td></tr>}</tbody>
             </table>
           </div>
         </CardContent>
@@ -6428,7 +6487,7 @@ else current.nonFkmTitles += 1;
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[760px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-left md:p-3">Source</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
-              <tbody>{fkmTitles.map((title) => <tr key={title.id} className="border-t"><td className="p-2 font-semibold md:p-3">{title.bowler}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.source}</td><td className="p-2 text-right md:p-3">{title.source === "Manual History" ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>)}{allTitles.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No FKM title history yet.</td></tr>}</tbody>
+              <tbody>{fkmTitles.map((title) => <tr key={title.id} className="border-t"><td className="p-2 font-semibold md:p-3">{title.bowler}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.source}</td><td className="p-2 text-right md:p-3">{title.source === "Manual History" ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>)}{allTitles.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No FKM title history yet.</td></tr>}</tbody>
             </table>
           </div>
         </CardContent>
