@@ -120,7 +120,7 @@ function completedGamesCount(bowler) {
 }
 
 function handicapPerGame(bowler) {
-  return Number(bowler.handicap ?? bowler.handicapPerGame ?? 0);
+  return Number(bowler.registrationHandicap ?? bowler.handicap ?? bowler.handicapPerGame ?? 0);
 }
 
 function handicapTotal(bowler) {
@@ -134,7 +134,13 @@ function rankRows(rows, scoreKey) {
 }
 
 function getRankedBowlers(bowlers, useHandicapScores = true) {
-  const rows = bowlers.map((b) => ({ ...b, scratch: scratchTotal(b), handicap: handicapTotal(b) }));
+  const perGameHandicap = (bowler) => handicapPerGame(bowler);
+  const rows = bowlers.map((b) => ({
+    ...b,
+    scratch: scratchTotal(b),
+    handicap: scratchTotal(b) + perGameHandicap(b) * completedGamesCount(b),
+    registrationHandicap: perGameHandicap(b),
+  }));
   return rankRows(rows, useHandicapScores ? "handicap" : "scratch");
 }
 
