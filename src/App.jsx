@@ -120,7 +120,7 @@ function completedGamesCount(bowler) {
 }
 
 function handicapPerGame(bowler) {
-  return Number(bowler.handicapPerGame || 0);
+  return Number(bowler.handicap ?? bowler.handicapPerGame ?? 0);
 }
 
 function handicapTotal(bowler) {
