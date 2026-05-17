@@ -4780,11 +4780,18 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
 function BracketScoreInput({
   scoreKey,
   value,
+  scratchValue,
   onScoreChange,
   handicap = 0,
   useHandicapScores = false,
 }) {
-  const scratch = Number(value || 0);
+  const displayValue =
+    scratchValue !== undefined && scratchValue !== null
+      ? scratchValue
+      : useHandicapScores && value !== undefined && value !== null && value !== ""
+        ? Math.max(0, Number(value || 0) - Number(handicap || 0))
+        : value;
+  const scratch = Number(displayValue || 0);
   const total = scratch + Number(handicap || 0);
 
   return (
@@ -4795,7 +4802,7 @@ function BracketScoreInput({
         max={300}
         className="h-7 w-14 px-1 text-center text-xs font-semibold"
         inputMode="numeric"
-        value={value ?? ""}
+        value={displayValue ?? ""}
         onChange={(e) => {
           const scratchValue = clampBowlingScoreInput(e.target.value);
           onScoreChange(
@@ -4817,7 +4824,7 @@ function BracketScoreInput({
   );
 }
 
-function BracketMatchEditor({ match, scores, onScoreChange, useHandicapScores }) {
+function BracketMatchEditor({ match, scores, scratchScores, onScoreChange, useHandicapScores }) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
   const winner = winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
@@ -4844,6 +4851,7 @@ const renderPlayerName = (player) => {
         <BracketScoreInput
   scoreKey={leftKey}
   value={scores[leftKey]}
+  scratchValue={scratchScores?.[leftKey]}
   onScoreChange={onScoreChange}
   handicap={match.left ? handicapPerGame(match.left) : 0}
   useHandicapScores={useHandicapScores}
@@ -4852,6 +4860,7 @@ const renderPlayerName = (player) => {
         <BracketScoreInput
   scoreKey={rightKey}
   value={scores[rightKey]}
+  scratchValue={scratchScores?.[rightKey]}
   onScoreChange={onScoreChange}
   handicap={match.right ? handicapPerGame(match.right) : 0}
   useHandicapScores={useHandicapScores}
@@ -4865,6 +4874,7 @@ function BracketRoundColumn({
   title,
   matches,
   scores,
+  scratchScores,
   onScoreChange,
   useHandicapScores,
   roundIndex = 0,
@@ -4910,6 +4920,7 @@ function BracketRoundColumn({
             <BracketMatchEditor
   match={match}
   scores={scores}
+  scratchScores={scratchScores}
   onScoreChange={onScoreChange}
   useHandicapScores={useHandicapScores}
 />
@@ -4923,6 +4934,7 @@ function BracketRoundColumn({
 function BracketTab({ entries, bowlers, useHandicapScores, bracketState, setBracketState,
 setSavedFinalsRounds }) {
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState });
+  const scratchScores = bracketState.scratchScores || {};
   const handleScoreChange = (
   scoreKey,
   value,
@@ -4972,6 +4984,7 @@ setSavedFinalsRounds }) {
           title={round.title}
           matches={round.matches}
           scores={scores}
+          scratchScores={scratchScores}
           onScoreChange={handleScoreChange}
           roundIndex={roundIndex}
           setSavedFinalsRounds={setSavedFinalsRounds}
