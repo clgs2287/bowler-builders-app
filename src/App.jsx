@@ -4014,6 +4014,7 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
   const [selectedPublicArchiveId, setSelectedPublicArchiveId] = useState(null);
   const [publicArchiveSection, setPublicArchiveSection] = useState("results");
   const [expandedPublicBowler, setExpandedPublicBowler] = useState(null);
+  const [expandedPublicTitleBowler, setExpandedPublicTitleBowler] = useState(null);
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
   const publicArchiveHistory = seasonFilter === "All"
     ? tournamentHistory || []
@@ -4090,9 +4091,11 @@ const publicTitleCounts = publicAllTitles.reduce((map, title) => {
       fkmTitles: 0,
       nonFkmTitles: 0,
       latest: "",
+      titleList: [],
     };
 
   current.titles += 1;
+  current.titleList.push(title);
 
   if (title.major) current.majors += 1;
   else if (title.eligible) current.fkmTitles += 1;
@@ -4106,12 +4109,21 @@ const publicTitleCounts = publicAllTitles.reduce((map, title) => {
   return map;
 }, {});
 
-const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
-  (a, b) =>
-    b.titles - a.titles ||
-    b.majors - a.majors ||
-    String(a.bowler || "").localeCompare(String(b.bowler || ""))
-);
+const publicTitleLeaderRows = Object.values(publicTitleCounts)
+  .map((row) => ({
+    ...row,
+    titleList: [...row.titleList].sort(
+      (a, b) =>
+        String(b.date || "").localeCompare(String(a.date || "")) ||
+        String(a.tournament || "").localeCompare(String(b.tournament || ""))
+    ),
+  }))
+  .sort(
+    (a, b) =>
+      b.titles - a.titles ||
+      b.majors - a.majors ||
+      String(a.bowler || "").localeCompare(String(b.bowler || ""))
+  );
 
   const playerStats = filteredPublicHistory
     .flatMap((tournament) => (tournament.results || []).map((result) => ({
@@ -4493,36 +4505,76 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts).sort(
         </thead>
 
         <tbody>
-          {publicTitleLeaderRows.map((row) => (
-            <tr
-              key={`public-title-row-${row.bowler}`}
-              className="border-t"
-            >
-              <td className="p-3 font-bold text-blue-950">
-                {row.bowler}
-              </td>
+          {publicTitleLeaderRows.map((row) => {
+            const isExpanded = expandedPublicTitleBowler === row.bowler;
 
-              <td className="p-3 text-right font-black text-yellow-700">
-                {row.titles}
-              </td>
+            return (
+              <React.Fragment key={`public-title-row-${row.bowler}`}>
+                <tr className="border-t">
+                  <td className="p-3 font-bold text-blue-950">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPublicTitleBowler((current) => current === row.bowler ? null : row.bowler)}
+                      className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
+                    >
+                      {isExpanded ? "-" : "+"} {row.bowler}
+                    </button>
+                  </td>
 
-              <td className="p-3 text-right font-bold text-red-700">
-                {row.majors}
-              </td>
+                  <td className="p-3 text-right font-black text-yellow-700">
+                    {row.titles}
+                  </td>
 
-              <td className="p-3 text-right font-bold text-green-700">
-                {row.fkmTitles}
-              </td>
+                  <td className="p-3 text-right font-bold text-red-700">
+                    {row.majors}
+                  </td>
 
-              <td className="p-3 text-right font-bold text-slate-700">
-                {row.nonFkmTitles}
-              </td>
+                  <td className="p-3 text-right font-bold text-green-700">
+                    {row.fkmTitles}
+                  </td>
 
-              <td className="p-3">
-                {row.latest || "-"}
-              </td>
-            </tr>
-          ))}
+                  <td className="p-3 text-right font-bold text-slate-700">
+                    {row.nonFkmTitles}
+                  </td>
+
+                  <td className="p-3">
+                    {row.latest || "-"}
+                  </td>
+                </tr>
+
+                {isExpanded && (
+                  <tr className="border-t bg-blue-50/70">
+                    <td className="p-3" colSpan={6}>
+                      <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
+                        <table className="w-full min-w-[640px] text-xs md:text-sm">
+                          <thead className="bg-blue-50 text-blue-900">
+                            <tr>
+                              <th className="p-2 text-left md:p-3">Tournament</th>
+                              <th className="p-2 text-left md:p-3">Date</th>
+                              <th className="p-2 text-left md:p-3">Season</th>
+                              <th className="p-2 text-left md:p-3">Type</th>
+                              <th className="p-2 text-left md:p-3">Source</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {row.titleList.map((title) => (
+                              <tr key={`public-title-detail-row-${title.id}`} className="border-t">
+                                <td className="p-2 font-semibold text-blue-950 md:p-3">{title.tournament || "Historical Title"}</td>
+                                <td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td>
+                                <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
+                                <td className="p-2 font-semibold text-blue-900 md:p-3">{title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM"}</td>
+                                <td className="p-2 text-blue-900 md:p-3">{title.source}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
 
           {publicTitleLeaderRows.length === 0 && (
             <tr>
