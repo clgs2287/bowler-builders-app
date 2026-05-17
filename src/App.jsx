@@ -3570,6 +3570,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
 
 function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState }) {
   const { scores, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState });
+  const scratchScores = bracketState.scratchScores || {};
 
   if (size === "Over 64") {
     return <AppCard><CardContent className="p-3 md:p-5"><p className="text-blue-700">Public bracket view currently supports up to 64 qualifiers.</p></CardContent></AppCard>;
@@ -3580,6 +3581,8 @@ const PublicBracketMatch = ({ match }) => {
   const rightKey = `${match.id}-r`;
   const leftScore = scores[leftKey] ?? "";
   const rightScore = scores[rightKey] ?? "";
+  const leftScratchScore = scratchScores[leftKey] ?? "";
+  const rightScratchScore = scratchScores[rightKey] ?? "";
   const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
 
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
@@ -3593,15 +3596,20 @@ const PublicBracketMatch = ({ match }) => {
   const renderPlayerName = (player) => {
     if (!player) return "TBD";
     if (!useHandicapScores) return player.name || "TBD";
-    return `${player.name || "TBD"} (${handicapPerGame(player)})`;
+    return `${player.name || "TBD"} (+${handicapPerGame(player)})`;
   };
 
-  const renderScore = (player, value) => {
+  const renderScore = (player, value, scratchValue) => {
     if (!player || player.name === "BYE") return "—";
 
-    const scratch = Number(value || 0);
     const handicap = useHandicapScores ? handicapPerGame(player) : 0;
-    const total = scratch + handicap;
+    const scratch =
+      scratchValue !== undefined && scratchValue !== null && scratchValue !== ""
+        ? Number(scratchValue || 0)
+        : useHandicapScores && value !== undefined && value !== null && value !== ""
+          ? Math.max(0, Number(value || 0) - handicap)
+          : Number(value || 0);
+    const total = useHandicapScores ? scratch + handicap : scratch;
 
     if (!scratch) return "—";
 
@@ -3628,12 +3636,12 @@ const PublicBracketMatch = ({ match }) => {
       <div className="grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
         <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
-          {renderScore(match.left, leftScore)}
+          {renderScore(match.left, leftScore, leftScratchScore)}
         </span>
 
         <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
-          {renderScore(match.right, rightScore)}
+          {renderScore(match.right, rightScore, rightScratchScore)}
         </span>
       </div>
     </div>
