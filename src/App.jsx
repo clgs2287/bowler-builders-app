@@ -502,32 +502,18 @@ const customLanes = String(rotationSource || "")
 
   if (customLanes.length < 2 || !startingLane) return startPair;
 
-  const baseLane = customLanes[0];
-  const relativeMoves = customLanes.map((lane) => lane - baseLane);
+  const rotationPairIndexes = customLanes
+    .map((lane) => pairs.indexOf(lanePairFromAssignment(lane)))
+    .filter((index) => index >= 0);
 
-const rawMovedLane = startingLane + relativeMoves[gameIndex % relativeMoves.length];
+  if (rotationPairIndexes.length < 2) return startPair;
 
-const availableLanes = parseLaneNumbers(lanesUsed);
-if (!availableLanes.length) return String(rawMovedLane || startingLane);
+  const basePairIndex = rotationPairIndexes[0];
+  const relativePairMoves = rotationPairIndexes.map((index) => (index - basePairIndex + pairs.length) % pairs.length);
+  const movedPair = pairs[(startIndex + relativePairMoves[gameIndex % relativePairMoves.length]) % pairs.length] || startPair;
+  const [lowLane, highLane] = movedPair.split("-").map(Number);
+  const movedLane = startingLane % 2 === 0 ? highLane : lowLane;
 
-const lowLane = Math.min(...availableLanes);
-const highLane = Math.max(...availableLanes);
-const laneCount = highLane - lowLane + 1;
-
-let movedLane = rawMovedLane;
-
-while (movedLane > highLane) {
-  movedLane -= laneCount;
-}
-
-while (movedLane < lowLane) {
-  movedLane += laneCount;
-}
-if (!availableLanes.includes(movedLane)) {
-  const matchingSideLanes = availableLanes.filter((lane) => lane % 2 === startingLane % 2);
-  const laneChoices = matchingSideLanes.length ? matchingSideLanes : availableLanes;
-  movedLane = laneChoices.find((lane) => lane > movedLane) || laneChoices[0] || movedLane;
-}
   return String(movedLane || startingLane);
 }
 
