@@ -270,9 +270,10 @@ if (savedFinalsRounds.stepladderFinal) {
         : 0;
 
     const g1 = Number(game1Scores[b.seed] || 0);
-    const game1Total = g1 > 0 ? average + g1 : 0;
+    const game1Score = finalsGameScore(b, g1, useHandicapScores);
+    const game1Total = game1Score > 0 ? average + game1Score : 0;
 
-    return { ...b, average, game1Total };
+    return { ...b, average, elimGame1: g1, elimGame1Score: game1Score, game1Total };
   });
 
   const game1Ranked = rankRows(baseRows, "game1Total");
@@ -283,9 +284,10 @@ if (savedFinalsRounds.stepladderFinal) {
 
   const game2Rows = game1Advancers.map((b) => {
     const g2 = Number(game2Scores[b.seed] || 0);
-    const game2Total = g2 > 0 ? b.game1Total + g2 : b.game1Total;
+    const game2Score = finalsGameScore(b, g2, useHandicapScores);
+    const game2Total = game2Score > 0 ? b.game1Total + game2Score : b.game1Total;
 
-    return { ...b, game2Total };
+    return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
   });
 
   const game2Ranked = rankRows(game2Rows, "game2Total");
@@ -301,24 +303,24 @@ if (savedFinalsRounds.stepladderFinal) {
   const stepWinner1 = winnerFromMatch(
     seedMap[4],
     seedMap[3],
-    stepScores["step-1-l"],
-    stepScores["step-1-r"],
+    finalsGameScore(seedMap[4], stepScores["step-1-l"], useHandicapScores),
+    finalsGameScore(seedMap[3], stepScores["step-1-r"], useHandicapScores),
     false
   );
 
   const stepWinner2 = winnerFromMatch(
     stepWinner1,
     seedMap[2],
-    stepScores["step-2-l"],
-    stepScores["step-2-r"],
+    finalsGameScore(stepWinner1, stepScores["step-2-l"], useHandicapScores),
+    finalsGameScore(seedMap[2], stepScores["step-2-r"], useHandicapScores),
     false
   );
 
   const champion = winnerFromMatch(
     stepWinner2,
     seedMap[1],
-    stepScores["step-3-l"],
-    stepScores["step-3-r"],
+    finalsGameScore(stepWinner2, stepScores["step-3-l"], useHandicapScores),
+    finalsGameScore(seedMap[1], stepScores["step-3-r"], useHandicapScores),
     false
   );
 
@@ -644,6 +646,24 @@ function winnerFromMatch(left, right, leftScore, rightScore, advanceByes = true)
   if (r > l) return right;
 
   return null;
+}
+
+function finalsGameScore(player, scratchScore, useHandicapScores = false) {
+  const scratch = Number(scratchScore || 0);
+
+  if (scratch <= 0) return 0;
+
+  return scratch + (useHandicapScores ? handicapPerGame(player || {}) : 0);
+}
+
+function finalsScoreDisplay(player, scratchScore, useHandicapScores = false) {
+  const scratch = Number(scratchScore || 0);
+
+  if (scratch <= 0) return "-";
+
+  if (!useHandicapScores) return String(scratch);
+
+  return `${scratch} + ${handicapPerGame(player || {})} = ${finalsGameScore(player, scratch, true)}`;
 }
 
 function TabButton({ active, onClick, children }) {
@@ -3705,19 +3725,30 @@ const PublicBracketMatch = ({ match }) => {
   );
 }
 
-function StepMatchPublic({ title, match, stepScores }) {
+function StepMatchPublic({ title, match, stepScores, useHandicapScores = false }) {
   const leftScore = stepScores[`${match.id}-l`] ?? "";
   const rightScore = stepScores[`${match.id}-r`] ?? "";
-  const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore, false);
+  const playerLabel = (player) => {
+    if (!player) return "TBD";
+    if (!useHandicapScores) return player.name || "TBD";
+    return `${player.name || "TBD"} (+${handicapPerGame(player)})`;
+  };
+  const winner = winnerFromMatch(
+    match.left,
+    match.right,
+    finalsGameScore(match.left, leftScore, useHandicapScores),
+    finalsGameScore(match.right, rightScore, useHandicapScores),
+    false
+  );
 
   return (
     <div className="rounded-xl border border-blue-200 bg-white p-3 shadow-sm">
       <h3 className="mb-2 font-bold text-blue-900">{title}</h3>
       <div className="grid grid-cols-[1fr_auto] gap-2 text-sm">
-        <span className={winner?.seed === match.left?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{match.left?.name || "TBD"}</span>
-        <span className="font-bold">{leftScore || "â€”"}</span>
-        <span className={winner?.seed === match.right?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{match.right?.name || "TBD"}</span>
-        <span className="font-bold">{rightScore || "â€”"}</span>
+        <span className={winner?.seed === match.left?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{playerLabel(match.left)}</span>
+        <span className="font-bold">{finalsScoreDisplay(match.left, leftScore, useHandicapScores)}</span>
+        <span className={winner?.seed === match.right?.seed ? "rounded-lg bg-green-100 px-2 py-1 font-bold text-green-900" : "px-2 py-1"}>{playerLabel(match.right)}</span>
+        <span className="font-bold">{finalsScoreDisplay(match.right, rightScore, useHandicapScores)}</span>
       </div>
     </div>
   );
@@ -3732,8 +3763,9 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   const baseRows = cutBowlers.map((b) => {
     const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
     const g1 = Number(game1Scores[b.seed] || 0);
-    const game1Total = g1 > 0 ? average + g1 : 0;
-    return { ...b, average, elimGame1: g1, game1Total };
+    const game1Score = finalsGameScore(b, g1, useHandicapScores);
+    const game1Total = game1Score > 0 ? average + game1Score : 0;
+    return { ...b, average, elimGame1: g1, elimGame1Score: game1Score, game1Total };
   });
   const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
     ? rankRows(baseRows, "game1Total")
@@ -3744,18 +3776,37 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   const game1Advancers = game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
   const game2Rows = game1Advancers.map((b) => {
     const g2 = Number(game2Scores[b.seed] || 0);
-    const game2Total = g2 > 0 ? b.game1Total + g2 : b.game1Total;
-    return { ...b, elimGame2: g2, game2Total };
+    const game2Score = finalsGameScore(b, g2, useHandicapScores);
+    const game2Total = game2Score > 0 ? b.game1Total + game2Score : b.game1Total;
+    return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
   });
   const game2Ranked = rankRows(game2Rows, "game2Total");
   const finalists = game2Ranked.slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
   const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-  const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
+  const stepWinner1 = winnerFromMatch(
+    stepMatch1.left,
+    stepMatch1.right,
+    finalsGameScore(stepMatch1.left, stepScores["step-1-l"], useHandicapScores),
+    finalsGameScore(stepMatch1.right, stepScores["step-1-r"], useHandicapScores),
+    false
+  );
   const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-  const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
+  const stepWinner2 = winnerFromMatch(
+    stepMatch2.left,
+    stepMatch2.right,
+    finalsGameScore(stepMatch2.left, stepScores["step-2-l"], useHandicapScores),
+    finalsGameScore(stepMatch2.right, stepScores["step-2-r"], useHandicapScores),
+    false
+  );
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-  const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "", false);
+  const champion = winnerFromMatch(
+    championship.left,
+    championship.right,
+    finalsGameScore(championship.left, stepScores["step-3-l"], useHandicapScores),
+    finalsGameScore(championship.right, stepScores["step-3-r"], useHandicapScores),
+    false
+  );
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -3769,7 +3820,7 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
             <StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} />
             <StatCard label="Champion" value={champion?.name || "TBD"} />
           </div>
-          <p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler's 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p>
+          <p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler's 4-game qualifying average as carry-forward. In handicap events, finals scores add each bowler's handicap.</p>
         </CardContent>
       </AppCard>
 
@@ -3782,7 +3833,7 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
               <thead className="bg-blue-800 text-white">
                 <tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr>
               </thead>
-              <tbody>{game1Ranked.map((row) => <tr key={`public-elim-g1-${row.seed}`} className={row.rank <= game1AdvancersCount ? "border-t bg-blue-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-3 text-center font-semibold">{game1Scores[row.seed] || "-"}</td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody>
+              <tbody>{game1Ranked.map((row) => <tr key={`public-elim-g1-${row.seed}`} className={row.rank <= game1AdvancersCount ? "border-t bg-blue-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-3 text-center font-semibold">{finalsScoreDisplay(row, game1Scores[row.seed], useHandicapScores)}</td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody>
             </table>
           </div>
         </CardContent>
@@ -3797,7 +3848,7 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
               <thead className="bg-blue-800 text-white">
                 <tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr>
               </thead>
-              <tbody>{game2Ranked.map((row) => <tr key={`public-elim-g2-${row.seed}`} className={row.rank <= 4 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-center font-semibold">{game2Scores[row.seed] || "-"}</td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody>
+              <tbody>{game2Ranked.map((row) => <tr key={`public-elim-g2-${row.seed}`} className={row.rank <= 4 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-center font-semibold">{finalsScoreDisplay(row, game2Scores[row.seed], useHandicapScores)}</td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody>
             </table>
           </div>
         </CardContent>
@@ -3807,9 +3858,9 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
         <CardContent className="p-3 md:p-5">
           <h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2>
           <div className="grid gap-4 lg:grid-cols-4">
-            <StepMatchPublic title="Match 1: Winner vs #4" match={stepMatch1} stepScores={stepScores} />
-            <StepMatchPublic title="Match 2: Winner vs #2" match={stepMatch2} stepScores={stepScores} />
-            <StepMatchPublic title="Championship: Winner vs #1" match={championship} stepScores={stepScores} />
+            <StepMatchPublic title="Match 1: Winner vs #4" match={stepMatch1} stepScores={stepScores} useHandicapScores={useHandicapScores} />
+            <StepMatchPublic title="Match 2: Winner vs #2" match={stepMatch2} stepScores={stepScores} useHandicapScores={useHandicapScores} />
+            <StepMatchPublic title="Championship: Winner vs #1" match={championship} stepScores={stepScores} useHandicapScores={useHandicapScores} />
           </div>
         </CardContent>
       </AppCard>
@@ -4832,8 +4883,9 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
     const baseRows = cutBowlers.map((b) => {
       const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
       const g1 = Number(game1Scores[b.seed] || 0);
-      const game1Total = g1 > 0 ? average + g1 : 0;
-      return { ...b, average, elimGame1: g1, game1Total };
+      const game1Score = finalsGameScore(b, g1, useHandicapScores);
+      const game1Total = game1Score > 0 ? average + game1Score : 0;
+      return { ...b, average, elimGame1: g1, elimGame1Score: game1Score, game1Total };
     });
     const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
       ? rankRows(baseRows, "game1Total")
@@ -4842,18 +4894,37 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
     const game1Advancers = game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
     const game2Rows = game1Advancers.map((b) => {
       const g2 = Number(game2Scores[b.seed] || 0);
-      const game2Total = g2 > 0 ? b.game1Total + g2 : b.game1Total;
-      return { ...b, elimGame2: g2, game2Total };
+      const game2Score = finalsGameScore(b, g2, useHandicapScores);
+      const game2Total = game2Score > 0 ? b.game1Total + game2Score : b.game1Total;
+      return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
     });
     const game2Ranked = rankRows(game2Rows, "game2Total");
     const finalists = game2Ranked.slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
     const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
     const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-    const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
+    const stepWinner1 = winnerFromMatch(
+      stepMatch1.left,
+      stepMatch1.right,
+      finalsGameScore(stepMatch1.left, stepScores["step-1-l"], useHandicapScores),
+      finalsGameScore(stepMatch1.right, stepScores["step-1-r"], useHandicapScores),
+      false
+    );
     const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-    const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
+    const stepWinner2 = winnerFromMatch(
+      stepMatch2.left,
+      stepMatch2.right,
+      finalsGameScore(stepMatch2.left, stepScores["step-2-l"], useHandicapScores),
+      finalsGameScore(stepMatch2.right, stepScores["step-2-r"], useHandicapScores),
+      false
+    );
     const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-    const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "", false);
+    const champion = winnerFromMatch(
+      championship.left,
+      championship.right,
+      finalsGameScore(championship.left, stepScores["step-3-l"], useHandicapScores),
+      finalsGameScore(championship.right, stepScores["step-3-r"], useHandicapScores),
+      false
+    );
     const finalOrder = [];
     addUnique(finalOrder, champion);
     addUnique(finalOrder, championship.left && champion && String(championship.left.seed) === String(champion.seed) ? championship.right : championship.left);
@@ -5135,16 +5206,22 @@ function StepScore({ scoreKey, stepScores, updateStep }) {
   );
 }
 
-function StepMatch({ title, match, winner, stepScores, updateStep }) {
+function StepMatch({ title, match, winner, stepScores, updateStep, useHandicapScores = false }) {
+  const playerLabel = (player) => {
+    if (!player) return "TBD";
+    if (!useHandicapScores) return player.name || "TBD";
+    return `${player.name || "TBD"} (+${handicapPerGame(player)})`;
+  };
+
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
       <h3 className="mb-3 font-semibold text-blue-900">{title}</h3>
 
       <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-        <span>{match.left?.name || "TBD"}</span>
+        <span>{playerLabel(match.left)}</span>
         <StepScore scoreKey={`${match.id}-l`} stepScores={stepScores} updateStep={updateStep} />
 
-        <span>{match.right?.name || "TBD"}</span>
+        <span>{playerLabel(match.right)}</span>
         <StepScore scoreKey={`${match.id}-r`} stepScores={stepScores} updateStep={updateStep} />
       </div>
 
@@ -5162,7 +5239,13 @@ setSavedFinalsRounds }) {
   const stepScores = eliminatorState.stepScores || {};
   const cutCount = Math.ceil(entries / 4);
   const cutBowlers = getRankedBowlers(bowlers, useHandicapScores).slice(0, cutCount);
-  const baseRows = cutBowlers.map((b) => { const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0; const g1 = Number(game1Scores[b.seed] || 0); const game1Total = g1 > 0 ? average + g1 : 0; return { ...b, average, elimGame1: g1, game1Total }; });
+  const baseRows = cutBowlers.map((b) => {
+    const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
+    const g1 = Number(game1Scores[b.seed] || 0);
+    const game1Score = finalsGameScore(b, g1, useHandicapScores);
+    const game1Total = game1Score > 0 ? average + game1Score : 0;
+    return { ...b, average, elimGame1: g1, elimGame1Score: game1Score, game1Total };
+  });
   const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
     ? rankRows(baseRows, "game1Total")
     : [...baseRows]
@@ -5170,7 +5253,12 @@ setSavedFinalsRounds }) {
         .map((row, index) => ({ ...row, rank: index + 1 }));
   const game1AdvancersCount = Math.max(4, Math.ceil(cutBowlers.length / 2));
   const game1Advancers = game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
-  const game2Rows = game1Advancers.map((b) => { const g2 = Number(game2Scores[b.seed] || 0); const game2Total = g2 > 0 ? b.game1Total + g2 : b.game1Total; return { ...b, elimGame2: g2, game2Total }; });
+  const game2Rows = game1Advancers.map((b) => {
+    const g2 = Number(game2Scores[b.seed] || 0);
+    const game2Score = finalsGameScore(b, g2, useHandicapScores);
+    const game2Total = game2Score > 0 ? b.game1Total + game2Score : b.game1Total;
+    return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
+  });
   const game2Ranked = rankRows(game2Rows, "game2Total");
   const finalists = game2Ranked.slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
@@ -5178,12 +5266,30 @@ setSavedFinalsRounds }) {
   const updateGame2 = (seed, value) => setEliminatorState((current) => ({ ...current, game2Scores: { ...(current.game2Scores || {}), [seed]: value } }));
   const updateStep = (key, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value } }));
   const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-  const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
+  const stepWinner1 = winnerFromMatch(
+    stepMatch1.left,
+    stepMatch1.right,
+    finalsGameScore(stepMatch1.left, stepScores["step-1-l"], useHandicapScores),
+    finalsGameScore(stepMatch1.right, stepScores["step-1-r"], useHandicapScores),
+    false
+  );
   const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-  const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
+  const stepWinner2 = winnerFromMatch(
+    stepMatch2.left,
+    stepMatch2.right,
+    finalsGameScore(stepMatch2.left, stepScores["step-2-l"], useHandicapScores),
+    finalsGameScore(stepMatch2.right, stepScores["step-2-r"], useHandicapScores),
+    false
+  );
   const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-  const champion = winnerFromMatch(championship.left, championship.right, stepScores["step-3-l"] ?? "", stepScores["step-3-r"] ?? "", false);
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label="Cut Bowlers" value={cutCount} /><StatCard label="Game 1 Advancers" value={game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} /></div><p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler’s 4-game qualifying average as carry-forward. The stepladder is scratch only with no average added.</p></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
+  const champion = winnerFromMatch(
+    championship.left,
+    championship.right,
+    finalsGameScore(championship.left, stepScores["step-3-l"], useHandicapScores),
+    finalsGameScore(championship.right, stepScores["step-3-r"], useHandicapScores),
+    false
+  );
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label="Cut Bowlers" value={cutCount} /><StatCard label="Game 1 Advancers" value={game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} /></div><p className="mt-4 text-sm text-blue-700">Eliminator games use the bowler’s 4-game qualifying average as carry-forward. In handicap events, finals scores add each bowler’s handicap.</p></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
 
 <p className="mb-4 text-sm text-blue-700">
   Average + Game 1. Top half advances.
@@ -5202,7 +5308,7 @@ setSavedFinalsRounds }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><EliminatorScoreInput
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><EliminatorScoreInput
   value={game1Scores[row.seed] ?? ""}
   onChange={(value) => updateGame1(row.seed, value)}
   locked={Boolean(savedFinalsRounds?.eliminatorGame1)}
@@ -5226,7 +5332,7 @@ setSavedFinalsRounds }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><EliminatorScoreInput
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><EliminatorScoreInput
   value={game2Scores[row.seed] ?? ""}
   onChange={(value) => updateGame2(row.seed, value)}
   locked={Boolean(savedFinalsRounds?.eliminatorGame2)}
@@ -5252,6 +5358,7 @@ setSavedFinalsRounds }) {
   winner={stepWinner1}
   stepScores={stepScores}
   updateStep={updateStep}
+  useHandicapScores={useHandicapScores}
 />
 
 <StepMatch
@@ -5260,6 +5367,7 @@ setSavedFinalsRounds }) {
   winner={stepWinner2}
   stepScores={stepScores}
   updateStep={updateStep}
+  useHandicapScores={useHandicapScores}
 />
 
 <StepMatch
@@ -5268,6 +5376,7 @@ setSavedFinalsRounds }) {
   winner={champion}
   stepScores={stepScores}
   updateStep={updateStep}
+  useHandicapScores={useHandicapScores}
 />
 
 </div></CardContent></AppCard></div>;
@@ -5856,8 +5965,9 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       const baseRows = cutBowlers.map((row) => {
         const average = completedGamesCount(row) > 0 ? (useHandicapScores ? row.handicap : row.scratch) / completedGamesCount(row) : 0;
         const g1 = Number(game1Scores[row.seed] || 0);
-        const game1Total = g1 > 0 ? average + g1 : 0;
-        return { ...row, average, elimGame1: g1, game1Total };
+        const game1Score = finalsGameScore(row, g1, useHandicapScores);
+        const game1Total = game1Score > 0 ? average + game1Score : 0;
+        return { ...row, average, elimGame1: g1, elimGame1Score: game1Score, game1Total };
       });
       const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
         ? rankRows(baseRows, "game1Total")
@@ -5868,8 +5978,9 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       const game1Advancers = game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
       const game2Rows = game1Advancers.map((row) => {
         const g2 = Number(game2Scores[row.seed] || 0);
-        const game2Total = g2 > 0 ? row.game1Total + g2 : row.game1Total;
-        return { ...row, elimGame2: g2, game2Total };
+        const game2Score = finalsGameScore(row, g2, useHandicapScores);
+        const game2Total = game2Score > 0 ? row.game1Total + game2Score : row.game1Total;
+        return { ...row, elimGame2: g2, elimGame2Score: game2Score, game2Total };
       });
       const game2Ranked = rankRows(game2Rows, "game2Total");
       const game2Score = Number(game2Scores[bowler.seed] || 0);
@@ -5881,9 +5992,21 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       const finalists = game2Ranked.slice(0, 4).map((row, index) => ({ ...row, stepSeed: index + 1 }));
       const seedMap = Object.fromEntries(finalists.map((row) => [row.stepSeed, row]));
       const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-      const stepWinner1 = winnerFromMatch(stepMatch1.left, stepMatch1.right, stepScores["step-1-l"] ?? "", stepScores["step-1-r"] ?? "", false);
+      const stepWinner1 = winnerFromMatch(
+        stepMatch1.left,
+        stepMatch1.right,
+        finalsGameScore(stepMatch1.left, stepScores["step-1-l"], useHandicapScores),
+        finalsGameScore(stepMatch1.right, stepScores["step-1-r"], useHandicapScores),
+        false
+      );
       const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-      const stepWinner2 = winnerFromMatch(stepMatch2.left, stepMatch2.right, stepScores["step-2-l"] ?? "", stepScores["step-2-r"] ?? "", false);
+      const stepWinner2 = winnerFromMatch(
+        stepMatch2.left,
+        stepMatch2.right,
+        finalsGameScore(stepMatch2.left, stepScores["step-2-l"], useHandicapScores),
+        finalsGameScore(stepMatch2.right, stepScores["step-2-r"], useHandicapScores),
+        false
+      );
       const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
 
       [stepMatch1, stepMatch2, championship].forEach((match) => {
