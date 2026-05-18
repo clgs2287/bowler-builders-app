@@ -3889,6 +3889,18 @@ function ReservationsTab({
   const addReservationToRoster = (reservation) => {
     const result = onAddReservationToRegistration(reservation);
     const name = result?.name || reservation.nickname || reservation.name || "Reservation";
+    setReservationState((current) => ({
+      ...current,
+      reservations: (current.reservations || []).map((item) =>
+        item.id === reservation.id
+          ? {
+              ...item,
+              rosterAdded: true,
+              rosterAddedAt: new Date().toISOString(),
+            }
+          : item
+      ),
+    }));
     setRosterNotice(result?.alreadyExists ? `${name} is already on the registration roster. The existing row was updated.` : `${name} was sent to Registration.`);
   };
 
@@ -4035,7 +4047,10 @@ function ReservationsTab({
 
     <tbody>
       {(reservationState.reservations || []).map(
-        (reservation) => (
+        (reservation) => {
+          const rosterAdded = Boolean(reservation.rosterAdded || reservation.rosterAddedAt);
+
+          return (
           <tr
             key={reservation.id}
             className="border-t"
@@ -4088,10 +4103,14 @@ function ReservationsTab({
   <div className="flex justify-end gap-2">
   <Button
     variant="outline"
-    className="rounded-xl border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+    className={rosterAdded
+      ? "rounded-xl border-slate-300 bg-slate-100 text-slate-600"
+      : "rounded-xl border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+    }
+    disabled={rosterAdded}
     onClick={() => addReservationToRoster(reservation)}
   >
-    Add to Roster
+    {rosterAdded ? "Added to Roster" : "Add to Roster"}
   </Button>
   <Button
     variant="outline"
@@ -4116,7 +4135,8 @@ onClick={() => {
   </div>
 </td>
           </tr>
-        )
+          );
+        }
       )}
 
       {reservationState.reservations?.length === 0 && (
