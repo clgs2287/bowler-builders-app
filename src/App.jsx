@@ -4647,7 +4647,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                     <td colSpan={publicStatsColSpan} className="p-3">
                       <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
                         <table className="w-full min-w-[820px] text-xs md:text-sm">
-                          <thead className="bg-blue-100 text-blue-950">
+                          <thead className="bg-blue-800 text-white">
                             <tr>
                               <th className="p-2 text-left md:p-3">Tournament</th>
                               <th className="p-2 text-left md:p-3">Date</th>
