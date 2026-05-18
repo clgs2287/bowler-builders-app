@@ -82,6 +82,19 @@ const BOWLING_CENTERS = [
   { name: "Interstate Bowling Center", address: "215 Whitten Rd, Hallowell, ME 04347" },
 ];
 
+const ADMIN_ACCESS_CODE = "BowlerBuilders2026";
+const ADMIN_SESSION_KEY = "bowler-builders-admin-session";
+const PUBLIC_TAB_IDS = new Set([
+  "tournamentInfo",
+  "public",
+  "publicfinals",
+  "publicsideaction",
+  "publicschedule",
+  "publicrecap",
+  "publicstats",
+  "publicreservations",
+]);
+
 const defaultRatios = { first: 0.4, second: 0.27, third: 0.19, fourth: 0.14 };
 const defaultOverrides = { first: 23.3, second: 14, third: 8.85, fourth: "", middle: 6.75, bottom: 4.5 };
 
@@ -750,15 +763,27 @@ tabs: [
   },
 ];
 
-function getSectionForTab(activeTab) {
-  return appSections.find((section) => section.tabs.some((tab) => tab.id === activeTab)) || appSections[0];
+function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator") {
+  return appSections
+    .filter((section) => isAdminMode || section.id === "leaderboard")
+    .map((section) => ({
+      ...section,
+      tabs: section.tabs.filter((tab) => {
+        if (tab.hideForSweeper && tournamentFormat === "sweeper") return false;
+        return isAdminMode || PUBLIC_TAB_IDS.has(tab.id);
+      }),
+    }))
+    .filter((section) => section.tabs.length > 0);
 }
 
-function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminator" }) {
-  const activeSection = getSectionForTab(activeTab);
-  const visibleSections = appSections
-    .map((section) => ({ ...section, tabs: section.tabs.filter((tab) => !(tab.hideForSweeper && tournamentFormat === "sweeper")) }))
-    .filter((section) => section.tabs.length > 0);
+function getSectionForTab(activeTab, isAdminMode = true, tournamentFormat = "eliminator") {
+  const sections = visibleAppSections(isAdminMode, tournamentFormat);
+  return sections.find((section) => section.tabs.some((tab) => tab.id === activeTab)) || sections[0] || appSections[0];
+}
+
+function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminator", isAdminMode = true }) {
+  const activeSection = getSectionForTab(activeTab, isAdminMode, tournamentFormat);
+  const visibleSections = visibleAppSections(isAdminMode, tournamentFormat);
 
   return (
     <div className="md:hidden rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
@@ -779,11 +804,9 @@ function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminat
   );
 }
 
-function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournamentFormat = "eliminator" }) {
-  const activeSection = getSectionForTab(activeTab);
-  const visibleSections = appSections
-    .map((section) => ({ ...section, tabs: section.tabs.filter((tab) => !(tab.hideForSweeper && tournamentFormat === "sweeper")) }))
-    .filter((section) => section.tabs.length > 0);
+function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournamentFormat = "eliminator", isAdminMode = true }) {
+  const activeSection = getSectionForTab(activeTab, isAdminMode, tournamentFormat);
+  const visibleSections = visibleAppSections(isAdminMode, tournamentFormat);
   const visibleActiveTabs = activeSection.tabs.filter((tab) => !(tab.hideForSweeper && tournamentFormat === "sweeper"));
 
   return (
@@ -813,7 +836,7 @@ function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournament
             </TabButton>
           ))}
         </div>
-        <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>
+        {isAdminMode && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>}
       </div>
     </div>
   );
@@ -8071,7 +8094,24 @@ class AppErrorBoundary extends React.Component {
 export default function BowlingPayoutApp() {
   const [paidPayouts, setPaidPayouts] = useState({});
   const [paidSideActionPayouts, setPaidSideActionPayouts] = useState({});
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [isAdminMode, setIsAdminMode] = useState(() => {
+    try {
+      return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("view") === "public") return "tournamentInfo";
+      return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "true" ? "dashboard" : "tournamentInfo";
+    } catch {
+      return "tournamentInfo";
+    }
+  });
+  const [adminCodeDraft, setAdminCodeDraft] = useState("");
+  const [adminCodeError, setAdminCodeError] = useState("");
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(48, 4));
   const entries = bowlers.length;
@@ -8238,6 +8278,39 @@ const [reservationState, setReservationState] = useState({
 
   const financials = useMemo(() => calculateFinancials({ entries, ...payoutState }), [entries, payoutState]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides }), [financials, payoutState]);
+  const unlockAdmin = () => {
+    if (adminCodeDraft !== ADMIN_ACCESS_CODE) {
+      setAdminCodeError("That admin code is not correct.");
+      return;
+    }
+
+    try {
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    } catch {
+      // Session storage may be blocked in some browsers; keep this session unlocked in memory.
+    }
+
+    setIsAdminMode(true);
+    setAdminCodeDraft("");
+    setAdminCodeError("");
+    setActiveTab("dashboard");
+  };
+  const lockAdmin = () => {
+    try {
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    } catch {
+      // Nothing to clear if session storage is unavailable.
+    }
+
+    setIsAdminMode(false);
+    setActiveTab("tournamentInfo");
+  };
+
+  useEffect(() => {
+    if (!isAdminMode && !PUBLIC_TAB_IDS.has(activeTab)) {
+      setActiveTab("tournamentInfo");
+    }
+  }, [activeTab, isAdminMode]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-200 via-blue-100 to-slate-300 p-2 md:p-8">
@@ -8288,8 +8361,44 @@ const [reservationState, setReservationState] = useState({
     </div>
   </div>
 </div>
-              <MobileTabSelect activeTab={activeTab} setActiveTab={setActiveTab} tournamentFormat={tournamentFormat} />
-              <DesktopTabs activeTab={activeTab} setActiveTab={setActiveTab} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} />
+              <div className="flex flex-col gap-2 rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">
+                    Access
+                  </p>
+                  <p className="text-sm font-semibold text-white">
+                    {isAdminMode ? "Admin mode is unlocked for this browser session." : "Public mode shows Tournament Home only."}
+                  </p>
+                </div>
+
+                {isAdminMode ? (
+                  <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={lockAdmin}>
+                    Lock Admin
+                  </Button>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      type="password"
+                      value={adminCodeDraft}
+                      onChange={(e) => {
+                        setAdminCodeDraft(e.target.value);
+                        setAdminCodeError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") unlockAdmin();
+                      }}
+                      placeholder="Admin code"
+                      className="h-10 min-w-[180px]"
+                    />
+                    <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={unlockAdmin}>
+                      Admin Access
+                    </Button>
+                    {adminCodeError && <span className="text-xs font-bold text-yellow-200">{adminCodeError}</span>}
+                  </div>
+                )}
+              </div>
+              <MobileTabSelect activeTab={activeTab} setActiveTab={setActiveTab} tournamentFormat={tournamentFormat} isAdminMode={isAdminMode} />
+              <DesktopTabs activeTab={activeTab} setActiveTab={setActiveTab} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} isAdminMode={isAdminMode} />
             </div>
           </div>
         </div>
