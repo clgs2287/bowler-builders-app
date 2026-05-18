@@ -169,6 +169,12 @@ const numberInputStyles = String.raw`
   color: #cbeafe;
 }
 
+.bb-logo-banner {
+  border: 1px solid rgba(59, 130, 246, 0.36);
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.72), rgba(5, 25, 50, 0.55));
+  box-shadow: inset 0 0 28px rgba(22, 128, 255, 0.2), 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
 .bb-access-panel {
   border: 1px solid rgba(96, 165, 250, 0.32);
   background: linear-gradient(90deg, rgba(5, 14, 30, 0.78), rgba(12, 36, 62, 0.72));
@@ -8511,6 +8517,13 @@ const [reservationState, setReservationState] = useState({
     </div>
   </div>
 </div>
+              <div className="bb-logo-banner overflow-hidden rounded-2xl p-2">
+                <img
+                  src="/logos.png"
+                  alt="Bowler Builders, Bowler Builders Pro Shops, and BBTV"
+                  className="mx-auto max-h-24 w-full object-contain"
+                />
+              </div>
               <div className="bb-access-panel flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-white/15 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">
