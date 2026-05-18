@@ -76,6 +76,12 @@ const STORAGE_KEY = "bowler-builders-tournament-app-v1";
 const HISTORY_STORAGE_KEY = "bowler-builders-tournament-history-v1";
 const TITLE_STORAGE_KEY = "bowler-builders-manual-title-history-v1";
 
+const BOWLING_CENTERS = [
+  { name: "Bayside Bowl", address: "58 Alder St, Portland, ME 04101" },
+  { name: "Just-In-Time Recreation", address: "24 Mollison Way, Lewiston, ME 04240" },
+  { name: "Interstate Bowling Center", address: "215 Whitten Rd, Hallowell, ME 04347" },
+];
+
 const defaultRatios = { first: 0.4, second: 0.27, third: 0.19, fourth: 0.14 };
 const defaultOverrides = { first: 23.3, second: 14, third: 8.85, fourth: "", middle: 6.75, bottom: 4.5 };
 
@@ -1130,6 +1136,16 @@ function DashboardTab({
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
+  const selectedCenterIsPreset = BOWLING_CENTERS.some((center) => center.name === tournamentInfo.center);
+  const updateCenter = (centerName) => {
+    const selectedCenter = BOWLING_CENTERS.find((center) => center.name === centerName);
+
+    setTournamentInfo((current) => ({
+      ...current,
+      center: centerName,
+      location: selectedCenter ? selectedCenter.address : centerName ? current.location : "",
+    }));
+  };
   const updateQualifyingGames = (value) => {
     const next = Math.max(1, Math.min(12, Number(value || 1)));
     setQualifyingGames(next);
@@ -1180,7 +1196,24 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
               <div className="space-y-3">
                 <LockedTextField label="Tournament Name" value={tournamentInfo.name} onChange={(value) => update("name", value)} />
                 <LockedTextField label="Date" value={tournamentInfo.date} onChange={(value) => update("date", value)} type="date" />
-                <LockedTextField label="Center" value={tournamentInfo.center || ""} onChange={(value) => update("center", value)} />
+                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+                  <Label className="text-left text-sm font-bold text-blue-900">Center</Label>
+                  <select
+                    value={selectedCenterIsPreset ? tournamentInfo.center : tournamentInfo.center || ""}
+                    onChange={(e) => updateCenter(e.target.value)}
+                    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+                  >
+                    <option value="">Select Center</option>
+                    {!selectedCenterIsPreset && tournamentInfo.center && (
+                      <option value={tournamentInfo.center}>{tournamentInfo.center}</option>
+                    )}
+                    {BOWLING_CENTERS.map((center) => (
+                      <option key={center.name} value={center.name}>
+                        {center.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <LockedTextField label="Address" value={tournamentInfo.location} onChange={(value) => update("location", value)} />
                 <LockedTextField label="Season" value={tournamentInfo.season || ""} onChange={(value) => update("season", value)} />
                   <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} placeholder="Example: 1-8, 11-18" />
