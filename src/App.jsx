@@ -195,7 +195,9 @@ const numberInputStyles = String.raw`
 
 .bb-card {
   border-color: rgba(81, 157, 255, 0.42);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 246, 255, 0.96));
+  background:
+    linear-gradient(180deg, rgba(214, 232, 250, 0.98), rgba(179, 210, 239, 0.96)),
+    linear-gradient(135deg, rgba(8, 24, 48, 0.12), transparent);
   box-shadow: 0 16px 40px rgba(1, 10, 25, 0.22), inset 0 4px 0 rgba(255, 91, 28, 0.78);
 }
 
@@ -207,8 +209,24 @@ const numberInputStyles = String.raw`
 
 .bb-stat {
   border-color: rgba(20, 91, 172, 0.28);
-  background: linear-gradient(180deg, #ffffff, #e8f3ff);
+  background: linear-gradient(180deg, #cfe3f8, #a9cbe9);
   box-shadow: inset 0 3px 0 #ff5b1c, 0 8px 22px rgba(13, 51, 91, 0.12);
+}
+
+.bb-card input,
+.bb-card select,
+.bb-card textarea {
+  background-color: rgba(245, 250, 255, 0.92);
+}
+
+.bb-card .bg-white,
+.bb-card .bg-white\/70,
+.bb-card .bg-white\/95 {
+  background-color: rgba(226, 239, 252, 0.82) !important;
+}
+
+.bb-card .bg-blue-50 {
+  background-color: rgba(189, 218, 246, 0.84) !important;
 }
 
 .bb-stage table thead {
@@ -216,11 +234,11 @@ const numberInputStyles = String.raw`
 }
 
 .bb-stage table tbody tr:nth-child(even) {
-  background-color: rgba(239, 246, 255, 0.7);
+  background-color: rgba(207, 226, 246, 0.72);
 }
 
 .bb-stage table tbody tr:hover {
-  background-color: rgba(219, 234, 254, 0.95);
+  background-color: rgba(187, 215, 244, 0.95);
 }
 
 .bb-stage button {
