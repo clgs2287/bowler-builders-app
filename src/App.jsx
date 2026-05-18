@@ -170,9 +170,22 @@ const numberInputStyles = String.raw`
 }
 
 .bb-logo-banner {
+  position: relative;
   border: 1px solid rgba(59, 130, 246, 0.36);
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.72), rgba(5, 25, 50, 0.55));
   box-shadow: inset 0 0 28px rgba(22, 128, 255, 0.2), 0 12px 30px rgba(0, 0, 0, 0.28);
+}
+
+.bb-logo-banner::after {
+  content: "";
+  position: absolute;
+  left: 35.2%;
+  top: 5%;
+  width: 25.8%;
+  height: 20%;
+  border: 1px solid rgba(0, 102, 255, 0.4);
+  background: linear-gradient(90deg, rgba(2, 6, 14, 0.98), rgba(5, 17, 36, 0.98));
+  box-shadow: inset 0 0 18px rgba(28, 111, 255, 0.18);
 }
 
 .bb-access-panel {
