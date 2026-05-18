@@ -82,7 +82,7 @@ const BOWLING_CENTERS = [
   { name: "Interstate Bowling Center", address: "215 Whitten Rd, Hallowell, ME 04347" },
 ];
 
-const ADMIN_ACCESS_CODE = "BowlerBuilders2026";
+const ADMIN_ACCESS_CODES = ["bowlerbuilders2026", "bowler builders 2026", "bowler-builders-2026"];
 const ADMIN_SESSION_KEY = "bowler-builders-admin-session";
 const PUBLIC_TAB_IDS = new Set([
   "tournamentInfo",
@@ -8279,7 +8279,9 @@ const [reservationState, setReservationState] = useState({
   const financials = useMemo(() => calculateFinancials({ entries, ...payoutState }), [entries, payoutState]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides }), [financials, payoutState]);
   const unlockAdmin = () => {
-    if (adminCodeDraft !== ADMIN_ACCESS_CODE) {
+    const normalizedCode = adminCodeDraft.trim().toLowerCase();
+
+    if (!ADMIN_ACCESS_CODES.includes(normalizedCode)) {
       setAdminCodeError("That admin code is not correct.");
       return;
     }
