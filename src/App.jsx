@@ -89,7 +89,7 @@ const numberInputStyles = String.raw`
   background:
     linear-gradient(110deg, transparent 0 12%, rgba(0, 119, 255, 0.16) 13%, transparent 14% 58%, rgba(0, 119, 255, 0.12) 59%, transparent 60%),
     repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 92px),
-    linear-gradient(to bottom, transparent 0 60%, rgba(128, 73, 22, 0.26) 60% 100%);
+    linear-gradient(to bottom, transparent 0 52%, rgba(3, 18, 42, 0.24) 72%, rgba(0, 3, 12, 0.66) 100%);
   opacity: 0.95;
 }
 
@@ -100,9 +100,9 @@ const numberInputStyles = String.raw`
   height: 30vh;
   pointer-events: none;
   background:
-    linear-gradient(92deg, transparent 0 24%, rgba(255, 255, 255, 0.16) 25%, transparent 25.4% 74%, rgba(255, 255, 255, 0.12) 75%, transparent 75.4%),
-    repeating-linear-gradient(92deg, #6f3a15 0 10px, #9b5b24 10px 18px, #d29347 18px 20px);
-  opacity: 0.22;
+    linear-gradient(92deg, transparent 0 24%, rgba(68, 159, 255, 0.2) 25%, transparent 25.4% 74%, rgba(68, 159, 255, 0.16) 75%, transparent 75.4%),
+    linear-gradient(to bottom, rgba(7, 34, 76, 0), rgba(3, 14, 36, 0.76));
+  opacity: 0.58;
 }
 
 .bb-app-shell {
