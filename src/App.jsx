@@ -70,6 +70,156 @@ const numberInputStyles = String.raw`
     display: none !important;
   }
 }
+
+.bb-stage {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(255, 255, 255, 0.18), transparent 24rem),
+    radial-gradient(circle at 12% 10%, rgba(40, 134, 255, 0.22), transparent 24rem),
+    radial-gradient(circle at 88% 18%, rgba(255, 92, 31, 0.16), transparent 24rem),
+    linear-gradient(135deg, #02040a 0%, #071525 42%, #08090d 100%);
+}
+
+.bb-stage::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(110deg, transparent 0 12%, rgba(0, 119, 255, 0.16) 13%, transparent 14% 58%, rgba(0, 119, 255, 0.12) 59%, transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 92px),
+    linear-gradient(to bottom, transparent 0 60%, rgba(128, 73, 22, 0.26) 60% 100%);
+  opacity: 0.95;
+}
+
+.bb-stage::after {
+  content: "";
+  position: fixed;
+  inset: auto 0 0;
+  height: 30vh;
+  pointer-events: none;
+  background:
+    linear-gradient(92deg, transparent 0 24%, rgba(255, 255, 255, 0.16) 25%, transparent 25.4% 74%, rgba(255, 255, 255, 0.12) 75%, transparent 75.4%),
+    repeating-linear-gradient(92deg, #6f3a15 0 10px, #9b5b24 10px 18px, #d29347 18px 20px);
+  opacity: 0.22;
+}
+
+.bb-app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+.bb-header {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(90deg, rgba(1, 9, 22, 0.96), rgba(5, 37, 74, 0.94) 48%, rgba(12, 14, 20, 0.96)),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 7px);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(90, 168, 255, 0.22);
+}
+
+.bb-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(105deg, transparent 0 18%, rgba(0, 119, 255, 0.34) 19%, transparent 20% 70%, rgba(255, 89, 28, 0.3) 71%, transparent 72%),
+    radial-gradient(circle at 8% 10%, rgba(255, 255, 255, 0.45), transparent 3.2rem),
+    radial-gradient(circle at 92% 12%, rgba(255, 255, 255, 0.35), transparent 3.6rem);
+  opacity: 0.7;
+}
+
+.bb-header-strip {
+  background: repeating-linear-gradient(90deg, #1266c5 0 18px, #39a0ff 18px 22px, #ff5b1c 22px 38px, #111827 38px 44px);
+}
+
+.bb-logo-mark {
+  position: relative;
+  overflow: hidden;
+  color: #0b1422;
+  background:
+    radial-gradient(circle at 56% 48%, #06101c 0 0.35rem, transparent 0.38rem),
+    radial-gradient(circle at 39% 38%, #06101c 0 0.2rem, transparent 0.22rem),
+    radial-gradient(circle at 53% 31%, #06101c 0 0.18rem, transparent 0.2rem),
+    linear-gradient(135deg, #eef7ff, #1d8cff 48%, #06366f);
+}
+
+.bb-logo-mark::after {
+  content: "";
+  position: absolute;
+  inset: 0.35rem;
+  border: 2px solid rgba(255, 255, 255, 0.74);
+  border-radius: 999px;
+}
+
+.bb-kicker {
+  letter-spacing: 0.22em;
+  color: #ffcb55;
+  text-shadow: 0 0 16px rgba(255, 91, 28, 0.42);
+}
+
+.bb-title {
+  text-transform: uppercase;
+  text-shadow: 0 3px 0 #06101c, 0 0 28px rgba(46, 155, 255, 0.45);
+}
+
+.bb-subtitle {
+  color: #cbeafe;
+}
+
+.bb-access-panel {
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  background: linear-gradient(90deg, rgba(5, 14, 30, 0.78), rgba(12, 36, 62, 0.72));
+}
+
+.bb-card {
+  border-color: rgba(81, 157, 255, 0.42);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 246, 255, 0.96));
+  box-shadow: 0 16px 40px rgba(1, 10, 25, 0.22), inset 0 4px 0 rgba(255, 91, 28, 0.78);
+}
+
+.bb-card h1,
+.bb-card h2,
+.bb-card h3 {
+  text-transform: uppercase;
+}
+
+.bb-stat {
+  border-color: rgba(20, 91, 172, 0.28);
+  background: linear-gradient(180deg, #ffffff, #e8f3ff);
+  box-shadow: inset 0 3px 0 #ff5b1c, 0 8px 22px rgba(13, 51, 91, 0.12);
+}
+
+.bb-stage table thead {
+  background: linear-gradient(90deg, #051322, #0f4f98 54%, #06101c) !important;
+}
+
+.bb-stage table tbody tr:nth-child(even) {
+  background-color: rgba(239, 246, 255, 0.7);
+}
+
+.bb-stage table tbody tr:hover {
+  background-color: rgba(219, 234, 254, 0.95);
+}
+
+.bb-stage button {
+  box-shadow: 0 4px 12px rgba(3, 20, 43, 0.12);
+}
+
+@media print {
+  .bb-stage,
+  .bb-stage::before,
+  .bb-stage::after {
+    background: white !important;
+  }
+
+  .bb-card,
+  .bb-stat {
+    box-shadow: none !important;
+  }
+}
 `;
 
 const STORAGE_KEY = "bowler-builders-tournament-app-v1";
@@ -843,7 +993,7 @@ function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournament
 }
 
 function StatCard({ label, value }) {
-  return <div className="rounded-xl border border-blue-100 bg-white p-3 shadow-sm md:rounded-2xl md:p-4"><p className="text-xs text-blue-700 md:text-sm">{label}</p><p className="text-lg font-bold text-blue-950 md:text-2xl">{value}</p></div>;
+  return <div className="bb-stat rounded-xl border border-blue-100 bg-white p-3 shadow-sm md:rounded-2xl md:p-4"><p className="text-xs font-bold uppercase text-blue-700 md:text-sm">{label}</p><p className="text-lg font-black text-blue-950 md:text-2xl">{value}</p></div>;
 }
 
 function SmallNumberInput({ value, onChange, width = "w-14 md:w-16", rowIndex, colIndex, scoreNavigation = false, max }) {
@@ -1031,7 +1181,7 @@ const infoRows = [
 }
 
 function AppCard({ children, className = "" }) {
-  return <Card className={`rounded-xl border border-blue-300 bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
+  return <Card className={`bb-card rounded-xl border bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
 }
 
 function LockedTextField({ label, value, onChange, type = "text", placeholder = "" }) {
@@ -8315,30 +8465,28 @@ const [reservationState, setReservationState] = useState({
   }, [activeTab, isAdminMode]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-200 via-blue-100 to-slate-300 p-2 md:p-8">
+    <div className="bb-stage min-h-screen p-2 md:p-8">
       <style>{numberInputStyles}</style>
-      <div className="mx-auto max-w-7xl space-y-3 md:space-y-6">
-        <div className="overflow-hidden rounded-3xl border border-blue-300 bg-white shadow-xl print:hidden">
-          <div className="relative bg-gradient-to-r from-blue-950 via-blue-800 to-slate-700 p-4 text-white md:p-5">
-            <div className="absolute inset-x-0 bottom-0 h-3 bg-[repeating-linear-gradient(90deg,#d6b56d_0px,#d6b56d_18px,#b88f43_18px,#b88f43_21px)] opacity-70" />
+      <div className="bb-app-shell mx-auto max-w-7xl space-y-3 md:space-y-6">
+        <div className="overflow-hidden rounded-3xl border border-blue-300/60 bg-slate-950 shadow-xl print:hidden">
+          <div className="bb-header relative p-4 text-white md:p-5">
+            <div className="bb-header-strip absolute inset-x-0 bottom-0 h-3 opacity-90" />
             <div className="relative space-y-4">
 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
   <div className="flex items-center gap-4">
-    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-3xl shadow-lg ring-2 ring-yellow-300">
-      🎳
-    </div>
+    <div className="bb-logo-mark flex h-16 w-16 shrink-0 items-center justify-center rounded-full shadow-lg ring-2 ring-blue-300" />
 
     <div>
-      <p className="text-xs font-bold uppercase tracking-[0.3em] text-yellow-300">
+      <p className="bb-kicker text-xs font-black uppercase">
         Bowler Builders
       </p>
 
-      <h1 className="text-2xl font-black leading-tight text-white md:text-4xl">
-        Tournament Command Center
+      <h1 className="bb-title text-2xl font-black leading-tight text-white md:text-4xl">
+        {isAdminMode ? "Tournament Command Center" : "Tournament Home"}
       </h1>
 
-      <p className="mt-1 text-sm font-medium text-blue-100">
-        Live scoring • payouts • brackets • reservations • stats
+      <p className="bb-subtitle mt-1 text-sm font-bold">
+        {isAdminMode ? "Live scoring | payouts | brackets | reservations | stats" : "Live standings | finals | schedule | stats"}
       </p>
     </div>
   </div>
@@ -8363,7 +8511,7 @@ const [reservationState, setReservationState] = useState({
     </div>
   </div>
 </div>
-              <div className="flex flex-col gap-2 rounded-2xl bg-white/10 p-3 ring-1 ring-white/15 md:flex-row md:items-center md:justify-between">
+              <div className="bb-access-panel flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-white/15 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">
                     Access
