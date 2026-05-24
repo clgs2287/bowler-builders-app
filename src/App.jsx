@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
+import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
 }
@@ -326,6 +327,57 @@ const defaultRatios = { first: 0.4, second: 0.27, third: 0.19, fourth: 0.14 };
 const defaultOverrides = { first: 23.3, second: 14, third: 8.85, fourth: "", middle: 6.75, bottom: 4.5 };
 const DEFAULT_BRACKET_PRICE = 5;
 const DEFAULT_BBTV_YOUTUBE_LINK = "https://www.youtube.com/@BBPSTV";
+const DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK = "";
+const TOURNAMENT_IMAGE_MAX_WIDTH = 1600;
+const TOURNAMENT_IMAGE_MAX_HEIGHT = 1200;
+
+function compressTournamentImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("Unable to read image file."));
+    reader.onload = () => {
+      const source = reader.result;
+      const image = new Image();
+
+      image.onerror = () => {
+        resolve({
+          id: `image-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          name: file.name || "Tournament image",
+          src: source,
+        });
+      };
+
+      image.onload = () => {
+        const ratio = Math.min(
+          1,
+          TOURNAMENT_IMAGE_MAX_WIDTH / image.width,
+          TOURNAMENT_IMAGE_MAX_HEIGHT / image.height
+        );
+        const width = Math.max(1, Math.round(image.width * ratio));
+        const height = Math.max(1, Math.round(image.height * ratio));
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        canvas.width = width;
+        canvas.height = height;
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, width, height);
+        context.drawImage(image, 0, 0, width, height);
+
+        resolve({
+          id: `image-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          name: file.name || "Tournament image",
+          src: canvas.toDataURL("image/jpeg", 0.86),
+        });
+      };
+
+      image.src = source;
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
 
 function makeBowler(seed, gameCount = 4) {
   return {
@@ -1356,13 +1408,18 @@ function TournamentInfoTab({
     .split(/\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+  const announcementImages = Array.isArray(tournamentInfo.announcementImages)
+    ? tournamentInfo.announcementImages.filter((image) => image?.src)
+    : [];
   const videoLinks = String(tournamentInfo.videoLinks || "")
     .split(/\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
   const watchLinks = [
-    ...(tournamentInfo.streamLink ? [{ label: "Livestream / Featured Video", href: tournamentInfo.streamLink }] : []),
+    ...(tournamentInfo.streamLink ? [{ label: "Current Livestream", href: tournamentInfo.streamLink }] : []),
     { label: "BBTV YouTube", href: tournamentInfo.bbtvYoutubeLink || DEFAULT_BBTV_YOUTUBE_LINK },
+    ...(tournamentInfo.facebookLink ? [{ label: "Bowler Builders Facebook", href: tournamentInfo.facebookLink }] : []),
+    ...(tournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: tournamentInfo.recentVideoLink }] : []),
     ...videoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href })),
   ].filter((item) => item.href);
   const reservationsMatchCurrentTournament = reservationState.entriesOpen && (
@@ -1491,7 +1548,7 @@ const infoRows = [
           </div>
         </div>
 
-        {(sponsorList.length > 0 || logoLinks.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
+        {(sponsorList.length > 0 || logoLinks.length > 0 || announcementImages.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {sponsorList.length > 0 && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
@@ -1514,6 +1571,24 @@ const infoRows = [
                     <div key={link} className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2">
                       <img src={link} alt="Tournament logo" className="max-h-20 max-w-full object-contain" />
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {announcementImages.length > 0 && (
+              <div className="rounded-2xl border border-blue-200 bg-white p-4 lg:col-span-2">
+                <h3 className="mb-3 text-lg font-black text-blue-950">Flyers & Announcements</h3>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {announcementImages.map((image) => (
+                    <figure key={image.id || image.src} className="overflow-hidden rounded-2xl border border-blue-100 bg-slate-50">
+                      <img src={image.src} alt={image.name || "Tournament announcement"} className="max-h-[520px] w-full object-contain" />
+                      {image.name && (
+                        <figcaption className="border-t border-blue-100 px-3 py-2 text-xs font-bold text-blue-900">
+                          {image.name}
+                        </figcaption>
+                      )}
+                    </figure>
                   ))}
                 </div>
               </div>
@@ -1678,6 +1753,26 @@ function DashboardTab({
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
+  const uploadAnnouncementImages = async (fileList) => {
+    const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) return;
+
+    try {
+      const images = await Promise.all(files.map((file) => compressTournamentImage(file)));
+      setTournamentInfo((current) => ({
+        ...current,
+        announcementImages: [...(Array.isArray(current.announcementImages) ? current.announcementImages : []), ...images],
+      }));
+    } catch (error) {
+      window.alert("That image could not be imported. Try saving it as a JPG or PNG and uploading again.");
+    }
+  };
+  const deleteAnnouncementImage = (imageId) => {
+    setTournamentInfo((current) => ({
+      ...current,
+      announcementImages: (Array.isArray(current.announcementImages) ? current.announcementImages : []).filter((image) => image.id !== imageId),
+    }));
+  };
   const selectedCenterIsPreset = BOWLING_CENTERS.some((center) => center.name === tournamentInfo.center);
   const updateCenter = (centerName) => {
     const selectedCenter = BOWLING_CENTERS.find((center) => center.name === centerName);
@@ -1867,6 +1962,20 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
 />
 
 <LockedTextField
+  label="Facebook Page"
+  value={tournamentInfo.facebookLink || ""}
+  onChange={(value) => update("facebookLink", value)}
+  placeholder={DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK || "Bowler Builders Facebook page link"}
+/>
+
+<LockedTextField
+  label="Recent Video"
+  value={tournamentInfo.recentVideoLink || ""}
+  onChange={(value) => update("recentVideoLink", value)}
+  placeholder="Recent tournament video link"
+/>
+
+<LockedTextField
   label="Sponsors"
   value={tournamentInfo.sponsors || ""}
   onChange={(value) => update("sponsors", value)}
@@ -1880,15 +1989,56 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
   placeholder="Image URLs separated by commas"
 />
 
+<div className="space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+  <Label className="text-sm font-bold text-blue-900">
+    Flyers / Announcements
+  </Label>
+
+  <input
+    type="file"
+    accept="image/*"
+    multiple
+    onChange={(event) => {
+      uploadAnnouncementImages(event.target.files);
+      event.target.value = "";
+    }}
+    className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+  />
+
+  <p className="text-xs font-semibold text-blue-700">
+    Upload flyers, lane pattern graphics, or tournament announcement images.
+  </p>
+
+  {Array.isArray(tournamentInfo.announcementImages) && tournamentInfo.announcementImages.length > 0 && (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {tournamentInfo.announcementImages.map((image) => (
+        <div key={image.id || image.src} className="rounded-xl border border-blue-200 bg-white p-2">
+          <img src={image.src} alt={image.name || "Tournament announcement"} className="h-24 w-full rounded-lg object-contain" />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="truncate text-xs font-bold text-blue-900">{image.name || "Uploaded image"}</span>
+            <button
+              type="button"
+              onClick={() => deleteAnnouncementImage(image.id)}
+              className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
 <div className="space-y-2">
   <Label className="text-sm font-bold text-blue-900">
-    Recent Video Links
+    Additional Watch Links
   </Label>
 
   <textarea
     value={tournamentInfo.videoLinks || ""}
     onChange={(e) => update("videoLinks", e.target.value)}
-    placeholder="Paste one video link per line"
+    placeholder="Optional: paste one extra watch/follow link per line"
     className="min-h-[80px] w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
   />
 </div>
@@ -2289,6 +2439,48 @@ function laneAssignmentSortValue(value) {
   return lane * 100 + letterRank;
 }
 
+function getTitleCount(title) {
+  return Math.max(1, Number(title?.titleCount || 1));
+}
+
+function getTitleCategoryLabel(title) {
+  if (title?.hof) return "HOF";
+  if (title?.historicalTotal) return "MIST";
+  if (title?.major) return "Major";
+  if (title?.eligible) return "FKM";
+  return "Non-FKM";
+}
+
+function lanePositionParts(value) {
+  const text = String(value || "").trim().toUpperCase();
+  const lane = text.match(/[0-9]+/)?.[0] || "";
+  const letter = text.match(/[A-Z]+/)?.[0] || "";
+
+  return { lane, letter };
+}
+
+function shiftLaneAfterDelete(bowlers, removedLane, tournamentStyle = "singles") {
+  const { lane, letter } = lanePositionParts(removedLane);
+  if (!lane || !letter) return bowlers;
+
+  const letters = getLaneLetterOptions(removedLane, tournamentStyle);
+  const removedLetterIndex = letters.indexOf(letter);
+  if (removedLetterIndex < 0) return bowlers;
+
+  return bowlers.map((bowler) => {
+    const parts = lanePositionParts(bowler.lane);
+    if (parts.lane !== lane) return bowler;
+
+    const currentLetterIndex = letters.indexOf(parts.letter);
+    if (currentLetterIndex <= removedLetterIndex) return bowler;
+
+    return {
+      ...bowler,
+      lane: `${lane}${letters[currentLetterIndex - 1]}`,
+    };
+  });
+}
+
 function RosterSizeInput({ entries, onSave }) {
   const [draft, setDraft] = useState(String(entries || 0));
 
@@ -2335,7 +2527,7 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   useEffect(() => {
     if (!laneAssignments.some(Boolean)) return;
     setBowlers((current) => current.map((bowler, index) => ({ ...bowler, lane: laneAssignments[index] || bowler.lane || "" })));
-  }, [tournamentInfo.lanesUsed, bowlers.length, tournamentStyle]);
+  }, [tournamentInfo.lanesUsed, tournamentStyle]);
 
   useEffect(() => {
   if (!useHandicapScores) return;
@@ -2424,6 +2616,22 @@ return {
 };
   }
 const updateBowler = (index, field, value) => {
+  if (field === "lane" && String(value || "").trim()) {
+    const normalizedLane = String(value || "").trim().toUpperCase();
+    const duplicate = bowlers.find(
+      (bowler, bowlerIndex) =>
+        bowlerIndex !== index &&
+        String(bowler.lane || "").trim().toUpperCase() === normalizedLane
+    );
+
+    if (duplicate) {
+      window.alert(
+        `${normalizedLane} is already assigned to ${duplicate.name || "another bowler"}. Choose a different lane spot.`
+      );
+      return;
+    }
+  }
+
   setBowlers((current) =>
     current.map((b, i) => {
       if (i !== index) return b;
@@ -2467,7 +2675,18 @@ const updateBowler = (index, field, value) => {
     })
   );
 };
-  const addBowler = () => setBowlers((current) => [...current, makeBowler(Math.max(0, ...current.map((b) => Number(b.seed || 0))) + 1, current[0]?.games?.length || 4)]);
+  const getNextLaneAssignment = (index) =>
+    buildLaneAssignments(tournamentInfo.lanesUsed, index + 1, tournamentStyle)[index] || "";
+  const addBowler = () => setBowlers((current) => {
+    const index = current.length;
+    return [
+      ...current,
+      {
+        ...makeBowler(Math.max(0, ...current.map((b) => Number(b.seed || 0))) + 1, current[0]?.games?.length || 4),
+        lane: getNextLaneAssignment(index),
+      },
+    ];
+  });
   const paidCount = bowlers.filter((b) => b.paid).length;
   const setRosterSize = (value) => {
     const target = Math.max(0, Number(value || 0));
@@ -2479,14 +2698,30 @@ const updateBowler = (index, field, value) => {
         return current.slice(0, target);
       }
       const maxSeed = Math.max(0, ...current.map((b) => Number(b.seed || 0)));
-      return [...current, ...Array.from({ length: target - current.length }, (_, index) => makeBowler(maxSeed + index + 1, current[0]?.games?.length || 4))];
+      return [
+        ...current,
+        ...Array.from({ length: target - current.length }, (_, index) => {
+          const rosterIndex = current.length + index;
+          return {
+            ...makeBowler(maxSeed + index + 1, current[0]?.games?.length || 4),
+            lane: getNextLaneAssignment(rosterIndex),
+          };
+        }),
+      ];
     });
   };
   const deleteBowler = (index) => {
     const confirmed = window.confirm(`Delete ${bowlers[index]?.name || "this bowler"} from the roster? Lane assignments on remaining bowlers will stay as-is.`);
     if (!confirmed) return;
     const seedToRemove = bowlers[index]?.seed;
-    setBowlers((current) => current.filter((_, i) => i !== index));
+    const laneToRemove = bowlers[index]?.lane;
+    setBowlers((current) =>
+      shiftLaneAfterDelete(
+        current.filter((_, i) => i !== index),
+        laneToRemove,
+        tournamentStyle
+      )
+    );
     setSidePotState((current) => {
       const nextBracketSets = { ...(current.bracketSets || {}) };
       Object.keys(nextBracketSets).forEach((key) => {
@@ -2982,6 +3217,16 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     });
   const exportRows = [["Rank", "Name", ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", "Handicap Total"], ...sorted.map((b) => [b.rank, b.name, ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, b.handicap])];
   const activeGameIsSaved = activeScoreGameIndex !== null && Boolean(savedScoreGames[activeScoreGameIndex]);
+  const printableScoreEntryGroups = scoreEntryRows.reduce((groups, row) => {
+    const lane = lanePositionParts(row.bowler.lane).lane || "Unassigned";
+    groups[lane] = [...(groups[lane] || []), row];
+    return groups;
+  }, {});
+  const printableScoreEntryLaneKeys = Object.keys(printableScoreEntryGroups).sort((a, b) => {
+    if (a === "Unassigned") return 1;
+    if (b === "Unassigned") return -1;
+    return Number(a || 9999) - Number(b || 9999);
+  });
 
 const saveCurrentGame = () => {
   if (activeScoreGameIndex === null) return;
@@ -3097,16 +3342,34 @@ const saveCurrentGame = () => {
   <h1 className="mb-1 text-2xl font-black text-black">  {tournamentInfo.name || "Tournament"}
 </h1>
 
+  {printableScoreEntryLaneKeys.map((laneKey) => (
+  <div key={`print-score-entry-lane-${laneKey}`} className="mb-4 break-inside-avoid">
+  <h2 className="mb-1 text-lg font-black text-black">Lane {laneKey}</h2>
   <table className="w-full border-collapse text-xs text-black">
     <thead>
       <tr>
         <th className="border border-black p-1 text-left">#</th>
-        <th className="border border-black p-1 text-left">Bowler</th>
-        <th className="border border-black p-1 text-center">Lane</th>
+        <th className="w-32 border border-black p-1 text-left">Bowler</th>
+        <th className="border border-black p-1 text-center">Pos</th>
         {useHandicapScores && <th className="border border-black p-1 text-center">Hdcp</th>}
         {Array.from({ length: qualifyingGames }, (_, gi) => (
           <th key={`print-score-game-${gi}`} className="border border-black p-1 text-center">
-            G{gi + 1}
+            <div>G{gi + 1}</div>
+            <div className="text-[9px] font-bold leading-tight text-black">
+              {laneKey !== "Unassigned"
+                ? lanePairForGame(
+                    laneKey,
+                    gi,
+                    tournamentInfo?.lanesUsed,
+                    tournamentInfo?.movePairs || 1,
+                    tournamentInfo?.movementMode || "custom",
+                    {
+                      odd: tournamentInfo?.customRotation || "",
+                      even: tournamentInfo?.evenCustomRotation || "",
+                    }
+                  )
+                : ""}
+            </div>
           </th>
         ))}
         <th className="border border-black p-1 text-center">Total</th>
@@ -3114,10 +3377,10 @@ const saveCurrentGame = () => {
     </thead>
 
     <tbody>
-      {bowlers.map((b, index) => (
+      {printableScoreEntryGroups[laneKey].map(({ bowler: b, index }, displayIndex) => (
         <tr key={`print-score-row-${b.seed}-${index}`}>
-          <td className="border border-black p-1 font-bold">{index + 1}</td>
-          <td className="border border-black p-1 font-bold">{b.name || ""}</td>
+          <td className="border border-black p-1 font-bold">{displayIndex + 1}</td>
+          <td className="w-32 border border-black p-1 font-bold">{b.name || ""}</td>
           <td className="border border-black p-1 text-center">{b.lane || ""}</td>
           {useHandicapScores && (
             <td className="border border-black p-1 text-center font-bold">
@@ -3125,13 +3388,15 @@ const saveCurrentGame = () => {
             </td>
           )}
           {Array.from({ length: qualifyingGames }, (_, gi) => (
-            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-1" />
+            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-10 border border-black p-1" />
           ))}
           <td className="border border-black p-1" />
         </tr>
       ))}
     </tbody>
   </table>
+  </div>
+  ))}
 </div>
 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
   <div className="text-sm font-semibold text-blue-800">
@@ -5635,6 +5900,7 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
   const [expandedPublicTitleBowler, setExpandedPublicTitleBowler] = useState(null);
   const [publicTitleFilter, setPublicTitleFilter] = useState("all");
   const [publicTitleView, setPublicTitleView] = useState("leaderboard");
+  const [publicHofYearFilter, setPublicHofYearFilter] = useState("All");
   const publicIdentityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
   const publicRealNameFor = (nickname) => publicIdentityMap.get(getIdentityKey(nickname))?.realName || "";
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
@@ -5690,6 +5956,17 @@ const publicNonFkmTitles = [
 ];
 
 const publicHofTitles = manualTitles.filter((title) => title.hof);
+const publicHofYears = Array.from(
+  new Set(publicHofTitles.map((title) => String(title.season || "").trim()).filter(Boolean))
+).sort((a, b) => String(b).localeCompare(String(a)));
+const filteredPublicHofTitles = publicHofYearFilter === "All"
+  ? publicHofTitles
+  : publicHofTitles.filter((title) => String(title.season || "").trim() === publicHofYearFilter);
+const sortedPublicHofTitles = [...filteredPublicHofTitles].sort(
+  (a, b) =>
+    String(b.season || "").localeCompare(String(a.season || "")) ||
+    String(publicRealNameFor(a.bowler) || a.bowler || "").localeCompare(String(publicRealNameFor(b.bowler) || b.bowler || ""))
+);
 const publicHofNames = new Set(
   publicHofTitles.map((title) => String(title.bowler || "").trim().toLowerCase())
 );
@@ -5726,12 +6003,14 @@ const publicTitleCounts = filteredPublicTitles.reduce((map, title) => {
       titleList: [],
     };
 
-  current.titles += 1;
+  const titleCount = getTitleCount(title);
+
+  current.titles += titleCount;
   current.titleList.push(title);
 
-  if (title.major) current.majors += 1;
-  else if (title.eligible) current.fkmTitles += 1;
-  else current.nonFkmTitles += 1;
+  if (title.major) current.majors += titleCount;
+  else if (title.eligible) current.fkmTitles += titleCount;
+  else current.nonFkmTitles += titleCount;
 
   if (!current.latest || String(title.date || "") > String(current.latest || "")) {
     current.latest = title.date || "";
@@ -6108,22 +6387,22 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
     <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
       <StatCard
         label="Total Titles"
-        value={filteredPublicTitles.length}
+        value={filteredPublicTitles.reduce((sum, title) => sum + getTitleCount(title), 0)}
       />
 
       <StatCard
         label="Majors"
-        value={filteredPublicTitles.filter((title) => title.major).length}
+        value={filteredPublicTitles.filter((title) => title.major).reduce((sum, title) => sum + getTitleCount(title), 0)}
       />
 
       <StatCard
         label="FKM Titles"
-        value={filteredPublicTitles.filter((title) => title.eligible && !title.major).length}
+        value={filteredPublicTitles.filter((title) => title.eligible && !title.major).reduce((sum, title) => sum + getTitleCount(title), 0)}
       />
 
       <StatCard
         label="Non-FKM Titles"
-        value={filteredPublicTitles.filter((title) => !title.eligible && !title.hof).length}
+        value={filteredPublicTitles.filter((title) => !title.eligible && !title.hof).reduce((sum, title) => sum + getTitleCount(title), 0)}
       />
 
       <StatCard
@@ -6241,10 +6520,10 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                           <tbody>
                             {row.titleList.map((title) => (
                               <tr key={`public-title-detail-row-${title.id}`} className="border-t">
-                                <td className="p-2 font-semibold text-blue-950 md:p-3">{title.tournament || "Historical Title"}</td>
+                                <td className="p-2 font-semibold text-blue-950 md:p-3">{title.tournament || "Historical Title"}{title.historicalTotal ? ` (${getTitleCount(title)} titles)` : ""}</td>
                                 <td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td>
                                 <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
-                                <td className="p-2 font-semibold text-blue-900 md:p-3">{title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM"}</td>
+                                <td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td>
                                 <td className="p-2 text-blue-900 md:p-3">{title.source}</td>
                               </tr>
                             ))}
@@ -6294,6 +6573,10 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               Date
             </th>
 
+            <th className="p-3 text-right">
+              Count
+            </th>
+
             <th className="p-3 text-left">
               Type
             </th>
@@ -6318,12 +6601,12 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                 {title.date || "-"}
               </td>
 
+              <td className="p-3 text-right font-black text-blue-900">
+                {getTitleCount(title)}
+              </td>
+
               <td className="p-3 font-bold">
-                {title.major
-                  ? "Major"
-                  : title.eligible
-                    ? "FKM"
-                    : "Non-FKM"}
+                {getTitleCategoryLabel(title)}
               </td>
             </tr>
           ))}
@@ -6331,7 +6614,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
           {filteredPublicTitles.length === 0 && (
             <tr>
               <td
-                colSpan={4}
+                colSpan={5}
                 className="p-5 text-center text-blue-700"
               >
                 No titles available yet.
@@ -6347,24 +6630,41 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   </div>
 )}
 {publicStatsTab === "hof" && (
+  <div className="space-y-3">
+  <div className="flex w-full flex-col gap-1 sm:w-56">
+    <Label>Filter Year</Label>
+    <select
+      value={publicHofYearFilter}
+      onChange={(event) => setPublicHofYearFilter(event.target.value)}
+      className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none"
+    >
+      <option value="All">All Years</option>
+      {publicHofYears.map((year) => (
+        <option key={year} value={year}>
+          {year}
+        </option>
+      ))}
+    </select>
+  </div>
+
   <div className="overflow-auto rounded-2xl border border-blue-200">
     <table className="w-full min-w-[520px] text-xs md:text-sm">
       <thead className="bg-blue-800 text-white">
         <tr>
-          <th className="p-3 text-left">Nickname</th>
           <th className="p-3 text-left">Name</th>
+          <th className="p-3 text-left">Nickname</th>
           <th className="p-3 text-left">Induction Year</th>
         </tr>
       </thead>
       <tbody>
-        {publicHofTitles.map((title) => (
+        {sortedPublicHofTitles.map((title) => (
           <tr key={`public-hof-${title.id}`} className="border-t">
-            <td className="p-3 font-semibold text-blue-950">{title.bowler}</td>
-            <td className="p-3 text-blue-900">{publicRealNameFor(title.bowler) || "—"}</td>
+            <td className="p-3 font-bold text-blue-950">{publicRealNameFor(title.bowler) || title.bowler}</td>
+            <td className="p-3 font-semibold text-blue-900">{publicRealNameFor(title.bowler) ? title.bowler : "—"}</td>
             <td className="p-3 text-blue-900">{title.season || "-"}</td>
           </tr>
         ))}
-        {publicHofTitles.length === 0 && (
+        {sortedPublicHofTitles.length === 0 && (
           <tr>
             <td colSpan={3} className="p-5 text-center text-blue-700">
               No Hall of Fame inductees entered yet.
@@ -6373,6 +6673,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         )}
       </tbody>
     </table>
+  </div>
   </div>
 )}
 {publicStatsTab === "archives" &&
@@ -8205,6 +8506,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 
 function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIdentities = [], setBowlerIdentities = () => {} }) {
   const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History", major: false });
+  const [newHistoricalTotal, setNewHistoricalTotal] = useState({ bowler: "", titleCount: "", source: "M.I.S.T. Series", season: "Pre-2018", eligible: true, major: false, notes: "" });
   const [newHof, setNewHof] = useState({ bowler: "", year: new Date().getFullYear().toString() });
   const [newIdentity, setNewIdentity] = useState({ nickname: "", realName: "" });
   const [titleSort, setTitleSort] = useState({ column: "titles", direction: "desc" });
@@ -8292,12 +8594,14 @@ const current =
     titleList: [],
   };
 
-current.titles += 1;
+const titleCount = getTitleCount(title);
+
+current.titles += titleCount;
 current.titleList.push(title);
 
-if (title.major) current.majors += 1;
-else if (title.eligible) current.fkmTitles += 1;
-else current.nonFkmTitles += 1;
+if (title.major) current.majors += titleCount;
+else if (title.eligible) current.fkmTitles += titleCount;
+else current.nonFkmTitles += titleCount;
     if (title.season) current.seasons.add(title.season);
     if (!current.latest || String(title.date || "") > String(current.latest || "")) current.latest = title.date || "";
     map[key] = current;
@@ -8336,6 +8640,34 @@ else current.nonFkmTitles += 1;
       hof: false,
     }, ...current]);
     setNewTitle({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History", major: false });
+  };
+
+  const addHistoricalTitleTotal = () => {
+    const titleCount = Math.max(0, Number(newHistoricalTotal.titleCount || 0));
+    if (!newHistoricalTotal.bowler.trim()) {
+      window.alert("Enter a bowler name for the historical total.");
+      return;
+    }
+    if (titleCount < 1) {
+      window.alert("Enter how many titles this bowler won.");
+      return;
+    }
+
+    setManualTitles((current) => [{
+      id: `historical-total-${Date.now()}`,
+      bowler: newHistoricalTotal.bowler.trim(),
+      tournament: newHistoricalTotal.source || "Historical Title Total",
+      date: "",
+      season: newHistoricalTotal.season || "Pre-2018",
+      source: newHistoricalTotal.source || "Historical Title Total",
+      eligible: Boolean(newHistoricalTotal.eligible ?? true),
+      major: Boolean(newHistoricalTotal.major),
+      hof: false,
+      historicalTotal: true,
+      titleCount,
+      notes: newHistoricalTotal.notes || "",
+    }, ...current]);
+    setNewHistoricalTotal({ bowler: "", titleCount: "", source: "M.I.S.T. Series", season: "Pre-2018", eligible: true, major: false, notes: "" });
   };
 
   const addHofInductee = () => {
@@ -8388,7 +8720,7 @@ else current.nonFkmTitles += 1;
     setManualTitles((current) => current.filter((title) => title.id !== id));
   };
 
-  const titleCsv = [["Bowler", "Tournament", "Date", "Season", "Category", "Source"], ...allTitles.map((title) => [title.bowler, title.tournament, title.date, title.season, title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM", title.source])];
+  const titleCsv = [["Bowler", "Tournament", "Date", "Season", "Category", "Source", "Count", "Notes"], ...allTitles.map((title) => [title.bowler, title.tournament, title.date, title.season, getTitleCategoryLabel(title), title.source, getTitleCount(title), title.notes || ""])];
   const manualHistoryDetails = [...(manualTitles || []).filter((title) => !title.hof)].sort(
     (a, b) =>
       String(b.date || "").localeCompare(String(a.date || "")) ||
@@ -8420,11 +8752,35 @@ else current.nonFkmTitles += 1;
           </div>
           {!isSectionCollapsed("summary") && (
           <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-<StatCard label="Total Titles" value={allTitles.filter((title) => !title.hof).length} />
+<StatCard label="Total Titles" value={allTitles.filter((title) => !title.hof).reduce((sum, title) => sum + getTitleCount(title), 0)} />
 <StatCard label="Majors" value={majorTitles.length} />
 <StatCard label="FKM Titles" value={fkmTitles.length} />
 <StatCard label="Non-FKM Titles" value={nonFkmTitles.length} />
 <StatCard label="HOF" value={hofTitles.length} />
+          </div>
+          )}
+        </CardContent>
+      </AppCard>
+
+      <AppCard>
+        <CardContent className="p-3 md:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold text-blue-900">Add Historical Title Total</h2>
+              <p className="text-sm text-blue-700">Use this for older records where only a bowler name and total title count are known.</p>
+            </div>
+            {sectionToggleButton("historicalTotals")}
+          </div>
+          {!isSectionCollapsed("historicalTotals") && (
+          <div className="grid gap-3 md:grid-cols-6">
+            <div className="space-y-2"><Label>Bowler</Label><Input value={newHistoricalTotal.bowler} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, bowler: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Titles Won</Label><Input type="number" value={newHistoricalTotal.titleCount} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, titleCount: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Source / Series</Label><Input value={newHistoricalTotal.source} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, source: e.target.value }))} placeholder="M.I.S.T. Series" /></div>
+            <div className="space-y-2"><Label>Season</Label><Input value={newHistoricalTotal.season} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, season: e.target.value }))} placeholder="Pre-2018" /></div>
+            <div className="space-y-2"><Label>FKM Eligible</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newHistoricalTotal.eligible ?? true)} onCheckedChange={(checked) => setNewHistoricalTotal((current) => ({ ...current, eligible: checked }))} /></div></div>
+            <div className="space-y-2"><Label>Major</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newHistoricalTotal.major)} onCheckedChange={(checked) => setNewHistoricalTotal((current) => ({ ...current, major: checked, eligible: checked ? true : current.eligible }))} /></div></div>
+            <div className="space-y-2 md:col-span-5"><Label>Notes</Label><Input value={newHistoricalTotal.notes} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, notes: e.target.value }))} placeholder="Optional note about the source record" /></div>
+            <div className="flex items-end"><Button className="w-full rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addHistoricalTitleTotal}>Add Total</Button></div>
           </div>
           )}
         </CardContent>
@@ -8505,13 +8861,13 @@ else current.nonFkmTitles += 1;
           <div className="mt-4 overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[520px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
-                <tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Induction Year</th><th className="p-2 text-right md:p-3">Actions</th></tr>
+                <tr><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Induction Year</th><th className="p-2 text-right md:p-3">Actions</th></tr>
               </thead>
               <tbody>
                 {hofTitles.map((title) => (
                   <tr key={title.id} className="border-t">
-                    <td className="p-2 font-semibold md:p-3">{title.bowler}</td>
-                    <td className="p-2 text-blue-900 md:p-3">{realNameFor(title.bowler) || "—"}</td>
+                    <td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td>
+                    <td className="p-2 font-semibold text-blue-900 md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td>
                     <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
                     <td className="p-2 text-right md:p-3">
                       <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>
@@ -8671,10 +9027,10 @@ else current.nonFkmTitles += 1;
                                                 <tbody>
                                                   {row.titleList.map((title) => (
                                                     <tr key={`title-detail-${title.id}`} className="border-t">
-                                                      <td className="p-2 font-semibold text-blue-950 md:p-3">{title.tournament || "Historical Title"}</td>
+                                                      <td className="p-2 font-semibold text-blue-950 md:p-3">{title.tournament || "Historical Title"}{title.historicalTotal ? ` (${getTitleCount(title)} titles)` : ""}</td>
                                                       <td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td>
                                                       <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
-                                                      <td className="p-2 font-semibold text-blue-900 md:p-3">{title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM"}</td>
+                                                      <td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td>
                                                       <td className="p-2 text-blue-900 md:p-3">{title.source}</td>
                                                     </tr>
                                                   ))}
@@ -8702,14 +9058,14 @@ else current.nonFkmTitles += 1;
           {!isSectionCollapsed("details") && (
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[760px] text-xs md:text-sm">
-              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-left md:p-3">Category</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
+              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-right md:p-3">Count</th><th className="p-2 text-left md:p-3">Category</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
               <tbody>{titleDetailRows.map((title) => {
                 const isManualTitle = manualTitleIds.has(String(title.id));
 
                 return (
-                  <tr key={title.id} className="border-t"><td className="p-2 font-semibold md:p-3">{title.bowler}</td><td className="p-2 text-blue-900 md:p-3">{realNameFor(title.bowler) || "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{title.hof ? "HOF" : title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM"}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>
+                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>
                 );
-              })}{titleDetailRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No title history yet.</td></tr>}</tbody>
+              })}{titleDetailRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No title history yet.</td></tr>}</tbody>
             </table>
           </div>
           )}
@@ -10128,7 +10484,7 @@ export default function BowlingPayoutApp() {
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState("eliminator");
-  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles" });
+  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
   const publicResultsUnlocked = bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid));
@@ -10281,7 +10637,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers.map((bowler) => normalizeBowlerGames(bowler, Number(snapshot.qualifyingGames || qualifyingGames || 4))) : buildInitialBowlers(0, Number(snapshot.qualifyingGames || 4)));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
     setTournamentFormat(snapshot.tournamentFormat || "eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", ...(snapshot.tournamentInfo || {}) });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], ...(snapshot.tournamentInfo || {}) });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || {}) });
     setSavedScoreGames(snapshot.savedScoreGames || {});
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
@@ -10346,9 +10702,13 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     });
 
     setBowlers((current) => {
+      const nextLane = existingIndex >= 0
+        ? current[existingIndex]?.lane || ""
+        : buildLaneAssignments(tournamentInfo.lanesUsed, current.length + 1, tournamentInfo.tournamentStyle || "singles")[current.length] || "";
       const nextBowler = {
         ...(existingIndex >= 0 ? current[existingIndex] : makeBowler(Math.max(0, ...current.map((bowler) => Number(bowler.seed || 0))) + 1, qualifyingGames)),
         name: displayName,
+        lane: nextLane,
         phone: formatPhoneNumber(reservation.phone || ""),
         email: reservation.email || "",
         average: archivedData?.eligible ? archivedData.average : "",
@@ -10403,7 +10763,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(buildInitialBowlers(0, 4));
     setUseHandicapScores(false);
     setTournamentFormat("eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles" });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
     setSavedFinalsRounds({});
@@ -10484,7 +10844,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             <div className="relative space-y-4">
 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
   <div className="flex items-center gap-4">
-    <div className="bb-logo-mark flex h-16 w-16 shrink-0 items-center justify-center rounded-full shadow-lg ring-2 ring-blue-300" />
+    <img
+      src={bowlerBuildersLogo}
+      alt="Bowler Builders"
+      className="h-16 w-20 shrink-0 rounded-xl bg-white object-contain p-1 shadow-lg ring-2 ring-blue-300 md:h-20 md:w-24"
+    />
 
     <div>
       <p className="bb-kicker text-xs font-black uppercase">
