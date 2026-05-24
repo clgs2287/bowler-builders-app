@@ -293,6 +293,7 @@ const numberInputStyles = String.raw`
 const STORAGE_KEY = "bowler-builders-tournament-app-v1";
 const HISTORY_STORAGE_KEY = "bowler-builders-tournament-history-v1";
 const TITLE_STORAGE_KEY = "bowler-builders-manual-title-history-v1";
+const BOWLER_IDENTITY_STORAGE_KEY = "bowler-builders-bowler-identities-v1";
 const DRAFT_STORAGE_KEY = "bowler-builders-saved-tournament-drafts-v1";
 
 const BOWLING_CENTERS = [
@@ -538,6 +539,10 @@ function getArchivedWinnerName(tournament = {}) {
 }
 
 function normalizeMatchText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getIdentityKey(value) {
   return String(value || "").trim().toLowerCase();
 }
 
@@ -5617,7 +5622,7 @@ function PublicTournamentRecap({
   );
 }
 
-function PublicStats({ tournamentHistory, manualTitles = [] }) {
+function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = [] }) {
   const [search, setSearch] = useState("");
   const [publicStatsTab, setPublicStatsTab] = useState("bowlers");
   const [seasonFilter, setSeasonFilter] = useState("All");
@@ -5629,6 +5634,9 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
   const [expandedPublicBowler, setExpandedPublicBowler] = useState(null);
   const [expandedPublicTitleBowler, setExpandedPublicTitleBowler] = useState(null);
   const [publicTitleFilter, setPublicTitleFilter] = useState("all");
+  const [publicTitleView, setPublicTitleView] = useState("leaderboard");
+  const publicIdentityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
+  const publicRealNameFor = (nickname) => publicIdentityMap.get(getIdentityKey(nickname))?.realName || "";
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
   const publicArchiveHistory = seasonFilter === "All"
     ? tournamentHistory || []
@@ -5666,20 +5674,25 @@ function PublicStats({ tournamentHistory, manualTitles = [] }) {
 
 const publicMajorTitles = [
   ...archiveTitles.filter((title) => title.major),
-  ...manualTitles.filter((title) => title.major),
+  ...manualTitles.filter((title) => title.major && !title.hof),
 ];
 
 const publicFkmTitles = [
   ...archiveTitles.filter((title) => title.eligible && !title.major),
   ...manualTitles.filter(
-    (title) => title.eligible !== false && !title.major
+    (title) => title.eligible !== false && !title.major && !title.hof
   ),
 ];
 
 const publicNonFkmTitles = [
   ...archiveTitles.filter((title) => !title.eligible),
-  ...manualTitles.filter((title) => title.eligible === false),
+  ...manualTitles.filter((title) => title.eligible === false && !title.hof),
 ];
+
+const publicHofTitles = manualTitles.filter((title) => title.hof);
+const publicHofNames = new Set(
+  publicHofTitles.map((title) => String(title.bowler || "").trim().toLowerCase())
+);
 
 const publicAllTitles = [
   ...publicMajorTitles,
@@ -5695,7 +5708,7 @@ const filteredPublicTitles = publicAllTitles.filter((title) => {
   if (publicTitleFilter === "major") return Boolean(title.major);
   if (publicTitleFilter === "fkm") return Boolean(title.eligible) && !title.major;
   if (publicTitleFilter === "fkmMajor") return Boolean(title.eligible);
-  if (publicTitleFilter === "nonFkm") return !title.eligible;
+  if (publicTitleFilter === "nonFkm") return !title.eligible && !title.hof;
   return true;
 });
 
@@ -5840,6 +5853,31 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
     }))
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase())));
 
+  const publicTitleFilters = [
+    { id: "all", label: "All Titles" },
+    { id: "fkmMajor", label: "FKM + Majors" },
+    { id: "fkm", label: "FKM Only" },
+    { id: "major", label: "Majors Only" },
+    { id: "nonFkm", label: "Non-FKM" },
+  ];
+
+  const publicTitleFilterSelect = (
+    <div className="flex w-full flex-col gap-1 sm:w-auto">
+      <Label>Filter Titles</Label>
+      <select
+        value={publicTitleFilter}
+        onChange={(event) => setPublicTitleFilter(event.target.value)}
+        className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none sm:w-56"
+      >
+        {publicTitleFilters.map((filter) => (
+          <option key={filter.id} value={filter.id}>
+            {filter.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
 
   return (
     <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
@@ -5876,6 +5914,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
     { id: "bowlers", label: "Bowler Stats" },
     { id: "archives", label: "Archived Tournaments" },
     { id: "titles", label: "Title History" },
+    { id: "hof", label: "Hall of Fame" },
   ].map((tab) => (
     <button
       key={tab.id}
@@ -6084,35 +6123,39 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
       <StatCard
         label="Non-FKM Titles"
-        value={filteredPublicTitles.filter((title) => !title.eligible).length}
+        value={filteredPublicTitles.filter((title) => !title.eligible && !title.hof).length}
       />
 
       <StatCard
-        label="Title Winners"
-        value={publicTitleLeaderRows.length}
+        label="HOF"
+        value={publicHofTitles.length}
       />
     </div>
 
-    <div className="flex flex-wrap gap-2">
-      {[
-        { id: "all", label: "All Titles" },
-        { id: "fkmMajor", label: "FKM + Majors" },
-        { id: "fkm", label: "FKM Only" },
-        { id: "major", label: "Majors Only" },
-        { id: "nonFkm", label: "Non-FKM" },
-      ].map((filter) => (
-        <button
-          key={filter.id}
-          type="button"
-          onClick={() => setPublicTitleFilter(filter.id)}
-          className={publicTitleFilter === filter.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}
-        >
-          {filter.label}
-        </button>
-      ))}
+    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: "leaderboard", label: "Title Leaderboard" },
+          { id: "all", label: "All Titles" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setPublicTitleView(tab.id)}
+            className={publicTitleView === tab.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {publicTitleFilterSelect}
     </div>
 
-    <div className="overflow-auto rounded-2xl border border-blue-200">
+    {publicTitleView === "leaderboard" && (
+      <>
+        <h3 className="text-lg font-black text-blue-950 md:text-xl">Title Leaderboard</h3>
+
+        <div className="overflow-auto rounded-2xl border border-blue-200">
       <table className="w-full min-w-[760px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
@@ -6156,6 +6199,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                       className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
                     >
                       {isExpanded ? "-" : "+"} {row.bowler}
+                      {publicHofNames.has(String(row.bowler || "").trim().toLowerCase()) ? " (HOF)" : ""}
                     </button>
                   </td>
 
@@ -6185,7 +6229,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                     <td className="p-3" colSpan={6}>
                       <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                         <table className="w-full min-w-[640px] text-xs md:text-sm">
-                          <thead className="bg-blue-50 text-blue-900">
+                          <thead className="bg-blue-800 text-white">
                             <tr>
                               <th className="p-2 text-left md:p-3">Tournament</th>
                               <th className="p-2 text-left md:p-3">Date</th>
@@ -6227,8 +6271,14 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         </tbody>
       </table>
     </div>
+      </>
+    )}
 
-    <div className="overflow-auto rounded-2xl border border-blue-200">
+    {publicTitleView === "all" && (
+      <>
+        <h3 className="text-lg font-black text-blue-950 md:text-xl">All Titles</h3>
+
+        <div className="overflow-auto rounded-2xl border border-blue-200">
       <table className="w-full min-w-[760px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
@@ -6291,6 +6341,38 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         </tbody>
       </table>
     </div>
+      </>
+    )}
+
+  </div>
+)}
+{publicStatsTab === "hof" && (
+  <div className="overflow-auto rounded-2xl border border-blue-200">
+    <table className="w-full min-w-[520px] text-xs md:text-sm">
+      <thead className="bg-blue-800 text-white">
+        <tr>
+          <th className="p-3 text-left">Nickname</th>
+          <th className="p-3 text-left">Name</th>
+          <th className="p-3 text-left">Induction Year</th>
+        </tr>
+      </thead>
+      <tbody>
+        {publicHofTitles.map((title) => (
+          <tr key={`public-hof-${title.id}`} className="border-t">
+            <td className="p-3 font-semibold text-blue-950">{title.bowler}</td>
+            <td className="p-3 text-blue-900">{publicRealNameFor(title.bowler) || "—"}</td>
+            <td className="p-3 text-blue-900">{title.season || "-"}</td>
+          </tr>
+        ))}
+        {publicHofTitles.length === 0 && (
+          <tr>
+            <td colSpan={3} className="p-5 text-center text-blue-700">
+              No Hall of Fame inductees entered yet.
+            </td>
+          </tr>
+        )}
+      </tbody>
+    </table>
   </div>
 )}
 {publicStatsTab === "archives" &&
@@ -8121,10 +8203,31 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   );
 }
 
-function TitlesTab({ tournamentHistory, manualTitles, setManualTitles }) {
-  const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History" });
+function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIdentities = [], setBowlerIdentities = () => {} }) {
+  const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History", major: false });
+  const [newHof, setNewHof] = useState({ bowler: "", year: new Date().getFullYear().toString() });
+  const [newIdentity, setNewIdentity] = useState({ nickname: "", realName: "" });
   const [titleSort, setTitleSort] = useState({ column: "titles", direction: "desc" });
   const [expandedTitleBowler, setExpandedTitleBowler] = useState(null);
+  const [collapsedTitleSections, setCollapsedTitleSections] = useState({});
+  const identityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
+  const realNameFor = (nickname) => identityMap.get(getIdentityKey(nickname))?.realName || "";
+  const isSectionCollapsed = (sectionId) => Boolean(collapsedTitleSections[sectionId]);
+  const toggleTitleSection = (sectionId) => {
+    setCollapsedTitleSections((current) => ({
+      ...current,
+      [sectionId]: !current[sectionId],
+    }));
+  };
+  const sectionToggleButton = (sectionId) => (
+    <Button
+      variant="outline"
+      className="rounded-2xl border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-900 hover:bg-blue-50"
+      onClick={() => toggleTitleSection(sectionId)}
+    >
+      {isSectionCollapsed(sectionId) ? "Expand" : "Minimize"}
+    </Button>
+  );
 
   const archiveTitles = tournamentHistory.flatMap((tournament) => (tournament.results || [])
     .filter((result) => result.tournamentWinner)
@@ -8147,20 +8250,25 @@ major: Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.ma
 
 const majorTitles = [
   ...archiveTitles.filter((title) => title.major),
-  ...manualTitles.filter((title) => title.major),
+  ...manualTitles.filter((title) => title.major && !title.hof),
 ];
 
 const fkmTitles = [
   ...archiveTitles.filter((title) => title.eligible && !title.major),
   ...manualTitles.filter(
-    (title) => title.eligible !== false && !title.major
+    (title) => title.eligible !== false && !title.major && !title.hof
   ),
 ];
 
 const nonFkmTitles = [
   ...archiveTitles.filter((title) => !title.eligible),
-  ...manualTitles.filter((title) => title.eligible === false),
+  ...manualTitles.filter((title) => title.eligible === false && !title.hof),
 ];
+
+const hofTitles = manualTitles.filter((title) => title.hof);
+const hofNameMap = new Map(
+  hofTitles.map((title) => [String(title.bowler || "").trim().toLowerCase(), title])
+);
 
 const allTitles = [
   ...majorTitles,
@@ -8168,6 +8276,7 @@ const allTitles = [
   ...nonFkmTitles,
 ]
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || a.bowler.localeCompare(b.bowler));
+  const manualTitleIds = new Set((manualTitles || []).map((title) => String(title.id)));
 
   const titleCounts = allTitles.reduce((map, title) => {
     const key = title.bowler.trim().toLowerCase();
@@ -8216,8 +8325,61 @@ else current.nonFkmTitles += 1;
       window.alert("Enter a bowler name for the historical title.");
       return;
     }
-    setManualTitles((current) => [{ id: `${Date.now()}`, ...newTitle, bowler: newTitle.bowler.trim(), tournament: newTitle.tournament || "Historical Title", eligible: true }, ...current]);
-    setNewTitle({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History" });
+    setManualTitles((current) => [{
+      id: `${Date.now()}`,
+      ...newTitle,
+      bowler: newTitle.bowler.trim(),
+      tournament: newTitle.tournament || "Historical Title",
+      source: "Manual History",
+      eligible: Boolean(newTitle.eligible ?? true),
+      major: Boolean(newTitle.major),
+      hof: false,
+    }, ...current]);
+    setNewTitle({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History", major: false });
+  };
+
+  const addHofInductee = () => {
+    if (!newHof.bowler.trim()) {
+      window.alert("Enter a bowler name for the Hall of Fame inductee.");
+      return;
+    }
+
+    setManualTitles((current) => [{
+      id: `hof-${Date.now()}`,
+      bowler: newHof.bowler.trim(),
+      tournament: "Hall of Fame",
+      date: "",
+      season: newHof.year || "",
+      source: "Hall of Fame",
+      eligible: false,
+      major: false,
+      hof: true,
+    }, ...current]);
+    setNewHof({ bowler: "", year: new Date().getFullYear().toString() });
+  };
+
+  const saveBowlerIdentity = () => {
+    const nickname = newIdentity.nickname.trim();
+    const realName = newIdentity.realName.trim();
+    if (!nickname || !realName) {
+      window.alert("Enter both nickname and real name.");
+      return;
+    }
+
+    setBowlerIdentities((current) => {
+      const nextIdentity = { id: getIdentityKey(nickname), nickname, realName };
+      const exists = (current || []).some((identity) => getIdentityKey(identity.nickname) === getIdentityKey(nickname));
+      return exists
+        ? current.map((identity) => getIdentityKey(identity.nickname) === getIdentityKey(nickname) ? nextIdentity : identity)
+        : [nextIdentity, ...(current || [])];
+    });
+    setNewIdentity({ nickname: "", realName: "" });
+  };
+
+  const deleteBowlerIdentity = (nickname) => {
+    const confirmed = window.confirm(`Delete real name mapping for ${nickname}?`);
+    if (!confirmed) return;
+    setBowlerIdentities((current) => (current || []).filter((identity) => getIdentityKey(identity.nickname) !== getIdentityKey(nickname)));
   };
 
   const deleteManualTitle = (id) => {
@@ -8226,7 +8388,21 @@ else current.nonFkmTitles += 1;
     setManualTitles((current) => current.filter((title) => title.id !== id));
   };
 
-  const titleCsv = [["Bowler", "Tournament", "Date", "Season", "Source"], ...allTitles.map((title) => [title.bowler, title.tournament, title.date, title.season, title.source])];
+  const titleCsv = [["Bowler", "Tournament", "Date", "Season", "Category", "Source"], ...allTitles.map((title) => [title.bowler, title.tournament, title.date, title.season, title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM", title.source])];
+  const manualHistoryDetails = [...(manualTitles || []).filter((title) => !title.hof)].sort(
+    (a, b) =>
+      String(b.date || "").localeCompare(String(a.date || "")) ||
+      String(a.bowler || "").localeCompare(String(b.bowler || ""))
+  );
+  const titleDetailRows = [
+    ...majorTitles,
+    ...fkmTitles,
+    ...nonFkmTitles,
+  ].sort(
+    (a, b) =>
+      String(b.date || "").localeCompare(String(a.date || "")) ||
+      String(a.bowler || "").localeCompare(String(b.bowler || ""))
+  );
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -8237,35 +8413,127 @@ else current.nonFkmTitles += 1;
               <h2 className="text-xl font-semibold text-blue-900">Titles Won</h2>
               <p className="text-sm text-blue-700">Tracks FKM/TOC-eligible titles from archived tournaments plus manually entered historical titles.</p>
             </div>
-            <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("titles-won.csv", titleCsv)}>Export Titles CSV</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("titles-won.csv", titleCsv)}>Export Titles CSV</Button>
+              {sectionToggleButton("summary")}
+            </div>
           </div>
+          {!isSectionCollapsed("summary") && (
           <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-<StatCard label="Total Titles" value={allTitles.length} />
+<StatCard label="Total Titles" value={allTitles.filter((title) => !title.hof).length} />
 <StatCard label="Majors" value={majorTitles.length} />
 <StatCard label="FKM Titles" value={fkmTitles.length} />
 <StatCard label="Non-FKM Titles" value={nonFkmTitles.length} />
-<StatCard label="Title Winners" value={titleLeaderRows.length} />
+<StatCard label="HOF" value={hofTitles.length} />
           </div>
+          )}
         </CardContent>
       </AppCard>
 
       <AppCard>
         <CardContent className="p-3 md:p-5">
-          <h2 className="mb-4 text-xl font-semibold text-blue-900">Add Historical Title</h2>
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-blue-900">Bowler Names</h2>
+            {sectionToggleButton("names")}
+          </div>
+          {!isSectionCollapsed("names") && (
+          <>
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_160px]">
+            <div className="space-y-2"><Label>Nickname / Display Name</Label><Input value={newIdentity.nickname} onChange={(e) => setNewIdentity((current) => ({ ...current, nickname: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Name</Label><Input value={newIdentity.realName} onChange={(e) => setNewIdentity((current) => ({ ...current, realName: e.target.value }))} /></div>
+            <div className="flex items-end"><Button className="w-full rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={saveBowlerIdentity}>Save Name</Button></div>
+          </div>
+
+          <div className="mt-4 overflow-auto rounded-2xl border border-blue-200 bg-white">
+            <table className="w-full min-w-[520px] text-xs md:text-sm">
+              <thead className="bg-blue-800 text-white">
+                <tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-right md:p-3">Actions</th></tr>
+              </thead>
+              <tbody>
+                {(bowlerIdentities || []).map((identity) => (
+                  <tr key={identity.id || identity.nickname} className="border-t">
+                    <td className="p-2 font-semibold md:p-3">{identity.nickname}</td>
+                    <td className="p-2 text-blue-900 md:p-3">{identity.realName}</td>
+                    <td className="p-2 text-right md:p-3">
+                      <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteBowlerIdentity(identity.nickname)}>Delete</Button>
+                    </td>
+                  </tr>
+                ))}
+                {(bowlerIdentities || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={3}>No bowler name mappings yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          </>
+          )}
+        </CardContent>
+      </AppCard>
+
+      <AppCard>
+        <CardContent className="p-3 md:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-blue-900">Add Historical Title</h2>
+            {sectionToggleButton("addTitle")}
+          </div>
+          {!isSectionCollapsed("addTitle") && (
+          <div className="grid gap-3 md:grid-cols-6">
             <div className="space-y-2"><Label>Bowler</Label><Input value={newTitle.bowler} onChange={(e) => setNewTitle((current) => ({ ...current, bowler: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Tournament</Label><Input value={newTitle.tournament} onChange={(e) => setNewTitle((current) => ({ ...current, tournament: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Date</Label><Input type="date" value={newTitle.date} onChange={(e) => setNewTitle((current) => ({ ...current, date: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Season</Label><Input value={newTitle.season} onChange={(e) => setNewTitle((current) => ({ ...current, season: e.target.value }))} /></div>
             <div className="space-y-2"><Label>FKM Eligible</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newTitle.eligible ?? true)} onCheckedChange={(checked) => setNewTitle((current) => ({ ...current, eligible: checked }))} /></div></div>
+            <div className="space-y-2"><Label>Major</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newTitle.major)} onCheckedChange={(checked) => setNewTitle((current) => ({ ...current, major: checked, eligible: checked ? true : current.eligible }))} /></div></div>
             <div className="flex items-end"><Button className="w-full rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addManualTitle}>Add Title</Button></div>
           </div>
+          )}
         </CardContent>
       </AppCard>
 
       <AppCard>
         <CardContent className="p-3 md:p-5">
-          <h2 className="mb-4 text-xl font-semibold text-blue-900">Title Leaderboard</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-blue-900">Hall of Fame</h2>
+            {sectionToggleButton("hof")}
+          </div>
+          {!isSectionCollapsed("hof") && (
+          <>
+          <div className="grid gap-3 md:grid-cols-[1fr_180px_160px]">
+            <div className="space-y-2"><Label>Bowler</Label><Input value={newHof.bowler} onChange={(e) => setNewHof((current) => ({ ...current, bowler: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Induction Year</Label><Input value={newHof.year} onChange={(e) => setNewHof((current) => ({ ...current, year: e.target.value }))} /></div>
+            <div className="flex items-end"><Button className="w-full rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addHofInductee}>Add HOF</Button></div>
+          </div>
+
+          <div className="mt-4 overflow-auto rounded-2xl border border-blue-200 bg-white">
+            <table className="w-full min-w-[520px] text-xs md:text-sm">
+              <thead className="bg-blue-800 text-white">
+                <tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Induction Year</th><th className="p-2 text-right md:p-3">Actions</th></tr>
+              </thead>
+              <tbody>
+                {hofTitles.map((title) => (
+                  <tr key={title.id} className="border-t">
+                    <td className="p-2 font-semibold md:p-3">{title.bowler}</td>
+                    <td className="p-2 text-blue-900 md:p-3">{realNameFor(title.bowler) || "—"}</td>
+                    <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
+                    <td className="p-2 text-right md:p-3">
+                      <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>
+                    </td>
+                  </tr>
+                ))}
+                {hofTitles.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>No Hall of Fame inductees entered yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          </>
+          )}
+        </CardContent>
+      </AppCard>
+
+      <AppCard>
+        <CardContent className="p-3 md:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-blue-900">Title Leaderboard</h2>
+            {sectionToggleButton("leaderboard")}
+          </div>
+          {!isSectionCollapsed("leaderboard") && (
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[560px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white"><tr><th
@@ -8376,6 +8644,7 @@ else current.nonFkmTitles += 1;
                                             className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
                                           >
                                             {isExpanded ? "-" : "+"} {row.bowler}
+                                            {hofNameMap.has(String(row.bowler || "").trim().toLowerCase()) ? " (HOF)" : ""}
                                           </button>
                                         </td>
                                         <td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td>
@@ -8390,7 +8659,7 @@ else current.nonFkmTitles += 1;
                                           <td className="p-3" colSpan={7}>
                                             <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                                               <table className="w-full min-w-[640px] text-xs md:text-sm">
-                                                <thead className="bg-blue-50 text-blue-900">
+                                                <thead className="bg-blue-800 text-white">
                                                   <tr>
                                                     <th className="p-2 text-left md:p-3">Tournament</th>
                                                     <th className="p-2 text-left md:p-3">Date</th>
@@ -8420,18 +8689,30 @@ else current.nonFkmTitles += 1;
                                 })}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No titles entered yet.</td></tr>}</tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </AppCard>
 
       <AppCard>
         <CardContent className="p-3 md:p-5">
-          <h2 className="mb-4 text-xl font-semibold text-blue-900">FKM Title Details</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold text-blue-900">FKM Title Details</h2>
+            {sectionToggleButton("details")}
+          </div>
+          {!isSectionCollapsed("details") && (
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[760px] text-xs md:text-sm">
-              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-left md:p-3">Source</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
-              <tbody>{fkmTitles.map((title) => <tr key={title.id} className="border-t"><td className="p-2 font-semibold md:p-3">{title.bowler}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.source}</td><td className="p-2 text-right md:p-3">{title.source === "Manual History" ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>)}{allTitles.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No FKM title history yet.</td></tr>}</tbody>
+              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-left md:p-3">Category</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
+              <tbody>{titleDetailRows.map((title) => {
+                const isManualTitle = manualTitleIds.has(String(title.id));
+
+                return (
+                  <tr key={title.id} className="border-t"><td className="p-2 font-semibold md:p-3">{title.bowler}</td><td className="p-2 text-blue-900 md:p-3">{realNameFor(title.bowler) || "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{title.hof ? "HOF" : title.major ? "Major" : title.eligible ? "FKM" : "Non-FKM"}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>
+                );
+              })}{titleDetailRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No title history yet.</td></tr>}</tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </AppCard>
     </div>
@@ -9858,6 +10139,7 @@ export default function BowlingPayoutApp() {
   const [hasLoadedSavedData, setHasLoadedSavedData] = useState(false);
   const [tournamentHistory, setTournamentHistory] = useState([]);
   const [manualTitles, setManualTitles] = useState([]);
+  const [bowlerIdentities, setBowlerIdentities] = useState([]);
   const [savedTournamentDrafts, setSavedTournamentDrafts] = useState([]);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [savedScoreGames, setSavedScoreGames] = useState({});
@@ -9903,6 +10185,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       if (savedHistory) setTournamentHistory(JSON.parse(savedHistory));
       const savedTitles = window.localStorage.getItem(TITLE_STORAGE_KEY);
       if (savedTitles) setManualTitles(JSON.parse(savedTitles));
+      const savedIdentities = window.localStorage.getItem(BOWLER_IDENTITY_STORAGE_KEY);
+      if (savedIdentities) setBowlerIdentities(JSON.parse(savedIdentities));
       const savedDrafts = window.localStorage.getItem(DRAFT_STORAGE_KEY);
       if (savedDrafts) setSavedTournamentDrafts(JSON.parse(savedDrafts));
     } catch (error) {
@@ -9917,11 +10201,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     try {
       window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(tournamentHistory));
       window.localStorage.setItem(TITLE_STORAGE_KEY, JSON.stringify(manualTitles));
+      window.localStorage.setItem(BOWLER_IDENTITY_STORAGE_KEY, JSON.stringify(bowlerIdentities));
       window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(savedTournamentDrafts));
     } catch (error) {
       console.warn("Could not save tournament history", error);
     }
-  }, [tournamentHistory, manualTitles, savedTournamentDrafts, hasLoadedHistory]);
+  }, [tournamentHistory, manualTitles, bowlerIdentities, savedTournamentDrafts, hasLoadedHistory]);
 
   useEffect(() => {
     try {
@@ -10392,7 +10677,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 )}
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} /></AppErrorBoundary>}
-        {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} /></AppErrorBoundary>}
+        {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
 <TournamentInfoTab
   tournamentInfo={tournamentInfo}
@@ -10426,9 +10711,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 )}
 {activeTab === "publicstats" && (
   <AppErrorBoundary key="publicstats">
-    <PublicStats
+<PublicStats
   tournamentHistory={tournamentHistory}
   manualTitles={manualTitles}
+  bowlerIdentities={bowlerIdentities}
 />
   </AppErrorBoundary>
 )}
