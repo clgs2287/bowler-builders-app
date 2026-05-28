@@ -1048,6 +1048,7 @@ function getBracketSpacing(roundIndex) {
 function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
   const manualQualifiers = bracketState.manualQualifiers || "";
   const scores = bracketState.scores || {};
+  const matchScoring = bracketState.matchScoring || "total";
   const suggested = Math.ceil(entries / 4);
   const qualifiers = Number(manualQualifiers || suggested);
   const size = getBracketSize(qualifiers);
@@ -1090,13 +1091,57 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState,
       roundMatches.push({ id, left, right });
     }
 
-    const winners = roundMatches.map((match) => winnerFromMatch(match.left, match.right, scores[`${match.id}-l`] ?? "", scores[`${match.id}-r`] ?? ""));
+    const winners = roundMatches.map((match) =>
+      matchScoring === "bestOf3"
+        ? winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id)
+        : winnerFromMatch(match.left, match.right, scores[`${match.id}-l`] ?? "", scores[`${match.id}-r`] ?? "")
+    );
     const spacing = getBracketSpacing(roundIndex);
     bracketRounds.push({ title: getRoundTitle(size, roundIndex, totalRounds), matches: roundMatches, ...spacing });
     previousWinners = winners;
   }
 
   return { manualQualifiers, scores, suggested, qualifiers, size, seeded, bracketRounds, champion: previousWinners?.[0] || null };
+}
+
+function winnerFromBestOfThreeMatch(left, right, scores = {}, matchId, advanceByes = true) {
+  const leftIsBye = !left || left.name === "BYE";
+  const rightIsBye = !right || right.name === "BYE";
+
+  if (leftIsBye && rightIsBye) return null;
+  if (!advanceByes && (leftIsBye || rightIsBye)) return null;
+  if (!leftIsBye && rightIsBye) return left;
+  if (leftIsBye && !rightIsBye) return right;
+
+  let leftWins = 0;
+  let rightWins = 0;
+
+  [1, 2, 3].forEach((gameNumber) => {
+    const leftScore = Number(scores[`${matchId}-g${gameNumber}-l`] || 0);
+    const rightScore = Number(scores[`${matchId}-g${gameNumber}-r`] || 0);
+
+    if (leftScore <= 0 || rightScore <= 0 || leftScore === rightScore) return;
+    if (leftScore > rightScore) leftWins += 1;
+    else rightWins += 1;
+  });
+
+  if (leftWins >= 2) return left;
+  if (rightWins >= 2) return right;
+  return null;
+}
+
+function getBestOfThreeRecord(scores = {}, matchId) {
+  return [1, 2, 3].reduce(
+    (record, gameNumber) => {
+      const leftScore = Number(scores[`${matchId}-g${gameNumber}-l`] || 0);
+      const rightScore = Number(scores[`${matchId}-g${gameNumber}-r`] || 0);
+
+      if (leftScore <= 0 || rightScore <= 0 || leftScore === rightScore) return record;
+      if (leftScore > rightScore) return { ...record, left: record.left + 1 };
+      return { ...record, right: record.right + 1 };
+    },
+    { left: 0, right: 0 }
+  );
 }
 
 function winnerFromMatch(left, right, leftScore, rightScore, advanceByes = true) {
@@ -5113,6 +5158,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
 function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
   const { scores, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
+  const matchScoring = bracketState.matchScoring || "total";
 
   if (size === "Over 64") {
     return <AppCard><CardContent className="p-3 md:p-5"><p className="text-blue-700">Public bracket view currently supports up to 64 qualifiers.</p></CardContent></AppCard>;
@@ -5125,7 +5171,10 @@ const PublicBracketMatch = ({ match }) => {
   const rightScore = scores[rightKey] ?? "";
   const leftScratchScore = scratchScores[leftKey] ?? "";
   const rightScratchScore = scratchScores[rightKey] ?? "";
-  const winner = winnerFromMatch(match.left, match.right, leftScore, rightScore);
+  const winner = matchScoring === "bestOf3"
+    ? winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id)
+    : winnerFromMatch(match.left, match.right, leftScore, rightScore);
+  const seriesRecord = getBestOfThreeRecord(scores, match.id);
 
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
   const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
@@ -5167,6 +5216,58 @@ const PublicBracketMatch = ({ match }) => {
     );
   };
 
+  if (matchScoring === "bestOf3") {
+    return (
+      <div
+        className={
+          winner?.name && winner.name !== "TIE"
+            ? "relative rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+            : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+        }
+      >
+        <div className="mb-2 grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
+          <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+          <span className="min-w-[32px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{seriesRecord.left}</span>
+          <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+          <span className="min-w-[32px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{seriesRecord.right}</span>
+        </div>
+        <div className="space-y-1 border-t border-blue-100 pt-2 text-[11px]">
+          {[1, 2, 3].map((gameNumber) => {
+            const gameLeftKey = `${match.id}-g${gameNumber}-l`;
+            const gameRightKey = `${match.id}-g${gameNumber}-r`;
+            const gameLeftScore = scores[gameLeftKey] ?? "";
+            const gameRightScore = scores[gameRightKey] ?? "";
+            const gameLeftScratch = scratchScores[gameLeftKey] ?? "";
+            const gameRightScratch = scratchScores[gameRightKey] ?? "";
+            const leftNumeric = Number(gameLeftScore || 0);
+            const rightNumeric = Number(gameRightScore || 0);
+            const leftGameWon = leftNumeric > 0 && rightNumeric > 0 && leftNumeric > rightNumeric;
+            const rightGameWon = leftNumeric > 0 && rightNumeric > 0 && rightNumeric > leftNumeric;
+
+            return (
+              <div key={`public-${match.id}-g${gameNumber}`} className="grid grid-cols-[24px_1fr_auto] items-center gap-1">
+                <span className="font-black text-blue-800">G{gameNumber}</span>
+                <span className={leftGameWon ? "rounded-lg bg-green-100 px-1.5 py-1 font-bold text-green-900" : "px-1.5 py-1"}>
+                  {match.left?.name || "TBD"}
+                </span>
+                <span className="min-w-[48px] rounded-lg bg-blue-50 px-1.5 py-1 text-center font-bold text-blue-950">
+                  {renderScore(match.left, gameLeftScore, gameLeftScratch)}
+                </span>
+                <span />
+                <span className={rightGameWon ? "rounded-lg bg-green-100 px-1.5 py-1 font-bold text-green-900" : "px-1.5 py-1"}>
+                  {match.right?.name || "TBD"}
+                </span>
+                <span className="min-w-[48px] rounded-lg bg-blue-50 px-1.5 py-1 text-center font-bold text-blue-950">
+                  {renderScore(match.right, gameRightScore, gameRightScratch)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={
@@ -5191,8 +5292,8 @@ const PublicBracketMatch = ({ match }) => {
 };
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0 }) => {
-    const matchHeight = 84;
-    const firstRoundGap = 42;
+    const matchHeight = matchScoring === "bestOf3" ? 230 : 84;
+    const firstRoundGap = matchScoring === "bestOf3" ? 48 : 42;
     const step = matchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
@@ -7003,10 +7104,13 @@ function TeamFinalsScoreInput({
   );
 }
 
-function BracketMatchEditor({ match, scores, scratchScores, memberScores, onScoreChange, onMemberScoreChange, useHandicapScores, finalsScoreMode = "baker" }) {
+function BracketMatchEditor({ match, scores, scratchScores, memberScores, onScoreChange, onMemberScoreChange, useHandicapScores, finalsScoreMode = "baker", matchScoring = "total" }) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
-  const winner = winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
+  const winner = matchScoring === "bestOf3"
+    ? winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id)
+    : winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
+  const seriesRecord = getBestOfThreeRecord(scores, match.id);
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
   const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
 const renderPlayerName = (player) => {
@@ -7022,6 +7126,67 @@ const renderPlayerName = (player) => {
 };
 
   const playerClass = (won) => won ? "truncate rounded-xl bg-green-100 px-2 py-1 font-bold text-green-900 ring-1 ring-green-300" : "truncate px-2 py-1";
+
+  if (matchScoring === "bestOf3") {
+    return (
+      <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
+        <div className="mb-2 grid grid-cols-[1fr_auto] items-center gap-2 text-xs">
+          <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+          <span className="rounded-xl bg-white px-2 py-1 text-center font-black text-blue-950 ring-1 ring-blue-100">{seriesRecord.left}</span>
+          <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+          <span className="rounded-xl bg-white px-2 py-1 text-center font-black text-blue-950 ring-1 ring-blue-100">{seriesRecord.right}</span>
+        </div>
+        <div className="space-y-2 border-t border-blue-100 pt-2">
+          {[1, 2, 3].map((gameNumber) => {
+            const gameLeftKey = `${match.id}-g${gameNumber}-l`;
+            const gameRightKey = `${match.id}-g${gameNumber}-r`;
+            const leftGameScore = Number(scores[gameLeftKey] || 0);
+            const rightGameScore = Number(scores[gameRightKey] || 0);
+            const leftGameWon = leftGameScore > 0 && rightGameScore > 0 && leftGameScore > rightGameScore;
+            const rightGameWon = leftGameScore > 0 && rightGameScore > 0 && rightGameScore > leftGameScore;
+
+            return (
+              <div key={`${match.id}-g${gameNumber}`} className="grid grid-cols-[24px_1fr_auto] items-center gap-1 text-[11px]">
+                <span className="font-black text-blue-800">G{gameNumber}</span>
+                <span className={leftGameWon ? "rounded-lg bg-green-100 px-1.5 py-1 font-bold text-green-900" : "px-1.5 py-1"}>
+                  {match.left?.name || "TBD"}
+                </span>
+                <TeamFinalsScoreInput
+                  scoreKey={gameLeftKey}
+                  player={match.left}
+                  value={scores[gameLeftKey]}
+                  scratchValue={scratchScores?.[gameLeftKey]}
+                  onScoreChange={onScoreChange}
+                  useHandicapScores={useHandicapScores}
+                  finalsScoreMode={finalsScoreMode}
+                  memberScores={memberScores}
+                  onMemberScoreChange={onMemberScoreChange}
+                />
+                <span />
+                <span className={rightGameWon ? "rounded-lg bg-green-100 px-1.5 py-1 font-bold text-green-900" : "px-1.5 py-1"}>
+                  {match.right?.name || "TBD"}
+                </span>
+                <TeamFinalsScoreInput
+                  scoreKey={gameRightKey}
+                  player={match.right}
+                  value={scores[gameRightKey]}
+                  scratchValue={scratchScores?.[gameRightKey]}
+                  onScoreChange={onScoreChange}
+                  useHandicapScores={useHandicapScores}
+                  finalsScoreMode={finalsScoreMode}
+                  memberScores={memberScores}
+                  onMemberScoreChange={onMemberScoreChange}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs font-semibold text-blue-800">
+          Winner: <span className="font-black text-blue-950">{winner?.name || "TBD"}</span>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
@@ -7065,11 +7230,12 @@ function BracketRoundColumn({
   onMemberScoreChange,
   useHandicapScores,
   finalsScoreMode = "baker",
+  matchScoring = "total",
   roundIndex = 0,
   setSavedFinalsRounds,
 }) {
-  const matchHeight = 96;
-  const firstRoundGap = 24;
+  const matchHeight = matchScoring === "bestOf3" ? 270 : 96;
+  const firstRoundGap = matchScoring === "bestOf3" ? 36 : 24;
 
   const getTop = (matchIndex) => {
     if (roundIndex === 0) {
@@ -7114,6 +7280,7 @@ function BracketRoundColumn({
   onMemberScoreChange={onMemberScoreChange}
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
+  matchScoring={matchScoring}
 />
           </div>
         ))}
@@ -7127,6 +7294,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const finalsScoreMode = getFinalsScoreMode(tournamentInfo);
   const finalsMaxScore = getFinalsScratchMax(tournamentStyle, finalsScoreMode);
+  const matchScoring = bracketState.matchScoring || "total";
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
   const memberScores = bracketState.memberScores || {};
@@ -7164,13 +7332,42 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
       [scoreKey]: nextMemberScores,
     },
   }));
+  const clearBracketScores = () => {
+    const confirmed = window.confirm("Clear all bracket finals scores? Qualifiers and registration will stay as-is.");
+    if (!confirmed) return;
+
+    setBracketState((current) => ({
+      ...current,
+      scores: {},
+      scratchScores: {},
+      memberScores: {},
+    }));
+    setSavedFinalsRounds((current) => {
+      const next = { ...(current || {}) };
+      Object.keys(next).forEach((key) => {
+        if (key.startsWith("bracketRound")) delete next[key];
+      });
+      return next;
+    });
+  };
 
   return (
     <AppCard>
       <CardContent className="p-3 md:p-5">
-        <div className="mb-4 grid gap-4 md:grid-cols-5">
+        <div className="mb-4 grid gap-4 md:grid-cols-6">
           <StatCard label="Suggested Qualifiers" value={suggested} />
           <div className="space-y-2"><Label>Manual Override Qualifiers</Label><SmallNumberInput value={manualQualifiers} onChange={(value) => setBracketState((current) => ({ ...current, manualQualifiers: value || "" }))} width="w-20" /></div>
+          <div className="space-y-2">
+            <Label>Match Scoring</Label>
+            <select
+              value={matchScoring}
+              onChange={(event) => setBracketState((current) => ({ ...current, matchScoring: event.target.value }))}
+              className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none"
+            >
+              <option value="total">Total Pins</option>
+              <option value="bestOf3">Best of 3 Games</option>
+            </select>
+          </div>
           <StatCard label="Bracket Size" value={size} />
           <StatCard label="Byes Needed" value={typeof size === "number" ? Math.max(0, size - qualifiers) : "—"} />
           <StatCard label="Scoring Mode" value={useHandicapScores ? "Handicap" : "Scratch"} />
@@ -7182,7 +7379,12 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
             <h2 className="text-xl font-semibold text-blue-900">Flexible Bracket Builder</h2>
             <p className="text-sm text-blue-700">Supports 4, 8, 16, 32, and 64-player brackets. Large brackets scroll horizontally.</p>
           </div>
-          <div className="rounded-2xl bg-white px-4 py-2 text-sm shadow-sm border border-blue-100">Winner: <span className="font-bold">{champion?.name || "TBD"}</span></div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearBracketScores}>
+              Clear Bracket Scores
+            </Button>
+            <div className="rounded-2xl bg-white px-4 py-2 text-sm shadow-sm border border-blue-100">Winner: <span className="font-bold">{champion?.name || "TBD"}</span></div>
+          </div>
         </div>
 
         {size === "Over 64" ? (
@@ -7204,6 +7406,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
           setSavedFinalsRounds={setSavedFinalsRounds}
           useHandicapScores={useHandicapScores}
           finalsScoreMode={finalsScoreMode}
+          matchScoring={matchScoring}
         />
       ))}
     </div>
@@ -7349,6 +7552,27 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   const updateGame1Members = (seed, nextMemberScores, value) => setEliminatorState((current) => ({ ...current, game1Scores: { ...(current.game1Scores || {}), [seed]: value }, game1MemberScores: { ...(current.game1MemberScores || {}), [seed]: nextMemberScores } }));
   const updateGame2Members = (seed, nextMemberScores, value) => setEliminatorState((current) => ({ ...current, game2Scores: { ...(current.game2Scores || {}), [seed]: value }, game2MemberScores: { ...(current.game2MemberScores || {}), [seed]: nextMemberScores } }));
   const updateStepMembers = (key, nextMemberScores, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value }, stepMemberScores: { ...(current.stepMemberScores || {}), [key]: nextMemberScores } }));
+  const clearEliminatorScores = () => {
+    const confirmed = window.confirm("Clear all eliminator finals scores? Registration and qualifying scores will stay as-is.");
+    if (!confirmed) return;
+
+    setEliminatorState((current) => ({
+      ...current,
+      game1Scores: {},
+      game2Scores: {},
+      stepScores: {},
+      game1MemberScores: {},
+      game2MemberScores: {},
+      stepMemberScores: {},
+    }));
+    setSavedFinalsRounds((current) => {
+      const next = { ...(current || {}) };
+      delete next.eliminatorGame1;
+      delete next.eliminatorGame2;
+      delete next.stepladderFinal;
+      return next;
+    });
+  };
   const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
   const stepWinner1 = winnerFromMatch(
     stepMatch1.left,
@@ -7373,7 +7597,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
     finalsGameScore(championship.right, stepScores["step-3-r"], useHandicapScores),
     false
   );
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Eliminator + Stepladder</h2><div className="grid gap-3 md:grid-cols-6"><StatCard label={`Cut ${entryLabel}`} value={cutCount} /><StatCard label="Game 1 Advancers" value={directStepladder ? "Skipped" : game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={directStepladder ? "Skipped" : 4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} />{getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}</div><p className="mt-4 text-sm text-blue-700">{directStepladder ? "The finals cut is already four entries, so this event starts directly with the stepladder." : "Eliminator games use qualifying average as carry-forward. In handicap events, finals scores add the bowler or team handicap."}</p></CardContent></AppCard>{!directStepladder && <><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><h2 className="text-center text-xl font-semibold text-blue-900 md:text-left">Eliminator + Stepladder</h2><Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearEliminatorScores}>Clear Eliminator Scores</Button></div><div className="grid gap-3 md:grid-cols-6"><StatCard label={`Cut ${entryLabel}`} value={cutCount} /><StatCard label="Game 1 Advancers" value={directStepladder ? "Skipped" : game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={directStepladder ? "Skipped" : 4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} />{getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}</div><p className="mt-4 text-sm text-blue-700">{directStepladder ? "The finals cut is already four entries, so this event starts directly with the stepladder." : "Eliminator games use qualifying average as carry-forward. In handicap events, finals scores add the bowler or team handicap."}</p></CardContent></AppCard>{!directStepladder && <><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
 
 <p className="mb-4 text-sm text-blue-700">
   Average + Game 1. Top half advances.
