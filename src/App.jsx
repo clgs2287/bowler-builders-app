@@ -37,6 +37,9 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 
 // Logo temporarily disabled for stability in this environment
 
+const HISTORICAL_TITLE_SERIES_OPTIONS = ["M.I.S.T.", "KWT", "F.B.E.T.", "FDDS", "Handicap/Non-FKM"];
+const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
+
 const numberInputStyles = String.raw`
   input.no-number-arrows[type="number"]::-webkit-outer-spin-button,
   input.no-number-arrows[type="number"]::-webkit-inner-spin-button {
@@ -407,6 +410,53 @@ function formatPhoneNumber(value) {
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 3)})${digits.slice(3)}`;
   return `(${digits.slice(0, 3)})${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function reservationTournamentKey({ name = "", date = "", center = "" } = {}) {
+  return [name, date, center]
+    .map((part) => String(part || "").trim().toLowerCase())
+    .join("|");
+}
+
+function reservationKeyFromState(reservationState = {}) {
+  return reservationTournamentKey({
+    name: reservationState.tournamentName,
+    date: reservationState.tournamentDate,
+    center: reservationState.tournamentCenter,
+  });
+}
+
+function reservationKeyFromScheduleItem(item = {}) {
+  return reservationTournamentKey({
+    name: item.name,
+    date: item.startDate,
+    center: item.center,
+  });
+}
+
+function reservationBucketFromState(reservationState = {}) {
+  return {
+    tournamentName: reservationState.tournamentName || "",
+    tournamentDate: reservationState.tournamentDate || "",
+    tournamentStartTime: reservationState.tournamentStartTime || "",
+    tournamentCenter: reservationState.tournamentCenter || "",
+    tournamentAddress: reservationState.tournamentAddress || "",
+    reservationLimit: Number(reservationState.reservationLimit || 48),
+    reservations: reservationState.reservations || [],
+  };
+}
+
+function isPlaceholderValue(value) {
+  const text = String(value || "").trim().toLowerCase();
+  return !text || ["na", "n/a", "none", "unknown", "tbd", "-"].includes(text);
+}
+
+function getReservationDisplayName(reservation = {}) {
+  const nickname = String(reservation.nickname || "").trim();
+  const name = String(reservation.name || "").trim();
+  if (!isPlaceholderValue(nickname)) return nickname;
+  if (!isPlaceholderValue(name)) return name;
+  return nickname || name || "";
 }
 
 function getTournamentStartDateTime(date, startTime) {
@@ -1048,7 +1098,7 @@ function getBracketSpacing(roundIndex) {
 function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
   const manualQualifiers = bracketState.manualQualifiers || "";
   const scores = bracketState.scores || {};
-  const matchScoring = bracketState.matchScoring || "total";
+  const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
   const suggested = Math.ceil(entries / 4);
   const qualifiers = Number(manualQualifiers || suggested);
   const size = getBracketSize(qualifiers);
@@ -1091,11 +1141,13 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState,
       roundMatches.push({ id, left, right });
     }
 
-    const winners = roundMatches.map((match) =>
-      matchScoring === "bestOf3"
-        ? winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id)
-        : winnerFromMatch(match.left, match.right, scores[`${match.id}-l`] ?? "", scores[`${match.id}-r`] ?? "")
-    );
+    const winners = roundMatches.map((match) => {
+      if (matchScoring === "bestOf3") return winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id);
+      if (matchScoring === "avgAdvantage" && roundIndex === 0) {
+        return winnerFromAverageAdvantageMatch(match.left, match.right, scores[`${match.id}-l`] ?? "", scores[`${match.id}-r`] ?? "");
+      }
+      return winnerFromMatch(match.left, match.right, scores[`${match.id}-l`] ?? "", scores[`${match.id}-r`] ?? "");
+    });
     const spacing = getBracketSpacing(roundIndex);
     bracketRounds.push({ title: getRoundTitle(size, roundIndex, totalRounds), matches: roundMatches, ...spacing });
     previousWinners = winners;
@@ -1144,6 +1196,51 @@ function getBestOfThreeRecord(scores = {}, matchId) {
   );
 }
 
+function qualifyingScratchAverage(player) {
+  if (!player || player.name === "BYE") return 0;
+  const games = Array.isArray(player.games) ? player.games.map((game) => Number(game || 0)).filter((game) => game > 0) : [];
+  if (games.length) return games.reduce((sum, game) => sum + game, 0) / games.length;
+  const gamesCount = completedGamesCount(player);
+  if (!gamesCount) return 0;
+  return Number(player.scratch || scratchTotal(player) || 0) / gamesCount;
+}
+
+function qualifyingScratchAverageDisplay(player) {
+  return String(Math.round(qualifyingScratchAverage(player)));
+}
+
+function roundOneAverageBonus(player, opponent) {
+  const playerAverage = Math.round(qualifyingScratchAverage(player));
+  const opponentAverage = Math.round(qualifyingScratchAverage(opponent));
+  if (playerAverage <= opponentAverage) return 0;
+  return Math.max(0, playerAverage - opponentAverage);
+}
+
+function averageAdvantageTotal(player, opponent, scratchScore) {
+  const scratch = Number(scratchScore || 0);
+  if (scratch <= 0) return 0;
+  return scratch + roundOneAverageBonus(player, opponent);
+}
+
+function winnerFromAverageAdvantageMatch(left, right, leftScore, rightScore, advanceByes = true) {
+  const leftIsBye = !left || left.name === "BYE";
+  const rightIsBye = !right || right.name === "BYE";
+
+  if (leftIsBye && rightIsBye) return null;
+  if (!advanceByes && (leftIsBye || rightIsBye)) return null;
+  if (!leftIsBye && rightIsBye) return left;
+  if (leftIsBye && !rightIsBye) return right;
+
+  const leftTotal = averageAdvantageTotal(left, right, leftScore);
+  const rightTotal = averageAdvantageTotal(right, left, rightScore);
+
+  if (leftTotal <= 0 && rightTotal <= 0) return null;
+  if (leftTotal <= 0 || rightTotal <= 0) return null;
+  if (leftTotal > rightTotal) return left;
+  if (rightTotal > leftTotal) return right;
+  return null;
+}
+
 function winnerFromMatch(left, right, leftScore, rightScore, advanceByes = true) {
   const leftIsBye = !left || left.name === "BYE";
   const rightIsBye = !right || right.name === "BYE";
@@ -1157,6 +1254,7 @@ function winnerFromMatch(left, right, leftScore, rightScore, advanceByes = true)
   const r = Number(rightScore || 0);
 
   if (l <= 0 && r <= 0) return null;
+  if (l <= 0 || r <= 0) return null;
   if (l > r) return left;
   if (r > l) return right;
 
@@ -1517,6 +1615,7 @@ const infoRows = [
         ? "Bracket"
         : "Eliminator",
   ],
+  ["Series", tournamentInfo.series || DEFAULT_TOURNAMENT_SERIES],
   ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
   ["Major", tournamentInfo.major ? "Yes" : "No"],
 ];
@@ -2100,7 +2199,7 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
     className="min-h-[120px] w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
   />
 </div>
-                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+<div className="grid grid-cols-[120px_1fr] items-center gap-3">
   <Label className="text-left text-sm font-bold text-blue-900">
     Finals Format
   </Label>
@@ -2113,6 +2212,23 @@ const dashboardFinalsGames = payoutState.finalsGamesOverrideEnabled
     <option value="eliminator">Eliminator</option>
     <option value="bracket">Bracket</option>
     <option value="sweeper">Sweeper</option>
+  </select>
+</div>
+                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+  <Label className="text-left text-sm font-bold text-blue-900">
+    Series
+  </Label>
+
+  <select
+    value={tournamentInfo.series || DEFAULT_TOURNAMENT_SERIES}
+    onChange={(e) => update("series", e.target.value)}
+    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+  >
+    {HISTORICAL_TITLE_SERIES_OPTIONS.map((series) => (
+      <option key={series} value={series}>
+        {series}
+      </option>
+    ))}
   </select>
 </div>
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
@@ -2488,9 +2604,21 @@ function getTitleCount(title) {
   return Math.max(1, Number(title?.titleCount || 1));
 }
 
+function getHistoricalTitleSeries(title) {
+  const raw = String(title?.source || title?.tournament || "M.I.S.T.").trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes("mist") || lower.includes("m.i.s.t")) return "M.I.S.T.";
+  if (lower.includes("kwt")) return "KWT";
+  if (lower.includes("fbet") || lower.includes("f.b.e.t")) return "F.B.E.T.";
+  if (lower.includes("fdds")) return "FDDS";
+  if (lower.includes("handicap") || lower.includes("non-fkm")) return "Handicap/Non-FKM";
+  if (["fkm title", "major title", "manual history", "historical title total", "historical title"].includes(lower)) return DEFAULT_TOURNAMENT_SERIES;
+  return raw || "M.I.S.T.";
+}
+
 function getTitleCategoryLabel(title) {
   if (title?.hof) return "HOF";
-  if (title?.historicalTotal) return "MIST";
+  if (title?.historicalTotal) return getHistoricalTitleSeries(title);
   if (title?.major) return "Major";
   if (title?.eligible) return "FKM";
   return "Non-FKM";
@@ -4191,19 +4319,34 @@ function ReservationsTab({
   const selectedScheduledTournament = (scheduleItems || []).find((item) => item.name === reservationState.tournamentName);
   const selectScheduledTournament = (name) => {
     const item = (scheduleItems || []).find((scheduleItem) => scheduleItem.name === name);
-    setReservationState((current) => ({
-      ...current,
-      tournamentName: name,
-      tournamentDate: item?.startDate || "",
-      tournamentStartTime: item?.startTime || "",
-      tournamentCenter: item?.center || "",
-      tournamentAddress: item?.address || "",
-    }));
+    const nextKey = reservationKeyFromScheduleItem(item || { name });
+    setReservationState((current) => {
+      const currentKey = reservationKeyFromState(current);
+      const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+
+      if (currentKey) {
+        reservationsByTournament[currentKey] = reservationBucketFromState(current);
+      }
+
+      const savedBucket = reservationsByTournament[nextKey] || {};
+
+      return {
+        ...current,
+        reservationsByTournament,
+        tournamentName: name,
+        tournamentDate: item?.startDate || savedBucket.tournamentDate || "",
+        tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
+        tournamentCenter: item?.center || savedBucket.tournamentCenter || "",
+        tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
+        reservationLimit: Number(savedBucket.reservationLimit || current.reservationLimit || 48),
+        reservations: savedBucket.reservations || [],
+      };
+    });
   };
 
   const addReservationToRoster = (reservation) => {
     const result = onAddReservationToRegistration(reservation);
-    const name = result?.name || reservation.nickname || reservation.name || "Reservation";
+    const name = result?.name || getReservationDisplayName(reservation) || "Reservation";
     setReservationState((current) => ({
       ...current,
       reservations: (current.reservations || []).map((item) =>
@@ -4217,6 +4360,34 @@ function ReservationsTab({
       ),
     }));
     setRosterNotice(result?.alreadyExists ? `${name} is already on the registration roster. The existing row was updated.` : `${name} was sent to Registration.`);
+  };
+
+  const resetReservationRosterStatus = (reservation) => {
+    setReservationState((current) => ({
+      ...current,
+      reservations: (current.reservations || []).map((item) =>
+        item.id === reservation.id
+          ? {
+              ...item,
+              rosterAdded: false,
+              rosterAddedAt: "",
+            }
+          : item
+      ),
+    }));
+    setRosterNotice(`${getReservationDisplayName(reservation) || "Reservation"} can be added to Registration again.`);
+  };
+
+  const clearAllReservations = () => {
+    const confirmed = window.confirm("Clear all reservations for every saved tournament? This cannot be undone.");
+    if (!confirmed) return;
+
+    setReservationState((current) => ({
+      ...current,
+      reservations: [],
+      reservationsByTournament: {},
+    }));
+    setRosterNotice("All reservations were cleared.");
   };
 
   return (
@@ -4233,6 +4404,15 @@ function ReservationsTab({
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button
+            variant="outline"
+            className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+            onClick={clearAllReservations}
+          >
+            Clear All Reservations
+          </Button>
+
           <div className="flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2">
             <Label>Entries Open</Label>
 
@@ -4245,6 +4425,7 @@ function ReservationsTab({
                 }))
               }
             />
+          </div>
           </div>
         </div>
 
@@ -4299,11 +4480,20 @@ function ReservationsTab({
       onChange={(e) =>
         setReservationState((current) => ({
           ...current,
+          reservationsByTournament: {
+            ...(current.reservationsByTournament || {}),
+            ...(reservationKeyFromState(current)
+              ? {
+                  [reservationKeyFromState(current)]: reservationBucketFromState(current),
+                }
+              : {}),
+          },
           tournamentName: e.target.value,
           tournamentDate: "",
           tournamentStartTime: "",
           tournamentCenter: "",
           tournamentAddress: "",
+          reservations: [],
         }))
       }
       placeholder="Tournament Name"
@@ -4427,6 +4617,15 @@ function ReservationsTab({
   >
     {rosterAdded ? "Added to Roster" : "Add to Roster"}
   </Button>
+  {rosterAdded && (
+    <Button
+      variant="outline"
+      className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+      onClick={() => resetReservationRosterStatus(reservation)}
+    >
+      Undo
+    </Button>
+  )}
   <Button
     variant="outline"
     className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
@@ -4591,6 +4790,7 @@ const registrationStatus =
       tournament:
         reservationState.tournamentName ||
         tournamentInfo.name,
+      tournamentKey: reservationKeyFromState(reservationState),
       name: form.name,
       nickname: form.nickname,
       phone: formatPhoneNumber(form.phone),
@@ -4761,7 +4961,7 @@ const byLane = lanes.reduce(
     <div>{header}</div>
 
     <div className="mt-1 text-[10px] font-bold text-blue-700 print:text-black">
-{lanePairForGame(
+Lane {lanePairForGame(
   lane,
   gi,
   tournamentInfo?.lanesUsed,
@@ -5158,22 +5358,25 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
 function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
   const { scores, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
-  const matchScoring = bracketState.matchScoring || "total";
+  const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
 
   if (size === "Over 64") {
     return <AppCard><CardContent className="p-3 md:p-5"><p className="text-blue-700">Public bracket view currently supports up to 64 qualifiers.</p></CardContent></AppCard>;
   }
 
-const PublicBracketMatch = ({ match }) => {
+const PublicBracketMatch = ({ match, roundIndex = 0 }) => {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
   const leftScore = scores[leftKey] ?? "";
   const rightScore = scores[rightKey] ?? "";
   const leftScratchScore = scratchScores[leftKey] ?? "";
   const rightScratchScore = scratchScores[rightKey] ?? "";
+  const usesAverageAdvantage = matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores;
   const winner = matchScoring === "bestOf3"
     ? winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id)
-    : winnerFromMatch(match.left, match.right, leftScore, rightScore);
+    : usesAverageAdvantage
+      ? winnerFromAverageAdvantageMatch(match.left, match.right, leftScore, rightScore)
+      : winnerFromMatch(match.left, match.right, leftScore, rightScore);
   const seriesRecord = getBestOfThreeRecord(scores, match.id);
 
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
@@ -5210,6 +5413,23 @@ const PublicBracketMatch = ({ match }) => {
       <span className="inline-flex flex-col items-center leading-tight">
         <span className="text-[9px] font-semibold text-blue-700">
           ({scratch} + {handicap})
+        </span>
+        <span>{total}</span>
+      </span>
+    );
+  };
+
+  const renderAverageAdvantageScore = (player, opponent, value) => {
+    if (!player || player.name === "BYE") return "—";
+    const scratch = Number(value || 0);
+    if (scratch <= 0) return "—";
+    const bonus = roundOneAverageBonus(player, opponent);
+    const total = scratch + bonus;
+    if (!bonus) return scratch;
+    return (
+      <span className="inline-flex flex-col items-center leading-tight">
+        <span className="text-[9px] font-semibold text-blue-700">
+          {scratch} + {bonus}
         </span>
         <span>{total}</span>
       </span>
@@ -5279,29 +5499,37 @@ const PublicBracketMatch = ({ match }) => {
       <div className="grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
         <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
-          {renderScore(match.left, leftScore, leftScratchScore)}
+          {usesAverageAdvantage ? renderAverageAdvantageScore(match.left, match.right, leftScore) : renderScore(match.left, leftScore, leftScratchScore)}
         </span>
 
         <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
-          {renderScore(match.right, rightScore, rightScratchScore)}
+          {usesAverageAdvantage ? renderAverageAdvantageScore(match.right, match.left, rightScore) : renderScore(match.right, rightScore, rightScratchScore)}
         </span>
       </div>
+      {usesAverageAdvantage && (
+        <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-800">
+          <p>Avg: {match.left?.name || "TBD"} {qualifyingScratchAverageDisplay(match.left)} / {match.right?.name || "TBD"} {qualifyingScratchAverageDisplay(match.right)}</p>
+          <p>R1 bonus: {match.left?.name || "TBD"} +{roundOneAverageBonus(match.left, match.right)} / {match.right?.name || "TBD"} +{roundOneAverageBonus(match.right, match.left)}</p>
+        </div>
+      )}
     </div>
   );
 };
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0 }) => {
-    const matchHeight = matchScoring === "bestOf3" ? 230 : 84;
+    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && !useHandicapScores ? 136 : 84;
+    const matchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 136 : 84;
     const firstRoundGap = matchScoring === "bestOf3" ? 48 : 42;
-    const step = matchHeight + firstRoundGap;
+    const step = firstRoundMatchHeight + firstRoundGap + 18;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
       const feederStart = matchIndex * (2 ** roundIndex);
       const feederEnd = feederStart + (2 ** roundIndex) - 1;
-      return ((feederStart + feederEnd) / 2) * step;
+      const feederCenter = ((feederStart + feederEnd) / 2) * step + firstRoundMatchHeight / 2;
+      return feederCenter - matchHeight / 2;
     };
-    const columnHeight = Math.max(1, matches.length) * (matchHeight + firstRoundGap + 18) * Math.max(1, 2 ** roundIndex);
+    const columnHeight = Math.max(1, matches.length) * step * Math.max(1, 2 ** roundIndex);
     return (
       <div className="min-w-[260px] flex-1">
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
@@ -5311,7 +5539,7 @@ const PublicBracketMatch = ({ match }) => {
 >
           {matches.map((match, matchIndex) => (
             <div key={`public-${match.id}`} className="absolute left-0 right-0" style={{ top: getTop(matchIndex) }}>
-              <PublicBracketMatch match={match} />
+            <PublicBracketMatch match={match} roundIndex={roundIndex} />
             </div>
           ))}
         </div>
@@ -6000,6 +6228,7 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
   const [expandedPublicBowler, setExpandedPublicBowler] = useState(null);
   const [expandedPublicTitleBowler, setExpandedPublicTitleBowler] = useState(null);
   const [publicTitleFilter, setPublicTitleFilter] = useState("all");
+  const [publicTitleSeriesFilter, setPublicTitleSeriesFilter] = useState("All");
   const [publicTitleView, setPublicTitleView] = useState("leaderboard");
   const [publicHofYearFilter, setPublicHofYearFilter] = useState("All");
   const publicIdentityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
@@ -6028,13 +6257,10 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
       tournament: tournament.name,
       date: tournament.date,
       season: tournament.season || "Unassigned",
-      source: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true)
-        ? Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false)
-          ? "Major Title"
-          : "FKM Title"
-        : "Non-FKM Title",
+      source: tournament.series || tournament.activeSnapshot?.tournamentInfo?.series || (Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true) ? DEFAULT_TOURNAMENT_SERIES : "Non-FKM Title"),
       eligible: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true),
       major: Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false),
+      series: tournament.series || tournament.activeSnapshot?.tournamentInfo?.series || DEFAULT_TOURNAMENT_SERIES,
       center: tournament.center || "",
     }))
 );
@@ -6081,8 +6307,12 @@ const publicAllTitles = [
     String(b.date || "").localeCompare(String(a.date || "")) ||
     String(a.bowler || "").localeCompare(String(b.bowler || ""))
 );
+const publicTitleSeriesOptions = Array.from(
+  new Set(publicAllTitles.map((title) => getHistoricalTitleSeries(title)).filter(Boolean))
+).sort((a, b) => String(a).localeCompare(String(b)));
 
 const filteredPublicTitles = publicAllTitles.filter((title) => {
+  if (publicTitleSeriesFilter !== "All" && getHistoricalTitleSeries(title) !== publicTitleSeriesFilter) return false;
   if (publicTitleFilter === "major") return Boolean(title.major);
   if (publicTitleFilter === "fkm") return Boolean(title.eligible) && !title.major;
   if (publicTitleFilter === "fkmMajor") return Boolean(title.eligible);
@@ -6110,7 +6340,7 @@ const publicTitleCounts = filteredPublicTitles.reduce((map, title) => {
   current.titleList.push(title);
 
   if (title.major) current.majors += titleCount;
-  else if (title.eligible) current.fkmTitles += titleCount;
+  if (title.eligible) current.fkmTitles += titleCount;
   else current.nonFkmTitles += titleCount;
 
   if (!current.latest || String(title.date || "") > String(current.latest || "")) {
@@ -6124,6 +6354,8 @@ const publicTitleCounts = filteredPublicTitles.reduce((map, title) => {
 const publicTitleLeaderRows = Object.values(publicTitleCounts)
   .map((row) => ({
     ...row,
+    displayName: publicRealNameFor(row.bowler) || row.bowler,
+    nickname: publicRealNameFor(row.bowler) ? row.bowler : "—",
     titleList: [...row.titleList].sort(
       (a, b) =>
         String(b.date || "").localeCompare(String(a.date || "")) ||
@@ -6134,7 +6366,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
     (a, b) =>
       b.titles - a.titles ||
       b.majors - a.majors ||
-      String(a.bowler || "").localeCompare(String(b.bowler || ""))
+      String(a.displayName || a.bowler || "").localeCompare(String(b.displayName || b.bowler || ""))
   );
 
   const playerStats = filteredPublicHistory
@@ -6242,19 +6474,36 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   ];
 
   const publicTitleFilterSelect = (
-    <div className="flex w-full flex-col gap-1 sm:w-auto">
-      <Label>Filter Titles</Label>
-      <select
-        value={publicTitleFilter}
-        onChange={(event) => setPublicTitleFilter(event.target.value)}
-        className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none sm:w-56"
-      >
-        {publicTitleFilters.map((filter) => (
-          <option key={filter.id} value={filter.id}>
-            {filter.label}
-          </option>
-        ))}
-      </select>
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+      <div className="flex w-full flex-col gap-1 sm:w-56">
+        <Label>Filter Titles</Label>
+        <select
+          value={publicTitleFilter}
+          onChange={(event) => setPublicTitleFilter(event.target.value)}
+          className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none"
+        >
+          {publicTitleFilters.map((filter) => (
+            <option key={filter.id} value={filter.id}>
+              {filter.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex w-full flex-col gap-1 sm:w-44">
+        <Label>Series</Label>
+        <select
+          value={publicTitleSeriesFilter}
+          onChange={(event) => setPublicTitleSeriesFilter(event.target.value)}
+          className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none"
+        >
+          <option value="All">All Series</option>
+          {publicTitleSeriesOptions.map((series) => (
+            <option key={series} value={series}>
+              {series}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 
@@ -6498,7 +6747,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
       <StatCard
         label="FKM Titles"
-        value={filteredPublicTitles.filter((title) => title.eligible && !title.major).reduce((sum, title) => sum + getTitleCount(title), 0)}
+        value={filteredPublicTitles.filter((title) => title.eligible).reduce((sum, title) => sum + getTitleCount(title), 0)}
       />
 
       <StatCard
@@ -6540,7 +6789,11 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-3 text-left">
-              Bowler
+              Name
+            </th>
+
+            <th className="p-3 text-left">
+              Nickname
             </th>
 
             <th className="p-3 text-right">
@@ -6578,9 +6831,13 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                       onClick={() => setExpandedPublicTitleBowler((current) => current === row.bowler ? null : row.bowler)}
                       className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
                     >
-                      {isExpanded ? "-" : "+"} {row.bowler}
+                      {isExpanded ? "-" : "+"} {row.displayName}
                       {publicHofNames.has(String(row.bowler || "").trim().toLowerCase()) ? " (HOF)" : ""}
                     </button>
+                  </td>
+
+                  <td className="p-3 font-semibold text-blue-900">
+                    {row.nickname}
                   </td>
 
                   <td className="p-3 text-right font-black text-yellow-700">
@@ -6606,7 +6863,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
                 {isExpanded && (
                   <tr className="border-t bg-blue-50/70">
-                    <td className="p-3" colSpan={6}>
+                    <td className="p-3" colSpan={7}>
                       <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                         <table className="w-full min-w-[640px] text-xs md:text-sm">
                           <thead className="bg-blue-800 text-white">
@@ -6641,7 +6898,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
           {publicTitleLeaderRows.length === 0 && (
             <tr>
               <td
-                colSpan={6}
+                colSpan={7}
                 className="p-5 text-center text-blue-700"
               >
                 No title history available yet.
@@ -6663,7 +6920,11 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-3 text-left">
-              Bowler
+              Name
+            </th>
+
+            <th className="p-3 text-left">
+              Nickname
             </th>
 
             <th className="p-3 text-left">
@@ -6690,8 +6951,12 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               key={`public-title-detail-${title.id}`}
               className="border-t"
             >
-              <td className="p-3 font-semibold">
-                {title.bowler}
+              <td className="p-3 font-bold text-blue-950">
+                {publicRealNameFor(title.bowler) || title.bowler}
+              </td>
+
+              <td className="p-3 font-semibold text-blue-900">
+                {publicRealNameFor(title.bowler) ? title.bowler : "—"}
               </td>
 
               <td className="p-3">
@@ -6715,7 +6980,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
           {filteredPublicTitles.length === 0 && (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 className="p-5 text-center text-blue-700"
               >
                 No titles available yet.
@@ -7104,12 +7369,15 @@ function TeamFinalsScoreInput({
   );
 }
 
-function BracketMatchEditor({ match, scores, scratchScores, memberScores, onScoreChange, onMemberScoreChange, useHandicapScores, finalsScoreMode = "baker", matchScoring = "total" }) {
+function BracketMatchEditor({ match, scores, scratchScores, memberScores, onScoreChange, onMemberScoreChange, useHandicapScores, finalsScoreMode = "baker", matchScoring = "total", roundIndex = 0 }) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
+  const usesAverageAdvantage = matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores;
   const winner = matchScoring === "bestOf3"
     ? winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id)
-    : winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
+    : usesAverageAdvantage
+      ? winnerFromAverageAdvantageMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "")
+      : winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
   const seriesRecord = getBestOfThreeRecord(scores, match.id);
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
   const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
@@ -7216,6 +7484,12 @@ const renderPlayerName = (player) => {
           onMemberScoreChange={onMemberScoreChange}
         />
       </div>
+      {usesAverageAdvantage && (
+        <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-900">
+          <p>Avg: {match.left?.name || "TBD"} {qualifyingScratchAverageDisplay(match.left)} / {match.right?.name || "TBD"} {qualifyingScratchAverageDisplay(match.right)}</p>
+          <p>R1 bonus: {match.left?.name || "TBD"} +{roundOneAverageBonus(match.left, match.right)} / {match.right?.name || "TBD"} +{roundOneAverageBonus(match.right, match.left)}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -7234,18 +7508,21 @@ function BracketRoundColumn({
   roundIndex = 0,
   setSavedFinalsRounds,
 }) {
-  const matchHeight = matchScoring === "bestOf3" ? 270 : 96;
+  const firstRoundMatchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && !useHandicapScores ? 148 : 96;
+  const matchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 148 : 96;
   const firstRoundGap = matchScoring === "bestOf3" ? 36 : 24;
+  const step = firstRoundMatchHeight + firstRoundGap + 18;
 
   const getTop = (matchIndex) => {
     if (roundIndex === 0) {
-      return matchIndex * (matchHeight + firstRoundGap + 18);
+      return matchIndex * step;
     }
     const feederStart = matchIndex * (2 ** roundIndex);
     const feederEnd = feederStart + (2 ** roundIndex) - 1;
-    return (((feederStart + feederEnd) / 2) * (matchHeight + firstRoundGap + 18)) - (matchHeight / 2);
+    const feederCenter = ((feederStart + feederEnd) / 2) * step + firstRoundMatchHeight / 2;
+    return feederCenter - matchHeight / 2;
   };
-  const columnHeight = Math.max(1, matches.length) * (matchHeight + firstRoundGap + 18) * Math.max(1, 2 ** roundIndex);
+  const columnHeight = Math.max(1, matches.length) * step * Math.max(1, 2 ** roundIndex);
   return (
     <div className="min-w-[260px] flex-1">
       <div className="mb-3 flex flex-col items-center gap-2">
@@ -7281,6 +7558,7 @@ function BracketRoundColumn({
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
   matchScoring={matchScoring}
+  roundIndex={roundIndex}
 />
           </div>
         ))}
@@ -7294,7 +7572,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const finalsScoreMode = getFinalsScoreMode(tournamentInfo);
   const finalsMaxScore = getFinalsScratchMax(tournamentStyle, finalsScoreMode);
-  const matchScoring = bracketState.matchScoring || "total";
+  const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
   const memberScores = bracketState.memberScores || {};
@@ -7366,6 +7644,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
             >
               <option value="total">Total Pins</option>
               <option value="bestOf3">Best of 3 Games</option>
+              {!useHandicapScores && <option value="avgAdvantage">Round 1 Avg Advantage</option>}
             </select>
           </div>
           <StatCard label="Bracket Size" value={size} />
@@ -8413,6 +8692,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       center: tournamentInfo.center || "",
       location: tournamentInfo.location || "",
       season: tournamentInfo.season || new Date().getFullYear().toString(),
+      series: tournamentInfo.series || DEFAULT_TOURNAMENT_SERIES,
       format: tournamentFormat,
       titleEligible: Boolean(tournamentInfo.titleEligible ?? true),
       major: Boolean(tournamentInfo.major ?? false),
@@ -8729,13 +9009,16 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 }
 
 function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIdentities = [], setBowlerIdentities = () => {} }) {
-  const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History", major: false });
-  const [newHistoricalTotal, setNewHistoricalTotal] = useState({ bowler: "", titleCount: "", source: "M.I.S.T. Series", season: "Pre-2018", eligible: true, major: false, notes: "" });
+  const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "M.I.S.T.", major: false });
+  const [newHistoricalTotal, setNewHistoricalTotal] = useState({ bowler: "", titleCount: "", source: "M.I.S.T.", season: "Pre-2018", eligible: true, major: false, notes: "" });
   const [newHof, setNewHof] = useState({ bowler: "", year: new Date().getFullYear().toString() });
   const [newIdentity, setNewIdentity] = useState({ nickname: "", realName: "" });
   const [titleSort, setTitleSort] = useState({ column: "titles", direction: "desc" });
   const [expandedTitleBowler, setExpandedTitleBowler] = useState(null);
   const [collapsedTitleSections, setCollapsedTitleSections] = useState({});
+  const [editingManualTitleId, setEditingManualTitleId] = useState(null);
+  const [editingManualTitle, setEditingManualTitle] = useState(null);
+  const [titleDetailFilters, setTitleDetailFilters] = useState({ bowler: "", tournament: "", season: "All", series: "All" });
   const identityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
   const realNameFor = (nickname) => identityMap.get(getIdentityKey(nickname))?.realName || "";
   const isSectionCollapsed = (sectionId) => Boolean(collapsedTitleSections[sectionId]);
@@ -8763,15 +9046,12 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIde
       tournament: tournament.name,
       date: tournament.date,
       season: tournament.season || "Unassigned",
-source: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true)
-  ? Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false)
-    ? "Major Title"
-    : "FKM Title"
-  : "Non-FKM Title",
+source: tournament.series || tournament.activeSnapshot?.tournamentInfo?.series || (Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true) ? DEFAULT_TOURNAMENT_SERIES : "Non-FKM Title"),
 
 eligible: Boolean(tournament.titleEligible ?? tournament.activeSnapshot?.tournamentInfo?.titleEligible ?? true),
 
 major: Boolean(tournament.major ?? tournament.activeSnapshot?.tournamentInfo?.major ?? false),
+series: tournament.series || tournament.activeSnapshot?.tournamentInfo?.series || DEFAULT_TOURNAMENT_SERIES,
     })));
 
 const majorTitles = [
@@ -8824,7 +9104,7 @@ current.titles += titleCount;
 current.titleList.push(title);
 
 if (title.major) current.majors += titleCount;
-else if (title.eligible) current.fkmTitles += titleCount;
+if (title.eligible) current.fkmTitles += titleCount;
 else current.nonFkmTitles += titleCount;
     if (title.season) current.seasons.add(title.season);
     if (!current.latest || String(title.date || "") > String(current.latest || "")) current.latest = title.date || "";
@@ -8835,6 +9115,8 @@ else current.nonFkmTitles += titleCount;
   const titleLeaderRows = Object.values(titleCounts)
     .map((row) => ({
       ...row,
+      displayName: realNameFor(row.bowler) || row.bowler,
+      nickname: realNameFor(row.bowler) ? row.bowler : "—",
       seasonsText: Array.from(row.seasons).sort((a, b) => String(b).localeCompare(String(a))).join(", "),
       titleList: [...row.titleList].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(a.tournament || "").localeCompare(String(b.tournament || ""))),
     }))
@@ -8843,9 +9125,9 @@ else current.nonFkmTitles += titleCount;
       const aValue = a[titleSort.column];
       const bValue = b[titleSort.column];
       if (typeof aValue === "string" || typeof bValue === "string") {
-        return String(aValue || "").localeCompare(String(bValue || "")) * direction || a.bowler.localeCompare(b.bowler);
+        return String(aValue || "").localeCompare(String(bValue || "")) * direction || String(a.displayName || a.bowler).localeCompare(String(b.displayName || b.bowler));
       }
-      return (Number(aValue || 0) - Number(bValue || 0)) * direction || a.bowler.localeCompare(b.bowler);
+      return (Number(aValue || 0) - Number(bValue || 0)) * direction || String(a.displayName || a.bowler).localeCompare(String(b.displayName || b.bowler));
     });
 
   const addManualTitle = () => {
@@ -8858,12 +9140,12 @@ else current.nonFkmTitles += titleCount;
       ...newTitle,
       bowler: newTitle.bowler.trim(),
       tournament: newTitle.tournament || "Historical Title",
-      source: "Manual History",
+      source: newTitle.source || "M.I.S.T.",
       eligible: Boolean(newTitle.eligible ?? true),
       major: Boolean(newTitle.major),
       hof: false,
     }, ...current]);
-    setNewTitle({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "Manual History", major: false });
+    setNewTitle({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "M.I.S.T.", major: false });
   };
 
   const addHistoricalTitleTotal = () => {
@@ -8891,7 +9173,7 @@ else current.nonFkmTitles += titleCount;
       titleCount,
       notes: newHistoricalTotal.notes || "",
     }, ...current]);
-    setNewHistoricalTotal({ bowler: "", titleCount: "", source: "M.I.S.T. Series", season: "Pre-2018", eligible: true, major: false, notes: "" });
+    setNewHistoricalTotal({ bowler: "", titleCount: "", source: "M.I.S.T.", season: "Pre-2018", eligible: true, major: false, notes: "" });
   };
 
   const addHofInductee = () => {
@@ -8944,13 +9226,75 @@ else current.nonFkmTitles += titleCount;
     setManualTitles((current) => current.filter((title) => title.id !== id));
   };
 
+  const startEditManualTitle = (title) => {
+    const titleSeries = getHistoricalTitleSeries(title);
+    setEditingManualTitleId(String(title.id));
+    setEditingManualTitle({
+      bowler: title.bowler || "",
+      tournament: title.tournament || "",
+      date: title.date || "",
+      season: title.season || "",
+      source: HISTORICAL_TITLE_SERIES_OPTIONS.includes(titleSeries) ? titleSeries : "M.I.S.T.",
+      titleCount: getTitleCount(title),
+      eligible: Boolean(title.eligible ?? true),
+      major: Boolean(title.major),
+      historicalTotal: Boolean(title.historicalTotal),
+      notes: title.notes || "",
+    });
+  };
+
+  const cancelEditManualTitle = () => {
+    setEditingManualTitleId(null);
+    setEditingManualTitle(null);
+  };
+
+  const saveEditManualTitle = () => {
+    if (!editingManualTitle || !editingManualTitleId) return;
+
+    const bowler = editingManualTitle.bowler.trim();
+    const titleCount = Math.max(1, Number(editingManualTitle.titleCount || 1));
+    const source = editingManualTitle.source.trim() || (editingManualTitle.historicalTotal ? "M.I.S.T." : "Manual History");
+    const tournament = editingManualTitle.historicalTotal
+      ? source
+      : editingManualTitle.tournament.trim() || "Historical Title";
+
+    if (!bowler) {
+      window.alert("Enter a bowler name before saving.");
+      return;
+    }
+
+    setManualTitles((current) => current.map((title) => {
+      if (String(title.id) !== String(editingManualTitleId)) return title;
+
+      return {
+        ...title,
+        bowler,
+        tournament,
+        date: editingManualTitle.date || "",
+        season: editingManualTitle.season || "",
+        source,
+        eligible: Boolean(editingManualTitle.eligible ?? true),
+        major: Boolean(editingManualTitle.major),
+        titleCount: editingManualTitle.historicalTotal ? titleCount : 1,
+        notes: editingManualTitle.notes || "",
+      };
+    }));
+    cancelEditManualTitle();
+  };
+
+  const editManualTitleCategory = editingManualTitle?.major
+    ? "major"
+    : editingManualTitle?.eligible === false
+      ? "nonFkm"
+      : "fkm";
+
   const titleCsv = [["Bowler", "Tournament", "Date", "Season", "Category", "Source", "Count", "Notes"], ...allTitles.map((title) => [title.bowler, title.tournament, title.date, title.season, getTitleCategoryLabel(title), title.source, getTitleCount(title), title.notes || ""])];
   const manualHistoryDetails = [...(manualTitles || []).filter((title) => !title.hof)].sort(
     (a, b) =>
       String(b.date || "").localeCompare(String(a.date || "")) ||
       String(a.bowler || "").localeCompare(String(b.bowler || ""))
   );
-  const titleDetailRows = [
+  const allTitleDetailRows = [
     ...majorTitles,
     ...fkmTitles,
     ...nonFkmTitles,
@@ -8959,6 +9303,28 @@ else current.nonFkmTitles += titleCount;
       String(b.date || "").localeCompare(String(a.date || "")) ||
       String(a.bowler || "").localeCompare(String(b.bowler || ""))
   );
+  const titleDetailSeasonOptions = Array.from(
+    new Set(allTitleDetailRows.map((title) => String(title.season || "").trim()).filter(Boolean))
+  ).sort((a, b) => String(b).localeCompare(String(a)));
+  const titleDetailSeriesOptions = Array.from(
+    new Set(allTitleDetailRows.map((title) => getHistoricalTitleSeries(title)).filter(Boolean))
+  ).sort((a, b) => String(a).localeCompare(String(b)));
+  const titleDetailRows = allTitleDetailRows.filter((title) => {
+    const bowlerNeedle = titleDetailFilters.bowler.trim().toLowerCase();
+    const tournamentNeedle = titleDetailFilters.tournament.trim().toLowerCase();
+    const bowlerText = [
+      title.bowler,
+      realNameFor(title.bowler),
+    ].filter(Boolean).join(" ").toLowerCase();
+    const tournamentText = String(title.tournament || "").toLowerCase();
+    const seasonText = String(title.season || "").trim();
+
+    if (bowlerNeedle && !bowlerText.includes(bowlerNeedle)) return false;
+    if (tournamentNeedle && !tournamentText.includes(tournamentNeedle)) return false;
+    if (titleDetailFilters.season !== "All" && seasonText !== titleDetailFilters.season) return false;
+    if (titleDetailFilters.series !== "All" && getHistoricalTitleSeries(title) !== titleDetailFilters.series) return false;
+    return true;
+  });
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -8977,9 +9343,9 @@ else current.nonFkmTitles += titleCount;
           {!isSectionCollapsed("summary") && (
           <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
 <StatCard label="Total Titles" value={allTitles.filter((title) => !title.hof).reduce((sum, title) => sum + getTitleCount(title), 0)} />
-<StatCard label="Majors" value={majorTitles.length} />
-<StatCard label="FKM Titles" value={fkmTitles.length} />
-<StatCard label="Non-FKM Titles" value={nonFkmTitles.length} />
+<StatCard label="Majors" value={majorTitles.reduce((sum, title) => sum + getTitleCount(title), 0)} />
+<StatCard label="FKM Titles" value={allTitles.filter((title) => title.eligible).reduce((sum, title) => sum + getTitleCount(title), 0)} />
+<StatCard label="Non-FKM Titles" value={nonFkmTitles.reduce((sum, title) => sum + getTitleCount(title), 0)} />
 <StatCard label="HOF" value={hofTitles.length} />
           </div>
           )}
@@ -8999,7 +9365,18 @@ else current.nonFkmTitles += titleCount;
           <div className="grid gap-3 md:grid-cols-6">
             <div className="space-y-2"><Label>Bowler</Label><Input value={newHistoricalTotal.bowler} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, bowler: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Titles Won</Label><Input type="number" value={newHistoricalTotal.titleCount} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, titleCount: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Source / Series</Label><Input value={newHistoricalTotal.source} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, source: e.target.value }))} placeholder="M.I.S.T. Series" /></div>
+            <div className="space-y-2">
+              <Label>Series</Label>
+              <select
+                className="h-[42px] w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-blue-950"
+                value={newHistoricalTotal.source}
+                onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, source: e.target.value }))}
+              >
+                {HISTORICAL_TITLE_SERIES_OPTIONS.map((series) => (
+                  <option key={series} value={series}>{series}</option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-2"><Label>Season</Label><Input value={newHistoricalTotal.season} onChange={(e) => setNewHistoricalTotal((current) => ({ ...current, season: e.target.value }))} placeholder="Pre-2018" /></div>
             <div className="space-y-2"><Label>FKM Eligible</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newHistoricalTotal.eligible ?? true)} onCheckedChange={(checked) => setNewHistoricalTotal((current) => ({ ...current, eligible: checked }))} /></div></div>
             <div className="space-y-2"><Label>Major</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newHistoricalTotal.major)} onCheckedChange={(checked) => setNewHistoricalTotal((current) => ({ ...current, major: checked, eligible: checked ? true : current.eligible }))} /></div></div>
@@ -9055,11 +9432,23 @@ else current.nonFkmTitles += titleCount;
             {sectionToggleButton("addTitle")}
           </div>
           {!isSectionCollapsed("addTitle") && (
-          <div className="grid gap-3 md:grid-cols-6">
+          <div className="grid gap-3 md:grid-cols-7">
             <div className="space-y-2"><Label>Bowler</Label><Input value={newTitle.bowler} onChange={(e) => setNewTitle((current) => ({ ...current, bowler: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Tournament</Label><Input value={newTitle.tournament} onChange={(e) => setNewTitle((current) => ({ ...current, tournament: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Date</Label><Input type="date" value={newTitle.date} onChange={(e) => setNewTitle((current) => ({ ...current, date: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Season</Label><Input value={newTitle.season} onChange={(e) => setNewTitle((current) => ({ ...current, season: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label>Series</Label>
+              <select
+                className="h-[42px] w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-blue-950"
+                value={newTitle.source}
+                onChange={(e) => setNewTitle((current) => ({ ...current, source: e.target.value }))}
+              >
+                {HISTORICAL_TITLE_SERIES_OPTIONS.map((series) => (
+                  <option key={series} value={series}>{series}</option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-2"><Label>FKM Eligible</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newTitle.eligible ?? true)} onCheckedChange={(checked) => setNewTitle((current) => ({ ...current, eligible: checked }))} /></div></div>
             <div className="space-y-2"><Label>Major</Label><div className="flex h-[42px] items-center rounded-xl border border-blue-100 bg-blue-50 px-3"><Switch compact checked={Boolean(newTitle.major)} onCheckedChange={(checked) => setNewTitle((current) => ({ ...current, major: checked, eligible: checked ? true : current.eligible }))} /></div></div>
             <div className="flex items-end"><Button className="w-full rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addManualTitle}>Add Title</Button></div>
@@ -9120,15 +9509,28 @@ else current.nonFkmTitles += titleCount;
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
-      column: "name",
+      column: "displayName",
       direction:
-        current.column === "name" && current.direction === "asc"
+        current.column === "displayName" && current.direction === "asc"
           ? "desc"
           : "asc",
     }))
   }
 >
-  Bowler
+  Name
+</th> <th
+  className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
+  onClick={() =>
+    setTitleSort((current) => ({
+      column: "nickname",
+      direction:
+        current.column === "nickname" && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }))
+  }
+>
+  Nickname
 </th> <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
@@ -9223,10 +9625,11 @@ else current.nonFkmTitles += titleCount;
                                             onClick={() => setExpandedTitleBowler((current) => current === row.bowler ? null : row.bowler)}
                                             className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
                                           >
-                                            {isExpanded ? "-" : "+"} {row.bowler}
+                                            {isExpanded ? "-" : "+"} {row.displayName}
                                             {hofNameMap.has(String(row.bowler || "").trim().toLowerCase()) ? " (HOF)" : ""}
                                           </button>
                                         </td>
+                                        <td className="p-2 font-semibold text-blue-900 md:p-3">{row.nickname}</td>
                                         <td className="p-2 text-right font-black text-yellow-700 md:p-3">{row.titles}</td>
                                         <td className="p-2 text-right font-bold text-red-700 md:p-3">{row.majors}</td>
                                         <td className="p-2 text-right font-bold text-green-700 md:p-3">{row.fkmTitles}</td>
@@ -9236,7 +9639,7 @@ else current.nonFkmTitles += titleCount;
                                       </tr>
                                       {isExpanded && (
                                         <tr className="border-t bg-blue-50/70">
-                                          <td className="p-3" colSpan={7}>
+                                          <td className="p-3" colSpan={8}>
                                             <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                                               <table className="w-full min-w-[640px] text-xs md:text-sm">
                                                 <thead className="bg-blue-800 text-white">
@@ -9266,7 +9669,7 @@ else current.nonFkmTitles += titleCount;
                                       )}
                                     </React.Fragment>
                                   );
-                                })}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No titles entered yet.</td></tr>}</tbody>
+                                })}{titleLeaderRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No titles entered yet.</td></tr>}</tbody>
             </table>
           </div>
           )}
@@ -9280,18 +9683,166 @@ else current.nonFkmTitles += titleCount;
             {sectionToggleButton("details")}
           </div>
           {!isSectionCollapsed("details") && (
+          <>
+          <div className="mb-3 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-3 md:grid-cols-[1fr_1fr_160px_160px_auto] md:items-end">
+            <label className="text-xs font-bold text-blue-900">
+              Bowler
+              <Input
+                className="mt-1 bg-white"
+                placeholder="Filter bowler"
+                value={titleDetailFilters.bowler}
+                onChange={(event) => setTitleDetailFilters((current) => ({ ...current, bowler: event.target.value }))}
+              />
+            </label>
+            <label className="text-xs font-bold text-blue-900">
+              Tournament
+              <Input
+                className="mt-1 bg-white"
+                placeholder="Filter tournament"
+                value={titleDetailFilters.tournament}
+                onChange={(event) => setTitleDetailFilters((current) => ({ ...current, tournament: event.target.value }))}
+              />
+            </label>
+            <label className="text-xs font-bold text-blue-900">
+              Season
+              <select
+                className="mt-1 h-[42px] w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-blue-950"
+                value={titleDetailFilters.season}
+                onChange={(event) => setTitleDetailFilters((current) => ({ ...current, season: event.target.value }))}
+              >
+                <option value="All">All Seasons</option>
+                {titleDetailSeasonOptions.map((season) => (
+                  <option key={season} value={season}>{season}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-bold text-blue-900">
+              Series
+              <select
+                className="mt-1 h-[42px] w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-blue-950"
+                value={titleDetailFilters.series}
+                onChange={(event) => setTitleDetailFilters((current) => ({ ...current, series: event.target.value }))}
+              >
+                <option value="All">All Series</option>
+                {titleDetailSeriesOptions.map((series) => (
+                  <option key={series} value={series}>{series}</option>
+                ))}
+              </select>
+            </label>
+            <Button
+              variant="outline"
+              className="rounded-xl border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-900"
+              onClick={() => setTitleDetailFilters({ bowler: "", tournament: "", season: "All", series: "All" })}
+            >
+              Clear
+            </Button>
+          </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[760px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-right md:p-3">Count</th><th className="p-2 text-left md:p-3">Category</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
               <tbody>{titleDetailRows.map((title) => {
                 const isManualTitle = manualTitleIds.has(String(title.id));
+                const isEditingManualTitle = isManualTitle && String(editingManualTitleId) === String(title.id);
+
+                if (isEditingManualTitle && editingManualTitle) {
+                  return (
+                    <tr key={title.id} className="border-t bg-blue-50">
+                      <td className="p-3" colSpan={8}>
+                        <div className="grid gap-3 md:grid-cols-6">
+                          <label className="text-xs font-bold text-blue-900">
+                            Name
+                            <Input className="mt-1" value={editingManualTitle.bowler} onChange={(event) => setEditingManualTitle((current) => ({ ...current, bowler: event.target.value }))} />
+                          </label>
+                          <label className="text-xs font-bold text-blue-900 md:col-span-2">
+                            {editingManualTitle.historicalTotal ? "Series" : "Tournament"}
+                            {editingManualTitle.historicalTotal ? (
+                              <select
+                                className="mt-1 h-[38px] w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-blue-950"
+                                value={editingManualTitle.source}
+                                onChange={(event) => setEditingManualTitle((current) => ({ ...current, source: event.target.value }))}
+                              >
+                                {HISTORICAL_TITLE_SERIES_OPTIONS.map((series) => (
+                                  <option key={series} value={series}>{series}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <Input
+                                className="mt-1"
+                                value={editingManualTitle.tournament}
+                                onChange={(event) => setEditingManualTitle((current) => ({ ...current, tournament: event.target.value }))}
+                              />
+                            )}
+                          </label>
+                          <label className="text-xs font-bold text-blue-900">
+                            Date
+                            <Input className="mt-1" type="date" value={editingManualTitle.date} onChange={(event) => setEditingManualTitle((current) => ({ ...current, date: event.target.value }))} />
+                          </label>
+                          <label className="text-xs font-bold text-blue-900">
+                            Season
+                            <Input className="mt-1" value={editingManualTitle.season} onChange={(event) => setEditingManualTitle((current) => ({ ...current, season: event.target.value }))} />
+                          </label>
+                          <label className="text-xs font-bold text-blue-900">
+                            Count
+                            <Input
+                              className="mt-1"
+                              disabled={!editingManualTitle.historicalTotal}
+                              min="1"
+                              type="number"
+                              value={editingManualTitle.titleCount}
+                              onChange={(event) => setEditingManualTitle((current) => ({ ...current, titleCount: event.target.value }))}
+                            />
+                          </label>
+                          <label className="text-xs font-bold text-blue-900">
+                            Category
+                            <select
+                              className="mt-1 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm text-blue-950"
+                              value={editManualTitleCategory}
+                              onChange={(event) => setEditingManualTitle((current) => ({
+                                ...current,
+                                major: event.target.value === "major",
+                                eligible: event.target.value !== "nonFkm",
+                              }))}
+                            >
+                              <option value="fkm">FKM</option>
+                              <option value="major">Major</option>
+                              <option value="nonFkm">Non-FKM</option>
+                            </select>
+                          </label>
+                          <label className="text-xs font-bold text-blue-900 md:col-span-3">
+                            Notes
+                            <Input className="mt-1" value={editingManualTitle.notes} onChange={(event) => setEditingManualTitle((current) => ({ ...current, notes: event.target.value }))} />
+                          </label>
+                          {!editingManualTitle.historicalTotal && (
+                            <label className="text-xs font-bold text-blue-900 md:col-span-2">
+                              Series
+                              <select
+                                className="mt-1 h-[38px] w-full rounded-xl border border-blue-200 bg-white px-3 text-sm text-blue-950"
+                                value={HISTORICAL_TITLE_SERIES_OPTIONS.includes(editingManualTitle.source) ? editingManualTitle.source : "M.I.S.T."}
+                                onChange={(event) => setEditingManualTitle((current) => ({ ...current, source: event.target.value }))}
+                              >
+                                {HISTORICAL_TITLE_SERIES_OPTIONS.map((series) => (
+                                  <option key={series} value={series}>{series}</option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                          <div className="flex items-end justify-end gap-2 md:col-span-6">
+                            <Button className="rounded-xl bg-blue-800 px-3 py-2 text-xs text-white hover:bg-blue-900" onClick={saveEditManualTitle}>Save</Button>
+                            <Button variant="outline" className="rounded-xl border-blue-200 bg-white px-3 py-2 text-xs text-blue-900" onClick={cancelEditManualTitle}>Cancel</Button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
 
                 return (
-                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button> : <span className="text-blue-400">—</span>}</td></tr>
+                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-800 md:text-xs" onClick={() => startEditManualTitle(title)}>Edit</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button></div> : <span className="text-blue-400">—</span>}</td></tr>
                 );
               })}{titleDetailRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No title history yet.</td></tr>}</tbody>
             </table>
           </div>
+          </>
           )}
         </CardContent>
       </AppCard>
@@ -10708,7 +11259,7 @@ export default function BowlingPayoutApp() {
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState("eliminator");
-  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
+  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
   const publicResultsUnlocked = bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid));
@@ -10752,6 +11303,7 @@ const [reservationState, setReservationState] = useState({
   tournamentStartTime: "",
   reservationLimit: 48,
   reservations: [],
+  reservationsByTournament: {},
 });
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
   const activeTournamentSnapshotRef = useRef(null);
@@ -10803,6 +11355,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           const savedDirector = parsed.tournamentInfo.director || "";
           setTournamentInfo({
             tournamentStyle: "singles",
+            series: DEFAULT_TOURNAMENT_SERIES,
             director: !savedDirector || savedDirector === "Cory Lagner" ? DEFAULT_TOURNAMENT_DIRECTOR : savedDirector,
             directorEmail: parsed.tournamentInfo.directorEmail || DEFAULT_TOURNAMENT_DIRECTOR_EMAIL,
             ...parsed.tournamentInfo,
@@ -10811,7 +11364,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           });
         }
         if (parsed.tournamentRecap) setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...parsed.tournamentRecap });
-        if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: 48, reservations: [], ...parsed.reservationState });
+        if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: 48, reservations: [], reservationsByTournament: {}, ...parsed.reservationState });
         if (parsed.multiDayEvent) setMultiDayEvent({ ...createDefaultMultiDayEvent(), ...parsed.multiDayEvent });
         if (parsed.payoutState) setPayoutState({ ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
         if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, ...parsed.bracketState });
@@ -10861,7 +11414,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers.map((bowler) => normalizeBowlerGames(bowler, Number(snapshot.qualifyingGames || qualifyingGames || 4))) : buildInitialBowlers(0, Number(snapshot.qualifyingGames || 4)));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
     setTournamentFormat(snapshot.tournamentFormat || "eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], ...(snapshot.tournamentInfo || {}) });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], ...(snapshot.tournamentInfo || {}) });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || {}) });
     setSavedScoreGames(snapshot.savedScoreGames || {});
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
@@ -10911,7 +11464,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setSavedTournamentDrafts((current) => current.filter((item) => item.id !== draftId));
   };
   const addReservationToRegistration = (reservation) => {
-    const displayName = (reservation.nickname || reservation.name || "").trim();
+    const displayName = getReservationDisplayName(reservation);
     if (!displayName) return { name: "", alreadyExists: false };
     const archivedData = getArchivedAverageForName(tournamentHistory, displayName) || getArchivedAverageForName(tournamentHistory, reservation.name);
     const handicapBase = Number(sidePotState.handicapBase ?? 200);
@@ -10919,22 +11472,31 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const archivedHandicap = useHandicapScores && archivedData?.eligible
       ? Math.max(0, Math.round((handicapBase - Number(archivedData.average || 0)) * (handicapPercent / 100)))
       : 0;
-    const existingIndex = bowlers.findIndex((bowler) => {
-      const nameMatches = String(bowler.name || "").trim().toLowerCase() === displayName.toLowerCase();
-      const emailMatches = reservation.email && String(bowler.email || "").trim().toLowerCase() === String(reservation.email || "").trim().toLowerCase();
-      return nameMatches || emailMatches;
-    });
+    const currentReservationKey = reservation.tournamentKey || reservationKeyFromState(reservationState);
+    let alreadyExists = false;
 
     setBowlers((current) => {
+      const existingIndex = current.findIndex((bowler) => {
+        return reservation.id && String(bowler.reservationId || "") === String(reservation.id);
+      });
+      alreadyExists = existingIndex >= 0;
+      const maxSeed = Math.max(
+        0,
+        ...current
+          .map((bowler) => Number(bowler.seed || 0))
+          .filter((seed) => Number.isFinite(seed))
+      );
       const nextLane = existingIndex >= 0
         ? current[existingIndex]?.lane || ""
         : buildLaneAssignments(tournamentInfo.lanesUsed, current.length + 1, tournamentInfo.tournamentStyle || "singles")[current.length] || "";
       const nextBowler = {
-        ...(existingIndex >= 0 ? current[existingIndex] : makeBowler(Math.max(0, ...current.map((bowler) => Number(bowler.seed || 0))) + 1, qualifyingGames)),
+        ...(existingIndex >= 0 ? current[existingIndex] : makeBowler(maxSeed + 1, qualifyingGames)),
         name: displayName,
         lane: nextLane,
         phone: formatPhoneNumber(reservation.phone || ""),
         email: reservation.email || "",
+        reservationId: reservation.id || "",
+        reservationTournamentKey: currentReservationKey,
         average: archivedData?.eligible ? archivedData.average : "",
         handicap: archivedHandicap,
         handicapPerGame: archivedHandicap,
@@ -10952,7 +11514,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return [...current, nextBowler];
     });
 
-    return { name: displayName, alreadyExists: existingIndex >= 0 };
+    return { name: displayName, alreadyExists };
   };
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
@@ -10964,7 +11526,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return;
     }
 
-    setTournamentInfo({ tournamentStyle: "singles", startTime: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, ...(snapshot.tournamentInfo || { name: archivedTournament.name || "Tournament", date: archivedTournament.date || "", startTime: "", center: archivedTournament.center || "", location: archivedTournament.location || "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", stage: "Qualifying" }) });
+    setTournamentInfo({ tournamentStyle: "singles", series: DEFAULT_TOURNAMENT_SERIES, startTime: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, ...(snapshot.tournamentInfo || { name: archivedTournament.name || "Tournament", date: archivedTournament.date || "", startTime: "", center: archivedTournament.center || "", location: archivedTournament.location || "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", series: archivedTournament.series || DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying" }) });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || archivedTournament.tournamentRecap || {}) });
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers : buildInitialBowlers(0, qualifyingGames));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
@@ -10987,7 +11549,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(buildInitialBowlers(0, 4));
     setUseHandicapScores(false);
     setTournamentFormat("eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
     setSavedFinalsRounds({});
@@ -11085,22 +11647,13 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     </div>
   </div>
 
-  <div className="grid grid-cols-2 gap-2 text-right text-xs md:grid-cols-1">
+  <div className="text-right text-xs">
     <div className="rounded-2xl bg-white/10 px-4 py-2 ring-1 ring-white/20">
       <p className="uppercase tracking-[0.2em] text-blue-200">
         Active Event
       </p>
       <p className="font-bold text-white">
         {tournamentInfo.name || "Tournament"}
-      </p>
-    </div>
-
-    <div className="rounded-2xl bg-white/10 px-4 py-2 ring-1 ring-white/20">
-      <p className="uppercase tracking-[0.2em] text-blue-200">
-        Format
-      </p>
-      <p className="font-bold capitalize text-white">
-        {getTournamentStyleConfig(tournamentInfo.tournamentStyle || "singles").label} / {tournamentFormat}
       </p>
     </div>
   </div>
