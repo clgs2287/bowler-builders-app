@@ -2658,34 +2658,37 @@ function SupabaseMigrationCard({
     downloadText(`bowler-builders-supabase-import-${stamp}.sql`, buildImportSql(), "text/sql;charset=utf-8;");
   };
   const checkDatabaseCounts = async () => {
-    if (!supabase) {
+    if (!hasSupabaseConfig) {
       setCheckMessage("Supabase is not configured.");
       return;
     }
 
     setChecking(true);
     setCheckMessage("Checking database rows...");
+    try {
+      const [scheduleRows, titleRows, identityRows, reservationRows, archiveRows, activeRows] = await Promise.all([
+        loadSupabaseRestRows("schedule_events", "?select=id"),
+        loadSupabaseRestRows("manual_titles", "?select=id"),
+        loadSupabaseRestRows("bowler_identities", "?select=id"),
+        loadSupabaseRestRows("reservations", "?select=id"),
+        loadSupabaseRestRows("archived_tournaments", "?select=id"),
+        loadSupabaseRestRows("active_tournament_snapshots", "?select=id"),
+      ]);
 
-    const [scheduleResult, titlesResult, identitiesResult] = await Promise.all([
-      supabase.from("schedule_events").select("id", { count: "exact", head: true }),
-      supabase.from("manual_titles").select("id", { count: "exact", head: true }),
-      supabase.from("bowler_identities").select("id", { count: "exact", head: true }),
-    ]);
-
-    setChecking(false);
-
-    const error = scheduleResult.error || titlesResult.error || identitiesResult.error;
-    if (error) {
+      setDbCounts({
+        schedule: scheduleRows.length || 0,
+        titles: titleRows.length || 0,
+        identities: identityRows.length || 0,
+        reservations: reservationRows.length || 0,
+        archives: archiveRows.length || 0,
+        activeSnapshots: activeRows.length || 0,
+      });
+      setCheckMessage("Database counts loaded.");
+    } catch (error) {
       setCheckMessage(error.message || "Could not read database counts.");
-      return;
+    } finally {
+      setChecking(false);
     }
-
-    setDbCounts({
-      schedule: scheduleResult.count || 0,
-      titles: titlesResult.count || 0,
-      identities: identitiesResult.count || 0,
-    });
-    setCheckMessage("Database counts loaded.");
   };
 
   return (
@@ -2715,10 +2718,13 @@ function SupabaseMigrationCard({
           <StatCard label="Name Mappings" value={bowlerIdentities.length} />
         </div>
         {dbCounts && (
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="mt-3 grid gap-3 md:grid-cols-6">
             <StatCard label="DB Schedule" value={dbCounts.schedule} />
             <StatCard label="DB Title Rows" value={dbCounts.titles} />
             <StatCard label="DB Name Mappings" value={dbCounts.identities} />
+            <StatCard label="DB Reservations" value={dbCounts.reservations} />
+            <StatCard label="DB Archives" value={dbCounts.archives} />
+            <StatCard label="DB Active" value={dbCounts.activeSnapshots} />
           </div>
         )}
         {checkMessage && <p className="mt-3 text-xs font-semibold text-blue-700">{checkMessage}</p>}
