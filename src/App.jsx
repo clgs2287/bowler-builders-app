@@ -2562,6 +2562,73 @@ function SupabaseConnectionCard() {
   );
 }
 
+function SupabaseAdminStatusCard({ session, adminProfile }) {
+  const [writeStatus, setWriteStatus] = useState("Not tested");
+  const isFallback = adminProfile?.source === "local-email-fallback";
+  const hasSession = Boolean(session?.access_token);
+
+  useEffect(() => {
+    if (!hasSession) setWriteStatus("Not tested");
+  }, [hasSession]);
+
+  const testWriteAccess = async () => {
+    if (!hasSession) {
+      setWriteStatus("No Supabase session token found.");
+      return;
+    }
+
+    setWriteStatus("Testing write access...");
+    try {
+      await withTimeout(
+        supabaseRestRequest("app_settings", "?on_conflict=id", {
+          method: "POST",
+          body: {
+            id: "admin_write_check",
+            value: {
+              checkedAt: new Date().toISOString(),
+              email: session.user?.email || "",
+            },
+          },
+          accessToken: session.access_token,
+          prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+        "Testing admin write access"
+      );
+      setWriteStatus("Write access confirmed.");
+    } catch (error) {
+      setWriteStatus(error.message || "Write access failed.");
+    }
+  };
+
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900">Admin Status</h2>
+            <div className="mt-2 grid gap-2 text-xs font-semibold text-blue-800 md:grid-cols-2">
+              <p>Supabase user: {session?.user?.email || "Not signed in"}</p>
+              <p>User ID: {session?.user?.id || "None"}</p>
+              <p>Admin profile: {adminProfile ? "Found" : "Not found"}</p>
+              <p>Admin source: {isFallback ? "Temporary email fallback" : adminProfile ? "Supabase admin_profiles" : "None"}</p>
+              <p>Role: {adminProfile?.role || "None"}</p>
+              <p>Write test: {writeStatus}</p>
+            </div>
+            {isFallback && (
+              <p className="mt-2 text-xs font-semibold text-amber-700">
+                Temporary fallback is active. Before launch, we should make this rely on Supabase admin profiles only.
+              </p>
+            )}
+          </div>
+          <Button variant="outline" className="rounded-2xl" onClick={testWriteAccess} disabled={!hasSession}>
+            Test Write Access
+          </Button>
+        </div>
+      </CardContent>
+    </AppCard>
+  );
+}
+
 function sqlString(value) {
   if (value === null || value === undefined) return "null";
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -2586,6 +2653,8 @@ function SupabaseMigrationCard({
   scheduleLocked = false,
   manualTitles = [],
   bowlerIdentities = [],
+  supabaseSession = null,
+  supabaseAdminProfile = null,
   supabaseLoadStatus = "Not loaded",
   supabaseSaveStatus = "Not saved",
   onSyncSupabaseNow = () => {},
@@ -2999,6 +3068,8 @@ function DashboardTab({
   scheduleLocked = false,
   manualTitles = [],
   bowlerIdentities = [],
+  supabaseSession = null,
+  supabaseAdminProfile = null,
   supabaseLoadStatus = "Not loaded",
   supabaseSaveStatus = "Not saved",
   onSyncSupabaseNow = () => {},
@@ -3076,6 +3147,7 @@ function DashboardTab({
   return (
     <div className="space-y-3 md:space-y-4">
       <SupabaseConnectionCard />
+      <SupabaseAdminStatusCard session={supabaseSession} adminProfile={supabaseAdminProfile} />
       <SupabaseMigrationCard
         scheduleItems={scheduleItems}
         scheduleLocked={scheduleLocked}
@@ -13979,52 +14051,47 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return null;
     }
     const fallbackProfile = fallbackAdminProfileForSession(session);
+    const accessToken = session.access_token;
     if (fallbackProfile) {
       setSupabaseAdminProfile(fallbackProfile);
-      return fallbackProfile;
     }
 
-    const { data: rpcData, error: rpcError } = await supabase.rpc("my_admin_profile");
-    if (!rpcError && Array.isArray(rpcData) && rpcData[0]) {
-      setSupabaseAdminProfile(rpcData[0]);
-      return rpcData[0];
-    }
-    if (rpcError) {
-      console.warn("Could not load admin profile by RPC", rpcError);
-    }
-
-    const { data, error } = await supabase
-      .from("admin_profiles")
-      .select("user_id,email,role")
-      .eq("user_id", session.user.id)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("Could not load admin profile", error);
-      setSupabaseAdminProfile(fallbackProfile);
-      return fallbackProfile;
-    }
-
-    if (data) {
-      setSupabaseAdminProfile(data);
-      return data;
-    }
-
-    if (session.user.email) {
-      const { data: emailProfile, error: emailError } = await supabase
-        .from("admin_profiles")
-        .select("user_id,email,role")
-        .ilike("email", session.user.email)
-        .maybeSingle();
-
-      if (emailError) {
-        console.warn("Could not load admin profile by email", emailError);
-        setSupabaseAdminProfile(fallbackProfile);
-        return fallbackProfile;
+    if (accessToken) {
+      try {
+        const rpcRows = await withTimeout(
+          supabaseRestRequest("rpc/my_admin_profile", "", {
+            method: "POST",
+            body: {},
+            accessToken,
+          }),
+          "Loading admin profile",
+          5000
+        );
+        if (Array.isArray(rpcRows) && rpcRows[0]) {
+          setSupabaseAdminProfile(rpcRows[0]);
+          return rpcRows[0];
+        }
+      } catch (error) {
+        console.warn("Could not load admin profile by REST RPC", error);
       }
 
-      setSupabaseAdminProfile(emailProfile || fallbackProfile);
-      return emailProfile || fallbackProfile;
+      try {
+        const rows = await withTimeout(
+          supabaseRestRequest(
+            "admin_profiles",
+            `?select=user_id,email,role&user_id=eq.${postgrestEq(session.user.id)}`,
+            { accessToken }
+          ),
+          "Loading admin profile row",
+          5000
+        );
+        if (Array.isArray(rows) && rows[0]) {
+          setSupabaseAdminProfile(rows[0]);
+          return rows[0];
+        }
+      } catch (error) {
+        console.warn("Could not load admin profile by REST table read", error);
+      }
     }
 
     setSupabaseAdminProfile(fallbackProfile);
@@ -14041,16 +14108,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const authTimeoutId = window.setTimeout(() => {
       if (!mounted) return;
       setSupabaseAuthLoading(false);
-      setSupabaseSession(null);
-      setSupabaseAdminProfile(null);
     }, 5000);
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
       const session = data?.session || null;
       setSupabaseSession(session);
-      await loadSupabaseAdminProfile(session);
       window.clearTimeout(authTimeoutId);
+      await loadSupabaseAdminProfile(session);
       setSupabaseAuthLoading(false);
     }).catch((error) => {
       console.warn("Could not check Supabase session", error);
@@ -14063,8 +14128,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSupabaseSession(session || null);
-      await loadSupabaseAdminProfile(session || null);
       window.clearTimeout(authTimeoutId);
+      await loadSupabaseAdminProfile(session || null);
       setSupabaseAuthLoading(false);
     });
 
@@ -14863,6 +14928,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       scheduleLocked={scheduleLocked}
       manualTitles={manualTitles}
       bowlerIdentities={bowlerIdentities}
+      supabaseSession={supabaseSession}
+      supabaseAdminProfile={supabaseAdminProfile}
       supabaseLoadStatus={supabaseLoadStatus}
       supabaseSaveStatus={supabaseSaveStatus}
       onSyncSupabaseNow={() => {
