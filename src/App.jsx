@@ -3806,7 +3806,6 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
   const teamSize = styleConfig.teamSize;
   const laneDrawMatchplay = isLaneDrawMatchplayStyle(tournamentStyle);
-  const laneAssignments = buildLaneAssignments(tournamentInfo.lanesUsed, bowlers.length, tournamentStyle);
   const teamCount = Math.ceil(bowlers.length / Math.max(1, teamSize));
   const paidTeamCount = getPaidTournamentEntryCount(bowlers, tournamentStyle);
   const handicapBase = Number(sidePotState.handicapBase ?? 200);
@@ -3816,12 +3815,6 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
       0,
       Math.round((handicapBase - Number(average || 0)) * (handicapPercent / 100))
     );
-  useEffect(() => {
-    if (laneDrawMatchplay) return;
-    if (!laneAssignments.some(Boolean)) return;
-    setBowlers((current) => current.map((bowler, index) => ({ ...bowler, lane: laneAssignments[index] || bowler.lane || "" })));
-  }, [tournamentInfo.lanesUsed, tournamentStyle, laneDrawMatchplay]);
-
   useEffect(() => {
   if (!useHandicapScores) return;
 
@@ -3968,15 +3961,12 @@ const updateBowler = (index, field, value) => {
     })
   );
 };
-  const getNextLaneAssignment = (index) =>
-    laneDrawMatchplay ? "" : buildLaneAssignments(tournamentInfo.lanesUsed, index + 1, tournamentStyle)[index] || "";
   const addBowler = () => setBowlers((current) => {
-    const index = current.length;
     return [
       ...current,
       {
         ...makeBowler(Math.max(0, ...current.map((b) => Number(b.seed || 0))) + 1, current[0]?.games?.length || 4),
-        lane: getNextLaneAssignment(index),
+        lane: "",
       },
     ];
   });
@@ -3994,10 +3984,9 @@ const updateBowler = (index, field, value) => {
       return [
         ...current,
         ...Array.from({ length: target - current.length }, (_, index) => {
-          const rosterIndex = current.length + index;
           return {
             ...makeBowler(maxSeed + index + 1, current[0]?.games?.length || 4),
-            lane: getNextLaneAssignment(rosterIndex),
+            lane: "",
           };
         }),
       ];
