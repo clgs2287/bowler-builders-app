@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
+import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
 }
@@ -336,6 +337,7 @@ const TOURNAMENT_STYLES = {
 };
 
 const ADMIN_ACCESS_CODES = ["bowlerbuilders2026", "bowler builders 2026", "bowler-builders-2026"];
+const ADMIN_EMAILS = ["cory.lagner@gmail.com"];
 const ADMIN_SESSION_KEY = "bowler-builders-admin-session";
 const DEFAULT_TOURNAMENT_DIRECTOR = "Jimmy Clark";
 const DEFAULT_TOURNAMENT_DIRECTOR_EMAIL = "jimmy_clark79@yahoo.com";
@@ -474,6 +476,16 @@ function reservationKeyFromScheduleItem(item = {}) {
     date: item.startDate,
     center: item.center,
   });
+}
+
+function findScheduleItemByName(scheduleItems = [], name = "") {
+  const needle = normalizeMatchText(name);
+  if (!needle) return null;
+  const namedItems = (scheduleItems || []).filter((item) => String(item?.name || "").trim());
+  const exact = namedItems.find((item) => normalizeMatchText(item.name) === needle);
+  if (exact) return exact;
+  const prefixMatches = namedItems.filter((item) => normalizeMatchText(item.name).startsWith(needle));
+  return prefixMatches.length === 1 ? prefixMatches[0] : null;
 }
 
 function reservationBucketFromState(reservationState = {}) {
@@ -728,6 +740,16 @@ function downloadCsv(filename, rows) {
 
 function downloadJson(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadText(filename, text, type = "text/plain;charset=utf-8;") {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -2381,7 +2403,7 @@ function AppCard({ children, className = "" }) {
   return <Card className={`bb-card rounded-xl border bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
 }
 
-function LockedTextField({ label, value, onChange, type = "text", placeholder = "" }) {
+function LockedTextField({ label, value, onChange, type = "text", placeholder = "", listId = "" }) {
   const isBlank = !String(value || "").trim();
   const [editing, setEditing] = useState(isBlank);
   const [draftValue, setDraftValue] = useState(value || "");
@@ -2432,6 +2454,7 @@ function LockedTextField({ label, value, onChange, type = "text", placeholder = 
         type={type}
         value={draftValue}
         placeholder={placeholder}
+        list={listId || undefined}
         autoFocus
         onChange={(e) => setDraftValue(e.target.value)}
         onBlur={saveValue}
@@ -2486,6 +2509,468 @@ function LockedQualifyingGamesField({ qualifyingGames, onSave }) {
   );
 }
 
+function SupabaseConnectionCard() {
+  const [status, setStatus] = useState(hasSupabaseConfig ? "Ready to test" : "Missing config");
+  const [detail, setDetail] = useState(hasSupabaseConfig ? "Supabase URL and publishable key are loaded locally." : "Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env.local.");
+  const [testing, setTesting] = useState(false);
+
+  const testConnection = async () => {
+    if (!supabase) {
+      setStatus("Missing config");
+      setDetail("Supabase is not configured for this browser session.");
+      return;
+    }
+
+    setTesting(true);
+    setStatus("Testing...");
+    setDetail("Checking the Supabase API connection.");
+
+    const { error } = await supabase.from("app_settings").select("id").limit(1);
+    setTesting(false);
+
+    if (!error) {
+      setStatus("Connected");
+      setDetail("Supabase responded successfully.");
+      return;
+    }
+
+    if (error.code === "42P01") {
+      setStatus("Connected, schema needed");
+      setDetail("Supabase responded. The app_settings table has not been created yet.");
+      return;
+    }
+
+    setStatus("Connection issue");
+    setDetail(error.message || "Supabase returned an unknown error.");
+  };
+
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900">Supabase</h2>
+            <p className="text-sm font-semibold text-blue-700">{status}</p>
+            <p className="mt-1 text-xs text-blue-600">{detail}</p>
+          </div>
+          <Button variant="outline" className="rounded-2xl" onClick={testConnection} disabled={testing}>
+            {testing ? "Testing..." : "Test Connection"}
+          </Button>
+        </div>
+      </CardContent>
+    </AppCard>
+  );
+}
+
+function sqlString(value) {
+  if (value === null || value === undefined) return "null";
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function sqlJson(value) {
+  return `${sqlString(JSON.stringify(value ?? {}))}::jsonb`;
+}
+
+function sqlBoolean(value) {
+  return value ? "true" : "false";
+}
+
+function sqlDate(value) {
+  if (!value) return "null";
+  const dateText = String(value).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateText) ? `${sqlString(dateText)}::date` : "null";
+}
+
+function SupabaseMigrationCard({
+  scheduleItems = [],
+  scheduleLocked = false,
+  manualTitles = [],
+  bowlerIdentities = [],
+  supabaseLoadStatus = "Not loaded",
+  supabaseSaveStatus = "Not saved",
+  onSyncSupabaseNow = () => {},
+}) {
+  const [dbCounts, setDbCounts] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [checkMessage, setCheckMessage] = useState("");
+
+  const buildImportSql = () => {
+    const lines = [
+      "-- Bowler Builders data import",
+      "-- Run this in Supabase SQL Editor after reviewing the row counts.",
+      "begin;",
+      "",
+    ];
+
+    lines.push(
+      "insert into public.app_settings (id, value) values",
+      `  ('schedule_locked', ${sqlJson({ locked: Boolean(scheduleLocked) })})`,
+      "on conflict (id) do update set value = excluded.value;",
+      ""
+    );
+
+    if (scheduleItems.length) {
+      lines.push("-- Schedule events");
+      scheduleItems.forEach((item, index) => {
+        const id = item.id || `schedule-${index + 1}`;
+        const sortDate = item.startDate || item.date || "";
+        lines.push(
+          "insert into public.schedule_events (id, data, sort_date) values",
+          `  (${sqlString(id)}, ${sqlJson({ ...item, id })}, ${sqlDate(sortDate)})`,
+          "on conflict (id) do update set data = excluded.data, sort_date = excluded.sort_date;",
+          ""
+        );
+      });
+    }
+
+    if (manualTitles.length) {
+      lines.push("-- Manual titles, historical title totals, and Hall of Fame entries");
+      manualTitles.forEach((title, index) => {
+        const id = title.id || `manual-title-${index + 1}`;
+        lines.push(
+          "insert into public.manual_titles (id, data, bowler, season, source, is_hof, is_major, is_eligible) values",
+          `  (${sqlString(id)}, ${sqlJson({ ...title, id })}, ${sqlString(title.bowler || title.name || "")}, ${sqlString(title.season || "")}, ${sqlString(title.source || "")}, ${sqlBoolean(title.hof)}, ${sqlBoolean(title.major)}, ${sqlBoolean(title.eligible !== false)})`,
+          "on conflict (id) do update set data = excluded.data, bowler = excluded.bowler, season = excluded.season, source = excluded.source, is_hof = excluded.is_hof, is_major = excluded.is_major, is_eligible = excluded.is_eligible;",
+          ""
+        );
+      });
+    }
+
+    if (bowlerIdentities.length) {
+      lines.push("-- Bowler name mappings");
+      bowlerIdentities.forEach((identity, index) => {
+        const id = identity.id || `identity-${index + 1}`;
+        lines.push(
+          "insert into public.bowler_identities (id, data, nickname, real_name) values",
+          `  (${sqlString(id)}, ${sqlJson({ ...identity, id })}, ${sqlString(identity.nickname || "")}, ${sqlString(identity.realName || identity.real_name || "")})`,
+          "on conflict (id) do update set data = excluded.data, nickname = excluded.nickname, real_name = excluded.real_name;",
+          ""
+        );
+      });
+    }
+
+    lines.push("commit;", "");
+    return lines.join("\n");
+  };
+
+  const downloadImportSql = () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    downloadText(`bowler-builders-supabase-import-${stamp}.sql`, buildImportSql(), "text/sql;charset=utf-8;");
+  };
+  const checkDatabaseCounts = async () => {
+    if (!supabase) {
+      setCheckMessage("Supabase is not configured.");
+      return;
+    }
+
+    setChecking(true);
+    setCheckMessage("Checking database rows...");
+
+    const [scheduleResult, titlesResult, identitiesResult] = await Promise.all([
+      supabase.from("schedule_events").select("id", { count: "exact", head: true }),
+      supabase.from("manual_titles").select("id", { count: "exact", head: true }),
+      supabase.from("bowler_identities").select("id", { count: "exact", head: true }),
+    ]);
+
+    setChecking(false);
+
+    const error = scheduleResult.error || titlesResult.error || identitiesResult.error;
+    if (error) {
+      setCheckMessage(error.message || "Could not read database counts.");
+      return;
+    }
+
+    setDbCounts({
+      schedule: scheduleResult.count || 0,
+      titles: titlesResult.count || 0,
+      identities: identitiesResult.count || 0,
+    });
+    setCheckMessage("Database counts loaded.");
+  };
+
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-blue-900">Supabase Migration</h2>
+            <p className="text-sm text-blue-700">
+              Prepare a safe SQL import for schedule, manual titles, Hall of Fame, and name mappings.
+            </p>
+          </div>
+          <Button variant="outline" className="rounded-2xl" onClick={downloadImportSql}>
+            Download Import SQL
+          </Button>
+          <Button variant="outline" className="rounded-2xl" onClick={checkDatabaseCounts} disabled={checking}>
+            {checking ? "Checking..." : "Check DB Counts"}
+          </Button>
+          <Button variant="outline" className="rounded-2xl" onClick={onSyncSupabaseNow}>
+            Save to Supabase Now
+          </Button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <StatCard label="Schedule Events" value={scheduleItems.length} />
+          <StatCard label="Manual Title Rows" value={manualTitles.length} />
+          <StatCard label="HOF Rows" value={manualTitles.filter((title) => title.hof).length} />
+          <StatCard label="Name Mappings" value={bowlerIdentities.length} />
+        </div>
+        {dbCounts && (
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <StatCard label="DB Schedule" value={dbCounts.schedule} />
+            <StatCard label="DB Title Rows" value={dbCounts.titles} />
+            <StatCard label="DB Name Mappings" value={dbCounts.identities} />
+          </div>
+        )}
+        {checkMessage && <p className="mt-3 text-xs font-semibold text-blue-700">{checkMessage}</p>}
+        <p className="mt-3 text-xs font-semibold text-blue-700">
+          This avoids granting public write access before admin login is set up.
+        </p>
+        <p className="mt-2 text-xs font-semibold text-blue-700">
+          Supabase load: {supabaseLoadStatus}
+        </p>
+        <p className="mt-1 text-xs font-semibold text-blue-700">
+          Supabase save: {supabaseSaveStatus}
+        </p>
+      </CardContent>
+    </AppCard>
+  );
+}
+
+function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSignOut }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+    setSubmitting(true);
+    const result = await onSignIn(email.trim(), password);
+    setSubmitting(false);
+    if (result?.error) setError(result.error);
+    else setPassword("");
+  };
+
+  if (!hasSupabaseConfig) {
+    return <span className="text-xs font-bold text-yellow-200">Supabase config missing</span>;
+  }
+
+  if (authLoading) {
+    return <span className="text-xs font-bold text-blue-100">Checking login...</span>;
+  }
+
+  if (session?.user) {
+    return (
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <span className="text-xs font-bold text-blue-100">
+          {adminProfile
+            ? `Signed in: ${session.user.email || adminProfile.email || "admin"}`
+            : `Signed in, not admin: ${session.user.email || "unknown email"} (${session.user.id || "no user id"})`}
+        </span>
+        <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSignOut}>
+          Clear Login
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <Input
+        type="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        placeholder="Admin email"
+        className="h-10 min-w-[180px] text-blue-950 placeholder:text-blue-400"
+      />
+      <Input
+        type="password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") submit();
+        }}
+        placeholder="Password"
+        className="h-10 min-w-[160px] text-blue-950 placeholder:text-blue-400"
+      />
+      <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={submit} disabled={submitting}>
+        {submitting ? "Signing In..." : "Admin Sign In"}
+      </Button>
+      {error && <span className="text-xs font-bold text-yellow-200">{error}</span>}
+    </div>
+  );
+}
+
+function dataFromRow(row) {
+  return row?.data && typeof row.data === "object" ? row.data : {};
+}
+
+function dateForSupabase(value) {
+  if (!value) return null;
+  const dateText = String(value).slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(dateText) ? dateText : null;
+}
+
+function scheduleRecordFromItem(item, index) {
+  const id = String(item?.id || `schedule-${index + 1}`);
+  const data = { ...(item || {}), id };
+  return {
+    id,
+    data,
+    sort_date: dateForSupabase(data.startDate || data.date),
+  };
+}
+
+function manualTitleRecordFromItem(title, index) {
+  const id = String(title?.id || `manual-title-${index + 1}`);
+  const data = { ...(title || {}), id };
+  return {
+    id,
+    data,
+    bowler: data.bowler || data.name || "",
+    season: data.season || "",
+    source: data.source || "",
+    is_hof: Boolean(data.hof),
+    is_major: Boolean(data.major),
+    is_eligible: data.eligible !== false,
+  };
+}
+
+function bowlerIdentityRecordFromItem(identity, index) {
+  const nickname = identity?.nickname || "";
+  const id = String(identity?.id || getIdentityKey(nickname) || `identity-${index + 1}`);
+  const data = { ...(identity || {}), id };
+  return {
+    id,
+    data,
+    nickname,
+    real_name: data.realName || data.real_name || "",
+  };
+}
+
+function allReservationItemsFromState(reservationState = {}) {
+  const byId = new Map();
+  const addReservation = (reservation, tournamentKey) => {
+    if (!reservation) return;
+    const id = String(reservation.id || `reservation-${byId.size + 1}`);
+    byId.set(id, {
+      ...reservation,
+      id,
+      tournamentKey: reservation.tournamentKey || tournamentKey || reservationKeyFromState(reservationState),
+    });
+  };
+
+  const currentKey = reservationKeyFromState(reservationState);
+  (reservationState.reservations || []).forEach((reservation) => addReservation(reservation, currentKey));
+  Object.entries(reservationState.reservationsByTournament || {}).forEach(([tournamentKey, bucket]) => {
+    (bucket?.reservations || []).forEach((reservation) => addReservation(reservation, tournamentKey));
+  });
+
+  return Array.from(byId.values());
+}
+
+function reservationRecordFromItem(reservation, index, fallbackTournamentKey = "") {
+  const id = String(reservation?.id || `reservation-${index + 1}`);
+  const tournamentKey = reservation?.tournamentKey || fallbackTournamentKey || "";
+  const data = { ...(reservation || {}), id, tournamentKey };
+  return {
+    id,
+    data,
+    tournament_id: tournamentKey,
+    name: getReservationDisplayName(data) || data.name || "",
+    email: data.email || "",
+    phone: data.phone || "",
+    added_to_roster: Boolean(data.addedToRoster || data.added_to_roster),
+  };
+}
+
+function archivedTournamentRecordFromItem(tournament, index) {
+  const id = String(tournament?.id || `archive-${index + 1}`);
+  const data = { ...(tournament || {}), id };
+  return {
+    id,
+    data,
+    name: data.name || "",
+    season: data.season || "",
+    event_date: dateForSupabase(data.date || data.eventDate),
+    center: data.center || data.location || "",
+  };
+}
+
+function activeSnapshotRecordFromSnapshot(snapshot = {}) {
+  const tournamentInfo = snapshot.tournamentInfo || {};
+  return {
+    id: "active",
+    data: snapshot,
+    name: tournamentInfo.name || "",
+    event_date: dateForSupabase(tournamentInfo.date),
+    tournament_style: tournamentInfo.tournamentStyle || "",
+  };
+}
+
+async function loadSupabaseRestRows(table, query = "", signal) {
+  if (!supabaseUrl || !supabasePublishableKey) throw new Error("Supabase config is missing.");
+  const baseUrl = supabaseUrl.replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/rest/v1/${table}${query}`, {
+    signal,
+    headers: {
+      apikey: supabasePublishableKey,
+      Authorization: `Bearer ${supabasePublishableKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Could not load ${table}.`);
+  }
+
+  return response.json();
+}
+
+async function supabaseRestRequest(table, query = "", { method = "GET", body, accessToken, signal, prefer = "" } = {}) {
+  if (!supabaseUrl || !supabasePublishableKey) throw new Error("Supabase config is missing.");
+  const baseUrl = supabaseUrl.replace(/\/$/, "");
+  const headers = {
+    apikey: supabasePublishableKey,
+    Authorization: `Bearer ${accessToken || supabasePublishableKey}`,
+  };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (prefer) headers.Prefer = prefer;
+
+  const response = await fetch(`${baseUrl}/rest/v1/${table}${query}`, {
+    method,
+    signal,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Supabase ${method} ${table} failed.`);
+  }
+
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function postgrestEq(value) {
+  return encodeURIComponent(String(value ?? ""));
+}
+
+async function withTimeout(promise, label, timeoutMs = 12000) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(`${label} timed out.`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 function DashboardTab({
   tournamentInfo,
   setTournamentInfo,
@@ -2504,6 +2989,13 @@ function DashboardTab({
   eliminatorState,
   payoutState,
   matchplayState = DEFAULT_MATCHPLAY_STATE,
+  scheduleItems = [],
+  scheduleLocked = false,
+  manualTitles = [],
+  bowlerIdentities = [],
+  supabaseLoadStatus = "Not loaded",
+  supabaseSaveStatus = "Not saved",
+  onSyncSupabaseNow = () => {},
   savedTournamentDrafts = [],
   onSaveTournamentDraft = () => {},
   onLoadTournamentDraft = () => {},
@@ -2511,6 +3003,25 @@ function DashboardTab({
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
+  const applyScheduledTournament = (name) => {
+    const scheduledItem = findScheduleItemByName(scheduleItems, name);
+    if (!scheduledItem) {
+      update("name", name);
+      return;
+    }
+
+    setTournamentInfo((current) => ({
+      ...current,
+      name: scheduledItem.name || name,
+      date: scheduledItem.startDate || current.date || "",
+      startTime: scheduledItem.startTime || current.startTime || "",
+      center: scheduledItem.center || current.center || "",
+      location: scheduledItem.address || current.location || "",
+      titleEligible: typeof scheduledItem.fkmTitle === "boolean" ? scheduledItem.fkmTitle : current.titleEligible,
+      major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : current.major,
+      series: scheduledItem.series || current.series || DEFAULT_TOURNAMENT_SERIES,
+    }));
+  };
   const uploadAnnouncementImages = async (fileList) => {
     const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
     if (!files.length) return;
@@ -2558,13 +3069,30 @@ function DashboardTab({
 
   return (
     <div className="space-y-3 md:space-y-4">
+      <SupabaseConnectionCard />
+      <SupabaseMigrationCard
+        scheduleItems={scheduleItems}
+        scheduleLocked={scheduleLocked}
+        manualTitles={manualTitles}
+        bowlerIdentities={bowlerIdentities}
+        supabaseLoadStatus={supabaseLoadStatus}
+        supabaseSaveStatus={supabaseSaveStatus}
+        onSyncSupabaseNow={onSyncSupabaseNow}
+      />
       <div className="grid gap-4 lg:grid-cols-12">
         <AppCard className="lg:col-span-7">
           <CardContent className="p-3 md:p-5">
             <h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Tournament Setup</h2>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-3">
-                <LockedTextField label="Tournament Name" value={tournamentInfo.name} onChange={(value) => update("name", value)} />
+                <LockedTextField label="Tournament Name" value={tournamentInfo.name} onChange={applyScheduledTournament} listId="dashboard-schedule-tournaments" />
+                <datalist id="dashboard-schedule-tournaments">
+                  {(scheduleItems || []).filter((item) => String(item?.name || "").trim()).map((item, index) => (
+                    <option key={`${item.name}-${index}`} value={item.name}>
+                      {[item.startDate, item.startTime ? formatStartTime(item.startTime) : "", item.center].filter(Boolean).join(" | ")}
+                    </option>
+                  ))}
+                </datalist>
                 <LockedTextField label="Date" value={tournamentInfo.date} onChange={(value) => update("date", value)} type="date" />
                 <LockedTextField label="Start Time" value={tournamentInfo.startTime || ""} onChange={(value) => update("startTime", value)} type="time" />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
@@ -5323,6 +5851,7 @@ function PublicReservations({
   reservationState,
   setReservationState,
   tournamentInfo,
+  onReservationSubmit = () => Promise.resolve(),
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -5456,6 +5985,10 @@ const registrationStatus =
         newReservation,
       ],
     }));
+
+    Promise.resolve(onReservationSubmit(newReservation)).catch((error) => {
+      console.warn("Could not save public reservation to Supabase", error);
+    });
 
     alert(
       registrationStatus === "Registered"
@@ -13370,6 +13903,12 @@ export default function BowlingPayoutApp() {
   });
   const [adminCodeDraft, setAdminCodeDraft] = useState("");
   const [adminCodeError, setAdminCodeError] = useState("");
+  const [supabaseSession, setSupabaseSession] = useState(null);
+  const [supabaseAdminProfile, setSupabaseAdminProfile] = useState(null);
+  const [supabaseAuthLoading, setSupabaseAuthLoading] = useState(hasSupabaseConfig);
+  const [supabaseLoadStatus, setSupabaseLoadStatus] = useState("Not loaded");
+  const [supabaseLoadReady, setSupabaseLoadReady] = useState(false);
+  const [supabaseSaveStatus, setSupabaseSaveStatus] = useState("Sign in as admin to save to Supabase");
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
@@ -13425,6 +13964,279 @@ const [reservationState, setReservationState] = useState({
 });
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
   const activeTournamentSnapshotRef = useRef(null);
+  const supabasePublicDataLoadedRef = useRef(false);
+  const supabaseSaveSkipRef = useRef(true);
+
+  const fallbackAdminProfileForSession = (session) => {
+    const email = String(session?.user?.email || "").trim().toLowerCase();
+    if (!email || !ADMIN_EMAILS.includes(email)) return null;
+    return {
+      user_id: session.user.id || "",
+      email: session.user.email,
+      role: "admin",
+      source: "local-email-fallback",
+    };
+  };
+
+  const loadSupabaseAdminProfile = async (session) => {
+    if (!supabase || !session?.user) {
+      setSupabaseAdminProfile(null);
+      return null;
+    }
+    const fallbackProfile = fallbackAdminProfileForSession(session);
+    if (fallbackProfile) {
+      setSupabaseAdminProfile(fallbackProfile);
+      return fallbackProfile;
+    }
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc("my_admin_profile");
+    if (!rpcError && Array.isArray(rpcData) && rpcData[0]) {
+      setSupabaseAdminProfile(rpcData[0]);
+      return rpcData[0];
+    }
+    if (rpcError) {
+      console.warn("Could not load admin profile by RPC", rpcError);
+    }
+
+    const { data, error } = await supabase
+      .from("admin_profiles")
+      .select("user_id,email,role")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("Could not load admin profile", error);
+      setSupabaseAdminProfile(fallbackProfile);
+      return fallbackProfile;
+    }
+
+    if (data) {
+      setSupabaseAdminProfile(data);
+      return data;
+    }
+
+    if (session.user.email) {
+      const { data: emailProfile, error: emailError } = await supabase
+        .from("admin_profiles")
+        .select("user_id,email,role")
+        .ilike("email", session.user.email)
+        .maybeSingle();
+
+      if (emailError) {
+        console.warn("Could not load admin profile by email", emailError);
+        setSupabaseAdminProfile(fallbackProfile);
+        return fallbackProfile;
+      }
+
+      setSupabaseAdminProfile(emailProfile || fallbackProfile);
+      return emailProfile || fallbackProfile;
+    }
+
+    setSupabaseAdminProfile(fallbackProfile);
+    return fallbackProfile;
+  };
+
+  useEffect(() => {
+    if (!supabase) {
+      setSupabaseAuthLoading(false);
+      return undefined;
+    }
+
+    let mounted = true;
+    const authTimeoutId = window.setTimeout(() => {
+      if (!mounted) return;
+      setSupabaseAuthLoading(false);
+      setSupabaseSession(null);
+      setSupabaseAdminProfile(null);
+    }, 5000);
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!mounted) return;
+      const session = data?.session || null;
+      setSupabaseSession(session);
+      await loadSupabaseAdminProfile(session);
+      window.clearTimeout(authTimeoutId);
+      setSupabaseAuthLoading(false);
+    }).catch((error) => {
+      console.warn("Could not check Supabase session", error);
+      if (!mounted) return;
+      setSupabaseSession(null);
+      setSupabaseAdminProfile(null);
+      window.clearTimeout(authTimeoutId);
+      setSupabaseAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSupabaseSession(session || null);
+      await loadSupabaseAdminProfile(session || null);
+      window.clearTimeout(authTimeoutId);
+      setSupabaseAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      window.clearTimeout(authTimeoutId);
+      listener?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  const signInSupabaseAdmin = async (email, password) => {
+    if (!supabase) return { error: "Supabase is not configured." };
+    if (!email || !password) return { error: "Enter email and password." };
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+
+    const profile = await loadSupabaseAdminProfile(data?.session || null);
+    if (!profile) return { error: "Signed in, but this user is not listed as an admin yet." };
+
+    try {
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    } catch {
+      // Session storage may be blocked in some browsers.
+    }
+
+    setIsAdminMode(true);
+    setActiveTab("dashboard");
+    return { ok: true };
+  };
+
+  const signOutSupabaseAdmin = async () => {
+    setSupabaseSession(null);
+    setSupabaseAdminProfile(null);
+    setSupabaseAuthLoading(false);
+    setSupabaseSaveStatus("Sign in as admin to save to Supabase");
+    lockAdmin();
+
+    if (supabase) {
+      try {
+        await Promise.race([
+          supabase.auth.signOut({ scope: "global" }),
+          new Promise((resolve) => window.setTimeout(resolve, 1500)),
+        ]);
+      } catch (error) {
+        console.warn("Could not sign out of Supabase normally", error);
+      }
+    }
+
+    try {
+      Object.keys(window.localStorage || {}).forEach((key) => {
+        if (key.startsWith("sb-") || key.toLowerCase().includes("supabase")) {
+          window.localStorage.removeItem(key);
+        }
+      });
+    } catch {
+      // Local storage may be blocked; state reset below still clears this session.
+    }
+  };
+
+  const syncSupabaseCoreData = async () => {
+    if (!supabase || !supabaseAdminProfile) {
+      setSupabaseSaveStatus("Sign in as admin to save to Supabase");
+      return;
+    }
+    const accessToken = supabaseSession?.access_token;
+    if (!accessToken) {
+      setSupabaseSaveStatus("Save issue: Supabase session token is missing. Clear login and sign in again.");
+      return;
+    }
+
+    setSupabaseSaveStatus("Saving...");
+
+    const scheduleRecords = (scheduleItems || []).map(scheduleRecordFromItem);
+    const titleRecords = (manualTitles || []).map(manualTitleRecordFromItem);
+    const identityRecords = (bowlerIdentities || []).map(bowlerIdentityRecordFromItem);
+    const reservationRecords = allReservationItemsFromState(reservationState).map(reservationRecordFromItem);
+    const archiveRecords = (tournamentHistory || []).map(archivedTournamentRecordFromItem);
+    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || {});
+
+    const syncTable = async (table, records) => {
+      setSupabaseSaveStatus(`Saving ${table}...`);
+      const existingRows = await withTimeout(
+        supabaseRestRequest(table, "?select=id", { accessToken }),
+        `Reading ${table}`
+      );
+
+      if (records.length) {
+        await withTimeout(
+          supabaseRestRequest(table, "?on_conflict=id", {
+            method: "POST",
+            body: records,
+            accessToken,
+            prefer: "resolution=merge-duplicates,return=minimal",
+          }),
+          `Saving ${table}`
+        );
+      }
+
+      const nextIds = new Set(records.map((record) => String(record.id)));
+      const staleIds = (existingRows || []).map((row) => String(row.id)).filter((id) => !nextIds.has(id));
+      if (staleIds.length) {
+        for (const id of staleIds) {
+          await withTimeout(
+            supabaseRestRequest(table, `?id=eq.${postgrestEq(id)}`, {
+              method: "DELETE",
+              accessToken,
+              prefer: "return=minimal",
+            }),
+            `Cleaning ${table}`
+          );
+        }
+      }
+    };
+
+    setSupabaseSaveStatus("Saving settings...");
+    await withTimeout(
+      supabaseRestRequest("app_settings", "?on_conflict=id", {
+        method: "POST",
+        body: { id: "schedule_locked", value: { locked: Boolean(scheduleLocked) } },
+        accessToken,
+        prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+      "Saving schedule settings"
+    );
+
+    const reservationSettings = {
+      entriesOpen: Boolean(reservationState.entriesOpen),
+      registrationEmail: reservationState.registrationEmail || "",
+      tournamentName: reservationState.tournamentName || "",
+      tournamentDate: reservationState.tournamentDate || "",
+      tournamentStartTime: reservationState.tournamentStartTime || "",
+      tournamentCenter: reservationState.tournamentCenter || "",
+      tournamentAddress: reservationState.tournamentAddress || "",
+      reservationLimit: Number(reservationState.reservationLimit || 48),
+      reservationsByTournament: reservationState.reservationsByTournament || {},
+    };
+    await withTimeout(
+      supabaseRestRequest("app_settings", "?on_conflict=id", {
+        method: "POST",
+        body: { id: "reservation_state", value: reservationSettings },
+        accessToken,
+        prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+      "Saving reservation settings"
+    );
+
+    await syncTable("schedule_events", scheduleRecords);
+    await syncTable("manual_titles", titleRecords);
+    await syncTable("bowler_identities", identityRecords);
+    await syncTable("reservations", reservationRecords);
+    await syncTable("archived_tournaments", archiveRecords);
+    await syncTable("active_tournament_snapshots", [activeSnapshotRecord]);
+
+    setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${archiveRecords.length} archives, active snapshot`);
+  };
+
+  useEffect(() => {
+    if (!supabaseAdminProfile) return;
+    try {
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    } catch {
+      // Session storage may be blocked in some browsers.
+    }
+    setIsAdminMode(true);
+  }, [supabaseAdminProfile]);
+
   useEffect(() => {
     window.__currentTournamentFormat = tournamentFormat;
   }, [tournamentFormat]);
@@ -13457,6 +14269,139 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       console.warn("Could not save tournament history", error);
     }
   }, [tournamentHistory, manualTitles, bowlerIdentities, savedTournamentDrafts, hasLoadedHistory]);
+
+  useEffect(() => {
+    if (!supabase || !hasLoadedHistory || !hasLoadedSavedData) return;
+
+    let cancelled = false;
+
+    const loadSupabasePublicData = async () => {
+      setSupabaseLoadStatus("Loading...");
+      setSupabaseLoadReady(false);
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+      try {
+        const reads = await Promise.allSettled([
+          loadSupabaseRestRows("schedule_events", "?select=id,data,sort_date&order=sort_date.asc", controller.signal),
+          loadSupabaseRestRows("app_settings", "?select=id,value&id=in.(schedule_locked,reservation_state)", controller.signal),
+          loadSupabaseRestRows("manual_titles", "?select=id,data&order=created_at.asc", controller.signal),
+          loadSupabaseRestRows("bowler_identities", "?select=id,data&order=created_at.asc", controller.signal),
+          loadSupabaseRestRows("reservations", "?select=id,data,tournament_id,added_to_roster&order=created_at.asc", controller.signal),
+          loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal),
+          loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
+        ]);
+
+        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "archive", "active snapshot"];
+        const failedReads = reads
+          .map((result, index) => result.status === "rejected" ? `${readNames[index]}: ${result.reason?.message || "failed"}` : "")
+          .filter(Boolean);
+        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, archiveRows, activeSnapshotRows] = reads.map((result) =>
+          result.status === "fulfilled" ? result.value : []
+        );
+
+        if (cancelled) return;
+
+        const nextSchedule = (scheduleRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
+        const nextTitles = (titleRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
+        const nextIdentities = (identityRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
+        const settings = Array.isArray(settingsRows) ? settingsRows : [];
+        const scheduleSettings = settings.find((row) => row.id === "schedule_locked");
+        const reservationSettings = settings.find((row) => row.id === "reservation_state")?.value || {};
+        const nextReservations = (reservationRows || []).map((row) => {
+          const data = dataFromRow(row);
+          return {
+            id: row.id,
+            ...data,
+            tournamentKey: data.tournamentKey || row.tournament_id || "",
+            addedToRoster: Boolean(data.addedToRoster || row.added_to_roster),
+          };
+        });
+        const nextArchives = (archiveRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
+        const nextActiveSnapshot = dataFromRow((activeSnapshotRows || [])[0] || {});
+
+        if (nextSchedule.length) setScheduleItems(nextSchedule);
+        if (typeof scheduleSettings?.value?.locked === "boolean") setScheduleLocked(scheduleSettings.value.locked);
+        if (nextTitles.length) setManualTitles(nextTitles);
+        if (nextIdentities.length) setBowlerIdentities(nextIdentities);
+        if (nextArchives.length) setTournamentHistory(nextArchives);
+        if (Object.keys(nextActiveSnapshot).length) applyActiveTournamentSnapshot(nextActiveSnapshot);
+        if (reservationSettings && typeof reservationSettings === "object") {
+          const currentReservationKey = reservationKeyFromState(reservationSettings);
+          const reservationsByTournament = { ...(reservationSettings.reservationsByTournament || {}) };
+          nextReservations.forEach((reservation) => {
+            const tournamentKey = reservation.tournamentKey || currentReservationKey;
+            if (!reservationsByTournament[tournamentKey]) {
+              reservationsByTournament[tournamentKey] = {
+                tournamentName: reservation.tournament || "",
+                tournamentDate: "",
+                tournamentStartTime: "",
+                tournamentCenter: "",
+                tournamentAddress: "",
+                reservationLimit: Number(reservationSettings.reservationLimit || 48),
+                reservations: [],
+              };
+            }
+            reservationsByTournament[tournamentKey].reservations = [
+              ...(reservationsByTournament[tournamentKey].reservations || []).filter((item) => String(item.id) !== String(reservation.id)),
+              reservation,
+            ];
+          });
+          setReservationState((current) => ({
+            ...current,
+            ...reservationSettings,
+            reservationsByTournament,
+            reservations: nextReservations.filter((reservation) => (reservation.tournamentKey || "") === currentReservationKey),
+          }));
+        }
+
+        supabasePublicDataLoadedRef.current = true;
+        supabaseSaveSkipRef.current = true;
+        setSupabaseLoadReady(true);
+        const loadedMessage = `Loaded ${nextSchedule.length} schedule, ${nextTitles.length} title/HOF, ${nextIdentities.length} name rows, ${nextReservations.length} reservations, ${nextArchives.length} archives, ${Object.keys(nextActiveSnapshot).length ? "1" : "0"} active snapshot`;
+        setSupabaseLoadStatus(failedReads.length ? `${loadedMessage}. Issues: ${failedReads.join("; ")}` : loadedMessage);
+      } catch (error) {
+        const message = error.name === "AbortError" ? "Supabase load timed out." : error.message || "Could not load Supabase data.";
+        if (!cancelled) {
+          supabasePublicDataLoadedRef.current = true;
+          setSupabaseLoadReady(true);
+          setSupabaseLoadStatus(`Load issue: ${message}`);
+        }
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    };
+
+    loadSupabasePublicData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasLoadedHistory, hasLoadedSavedData]);
+
+  useEffect(() => {
+    if (!supabase || !supabaseAdminProfile) {
+      setSupabaseSaveStatus("Sign in as admin to save to Supabase");
+      return undefined;
+    }
+    if (!supabaseLoadReady) {
+      setSupabaseSaveStatus("Waiting for Supabase load before saving");
+      return undefined;
+    }
+    if (supabaseSaveSkipRef.current) {
+      supabaseSaveSkipRef.current = false;
+      setSupabaseSaveStatus("Ready");
+      return undefined;
+    }
+
+    setSupabaseSaveStatus("Waiting to save...");
+    const timeoutId = window.setTimeout(() => {
+      syncSupabaseCoreData().catch((error) => {
+        setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save to Supabase."}`);
+      });
+    }, 900);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [scheduleItems, scheduleLocked, manualTitles, bowlerIdentities, reservationState, tournamentHistory, supabaseAdminProfile, supabaseSession, supabaseLoadReady]);
 
   useEffect(() => {
     try {
@@ -13644,6 +14589,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
     return { name: displayName, alreadyExists };
   };
+
+  const submitReservationToSupabase = async (reservation) => {
+    if (!supabase) return;
+    const record = reservationRecordFromItem(reservation, 0, reservation.tournamentKey || reservationKeyFromState(reservationState));
+    const { error } = await supabase.from("reservations").insert(record);
+    if (error) throw error;
+  };
+
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
     if (!confirmed) return;
@@ -13836,15 +14789,35 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
                 {isAdminMode ? (
                   <div className="flex flex-wrap gap-2">
+                    {supabaseSession?.user && (
+                      <span className="self-center text-xs font-bold text-blue-100">
+                        {supabaseAdminProfile
+                          ? `Signed in: ${supabaseSession.user.email || supabaseAdminProfile.email || "admin"}`
+                          : `Signed in, not admin: ${supabaseSession.user.email || "unknown email"} (${supabaseSession.user.id || "no user id"})`}
+                      </span>
+                    )}
                     <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={exportFullBackup}>
                       Export Full Backup
                     </Button>
+                    {supabaseSession?.user && (
+                      <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={signOutSupabaseAdmin}>
+                        Sign Out
+                      </Button>
+                    )}
                     <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={lockAdmin}>
                       Lock Admin
                     </Button>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <SupabaseAdminLogin
+                      session={supabaseSession}
+                      adminProfile={supabaseAdminProfile}
+                      authLoading={supabaseAuthLoading}
+                      onSignIn={signInSupabaseAdmin}
+                      onSignOut={signOutSupabaseAdmin}
+                    />
+                    <span className="hidden text-xs font-bold text-blue-100 sm:inline">or</span>
                     <Input
                       type="password"
                       value={adminCodeDraft}
@@ -13891,6 +14864,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       bracketState={bracketState}
       eliminatorState={eliminatorState}
       matchplayState={matchplayState}
+      scheduleItems={scheduleItems}
+      scheduleLocked={scheduleLocked}
+      manualTitles={manualTitles}
+      bowlerIdentities={bowlerIdentities}
+      supabaseLoadStatus={supabaseLoadStatus}
+      supabaseSaveStatus={supabaseSaveStatus}
+      onSyncSupabaseNow={() => {
+        syncSupabaseCoreData().catch((error) => {
+          setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save to Supabase."}`);
+        });
+      }}
       setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
       savedTournamentDrafts={savedTournamentDrafts}
       onSaveTournamentDraft={saveTournamentDraft}
@@ -14059,6 +15043,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   reservationState={reservationState}
   setReservationState={setReservationState}
   tournamentInfo={tournamentInfo}
+  onReservationSubmit={submitReservationToSupabase}
 />
   </AppErrorBoundary>
 )}
