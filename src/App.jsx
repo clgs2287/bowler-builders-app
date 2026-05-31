@@ -726,6 +726,16 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function calculateFinancials({
   entries,
   lineageEntries = entries,
@@ -877,7 +887,7 @@ if (savedFinalsRounds.stepladderFinal) {
 
   const game2Ranked = directStepladder ? [] : rankRows(game2Rows, "game2Total");
 
-  const finalists = (directStepladder ? game1Ranked : game2Ranked)
+  const finalists = (directStepladder ? cutBowlers : game2Ranked)
     .slice(0, 4)
     .map((b, index) => ({ ...b, stepSeed: index + 1 }));
 
@@ -1379,7 +1389,7 @@ function buildEliminatorTournament({ bowlers = [], eliminatorTournamentState = {
       const openingRows = groupPlayers.map((player) => {
         const games = [0, 1, 2].map((gameIndex) => {
           const scoreKey = eliminatorTournamentScoreKey(stageIndex, groupIndex, "opening", 0, player, gameIndex);
-          return { scoreKey, score: Number(scores[scoreKey] || 0) };
+          return { scoreKey, score: Number(scores[scoreKey] ?? player.games?.[gameIndex] ?? 0) };
         });
         const total = games.reduce((sum, game) => sum + Number(game.score || 0), 0);
         return { ...player, games, total };
@@ -1968,6 +1978,7 @@ tabs: [
 
 function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator", publicResultsUnlocked = true, tournamentInfo = {}) {
   const matchplayTournament = isMatchplayTournament(tournamentFormat, tournamentInfo);
+  const eliminatorTournament = isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles");
 
   return appSections
     .filter((section) => isAdminMode || section.id === "leaderboard")
@@ -1976,6 +1987,7 @@ function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator",
       tabs: section.tabs.filter((tab) => {
         if (tab.hideForSweeper && tournamentFormat === "sweeper") return false;
         if (matchplayTournament && tab.id === "public") return false;
+        if (eliminatorTournament && tab.id === "public") return false;
         if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(tab.id)) return false;
         return isAdminMode || PUBLIC_TAB_IDS.has(tab.id);
       }),
@@ -1990,6 +2002,7 @@ function getSectionForTab(activeTab, isAdminMode = true, tournamentFormat = "eli
 
 function getDisplayTabLabel(tab, tournamentInfo = {}) {
   if (tab.id === "publicfinals" && isMatchplayTournament("", tournamentInfo)) return "Matchplay";
+  if (tab.id === "publicfinals" && isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles")) return "Eliminator Tournament";
   return tab.label;
 }
 
@@ -3923,14 +3936,16 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false, 
   );
 }
 
-function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, }) {
+function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, setEliminatorTournamentState, }) {
   const [activeScoreGameIndex, setActiveScoreGameIndex] = useState(null);
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const laneDrawMatchplay = isLaneDrawMatchplayStyle(tournamentStyle);
+  const eliminatorTournamentStyle = isEliminatorTournamentStyle(tournamentStyle);
   const teamSize = getTournamentTeamSize(tournamentStyle);
 
  const updateGame = (index, gameIndex, value) => {
   const score = Math.max(0, Math.min(300, Number(value || 0)));
+  const editedBowler = bowlers[index];
   setBowlers((current) =>
     current.map((b, i) =>
       i === index
@@ -3944,6 +3959,23 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
         : b
     )
   );
+  if (eliminatorTournamentStyle && gameIndex < 3 && editedBowler && setEliminatorTournamentState) {
+    const eliminatorOpening = buildEliminatorTournament({ bowlers, eliminatorTournamentState, tournamentInfo });
+    const openingRow = eliminatorOpening.stages[0]?.groups
+      ?.flatMap((group) => group.openingRows.map((row) => ({ ...row, groupIndex: group.groupIndex })))
+      ?.find((row) => eliminatorTournamentPlayerKey(row) === eliminatorTournamentPlayerKey(editedBowler));
+    const scoreKey = openingRow?.games?.[gameIndex]?.scoreKey;
+    if (scoreKey) {
+      setEliminatorTournamentState((current) => ({
+        ...DEFAULT_ELIMINATOR_TOURNAMENT_STATE,
+        ...(current || {}),
+        scores: {
+          ...(current?.scores || {}),
+          [scoreKey]: score,
+        },
+      }));
+    }
+  }
 
   if (activeScoreGameIndex !== gameIndex) return;
 
@@ -6498,7 +6530,7 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
     return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
   });
   const game2Ranked = directStepladder ? [] : rankRows(game2Rows, "game2Total");
-  const finalists = (directStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+  const finalists = (directStepladder ? cutBowlers : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
   const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
   const stepWinner1 = winnerFromMatch(
@@ -6595,6 +6627,7 @@ function PublicViewTab({
   eliminatorState,
   laneEliminatorState,
   matchplayState,
+  eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE,
   scheduleItems = [],
   publicMode = "leaderboard",
 }) {
@@ -6605,12 +6638,13 @@ function PublicViewTab({
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
   const ranked = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle);
   const publicIsMatchplay = isMatchplayTournament(tournamentFormat, tournamentInfo);
+  const publicIsEliminatorTournament = isEliminatorTournamentStyle(tournamentStyle);
   const displayCashers = Number(financials.cashers || 0);
   const cutBowler = ranked[Math.max(displayCashers - 1, 0)];
   const cutScore = cutBowler ? (useHandicapScores ? cutBowler.handicap : cutBowler.scratch) : undefined;
   const publicTabs =
   publicMode === "finals"
-    ? [{ id: "finals", label: "Finals" }]
+    ? [{ id: "finals", label: publicIsEliminatorTournament ? "Eliminator Tournament" : publicIsMatchplay ? "Matchplay" : "Finals" }]
     : [{ id: "leaderboard", label: "Leaderboard" }];
 
   return (
@@ -6648,11 +6682,12 @@ function PublicViewTab({
         </CardContent>
       </Card>
 
-      {publicTab === "leaderboard" && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} />}
+      {publicTab === "leaderboard" && !publicIsEliminatorTournament && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} />}
       {publicMode === "finals" && publicIsMatchplay && <PublicMatchplayBracketView bowlers={bowlers} matchplayState={matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={tournamentInfo} />}
-      {publicMode === "finals" && !publicIsMatchplay && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} />}
-      {publicMode === "finals" && !publicIsMatchplay && tournamentFormat === "eliminator" && <PublicEliminatorView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} tournamentInfo={tournamentInfo} />}
-      {publicMode === "finals" && !publicIsMatchplay && tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} laneEliminatorState={laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={tournamentInfo} readOnly />}
+      {publicMode === "finals" && publicIsEliminatorTournament && <EliminatorTournamentTab bowlers={bowlers} eliminatorTournamentState={eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={tournamentInfo} readOnly />}
+      {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} />}
+      {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "eliminator" && <PublicEliminatorView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} tournamentInfo={tournamentInfo} />}
+      {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} laneEliminatorState={laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={tournamentInfo} readOnly />}
     </div>
   );
 }
@@ -7132,6 +7167,7 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
   );
   const selectedPublicArchiveSnapshot = selectedPublicArchive?.activeSnapshot || null;
   const selectedPublicArchiveIsMatchplay = selectedPublicArchiveSnapshot && isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {});
+  const selectedPublicArchiveIsEliminatorTournament = selectedPublicArchiveSnapshot && isEliminatorTournamentStyle(selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles");
   const selectedPublicArchiveRecap = selectedPublicArchive?.tournamentRecap || selectedPublicArchiveSnapshot?.tournamentRecap || {};
   const archiveTitles = (tournamentHistory || []).flatMap((tournament) =>
   (tournament.results || [])
@@ -7955,7 +7991,10 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
           { id: "finals", label: "Finals" },
           { id: "sideaction", label: "Side Action" },
           { id: "recap", label: "Recap" },
-        ].filter((section) => !(selectedPublicArchiveIsMatchplay && section.id === "qualifying")).map((section) => (
+        ]
+          .filter((section) => !((selectedPublicArchiveIsMatchplay || selectedPublicArchiveIsEliminatorTournament) && section.id === "qualifying"))
+          .map((section) => section.id === "finals" && selectedPublicArchiveIsEliminatorTournament ? { ...section, label: "Eliminator Tournament" } : section)
+          .map((section) => (
           <button
             key={section.id}
             type="button"
@@ -8011,13 +8050,14 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         </div>
       )}
 
-      {publicArchiveSection === "qualifying" && selectedPublicArchiveSnapshot && !selectedPublicArchiveIsMatchplay && <StandingsPublic ranked={getRankedTournamentEntries(selectedPublicArchiveSnapshot.bowlers || [], Boolean(selectedPublicArchiveSnapshot.useHandicapScores), selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedPublicArchiveSnapshot.bowlers || []).length, ...(selectedPublicArchiveSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} tournamentFormat={selectedPublicArchiveSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"} />}
+      {publicArchiveSection === "qualifying" && selectedPublicArchiveSnapshot && !selectedPublicArchiveIsMatchplay && !selectedPublicArchiveIsEliminatorTournament && <StandingsPublic ranked={getRankedTournamentEntries(selectedPublicArchiveSnapshot.bowlers || [], Boolean(selectedPublicArchiveSnapshot.useHandicapScores), selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedPublicArchiveSnapshot.bowlers || []).length, ...(selectedPublicArchiveSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} tournamentFormat={selectedPublicArchiveSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"} />}
       {publicArchiveSection === "qualifying" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with full scoring snapshots.</p>}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && <PublicMatchplayBracketView bowlers={selectedPublicArchiveSnapshot.bowlers || []} matchplayState={selectedPublicArchiveSnapshot.matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
-      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && selectedPublicArchiveSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} bracketState={selectedPublicArchiveSnapshot.bracketState || { manualQualifiers: "", scores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
-      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && selectedPublicArchiveSnapshot.tournamentFormat === "eliminator" && <PublicEliminatorView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} eliminatorState={selectedPublicArchiveSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
-      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && selectedPublicArchiveSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} laneEliminatorState={selectedPublicArchiveSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} readOnly />}
-      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && selectedPublicArchiveSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format - no finals bracket.</p>}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && selectedPublicArchiveIsEliminatorTournament && <EliminatorTournamentTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} eliminatorTournamentState={selectedPublicArchiveSnapshot.eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} readOnly />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} bracketState={selectedPublicArchiveSnapshot.bracketState || { manualQualifiers: "", scores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "eliminator" && <PublicEliminatorView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} eliminatorState={selectedPublicArchiveSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} laneEliminatorState={selectedPublicArchiveSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} readOnly />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format - no finals bracket.</p>}
       {publicArchiveSection === "finals" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with full scoring snapshots.</p>}
       {publicArchiveSection === "sideaction" && selectedPublicArchiveSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} sidePotState={selectedPublicArchiveSnapshot.sidePotState} qualifyingGames={selectedPublicArchiveSnapshot.qualifyingGames || 4} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
       {publicArchiveSection === "sideaction" && !selectedPublicArchiveSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
@@ -8106,7 +8146,7 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
       return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
     });
     const game2Ranked = directStepladder ? [] : rankRows(game2Rows, "game2Total");
-    const finalists = (directStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+    const finalists = (directStepladder ? cutBowlers : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
     const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
     const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
     const stepWinner1 = winnerFromMatch(
@@ -8745,7 +8785,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
     return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
   });
   const game2Ranked = directStepladder ? [] : rankRows(game2Rows, "game2Total");
-  const finalists = (directStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+  const finalists = (directStepladder ? cutBowlers : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
   const updateGame1 = (seed, value) => setEliminatorState((current) => ({ ...current, game1Scores: { ...(current.game1Scores || {}), [seed]: value } }));
   const updateGame2 = (seed, value) => setEliminatorState((current) => ({ ...current, game2Scores: { ...(current.game2Scores || {}), [seed]: value } }));
@@ -9117,7 +9157,12 @@ function LanePairEliminatorTab({ entries, bowlers, useHandicapScores, laneElimin
 }
 
 function EliminatorTournamentTab({ bowlers, setBowlers, eliminatorTournamentState, setEliminatorTournamentState, tournamentInfo = {}, readOnly = false }) {
+  const [printMode, setPrintMode] = useState("");
   const result = buildEliminatorTournament({ bowlers, eliminatorTournamentState, tournamentInfo });
+  const openingPrintGroups = result.stages[0]?.groups || [];
+  const survivorPrintGroups = result.stages
+    .slice(1)
+    .flatMap((stage) => (stage.groups || []).map((group) => ({ ...group, stageTitle: stage.title, stageIndex: stage.stageIndex })));
   const updateScore = (scoreKey, value, player = null, gameIndex = null) => {
     if (readOnly || !setEliminatorTournamentState) return;
     const score = clampBowlingScoreInput(value, 1, 300);
@@ -9187,9 +9232,192 @@ function EliminatorTournamentTab({ bowlers, setBowlers, eliminatorTournamentStat
     inputs[nextIndex]?.focus();
     inputs[nextIndex]?.select?.();
   };
+  const printEliminatorSheets = (mode) => {
+    setPrintMode(mode);
+    setTimeout(() => window.print(), 100);
+  };
+  const PrintableOpeningSheet = ({ group, sheetNumber }) => (
+    <div className="print-sheet rounded-2xl border border-slate-300 bg-white p-6 shadow-sm">
+      <div className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-4 print:border-black">
+        <div>
+          <h1 className="text-3xl font-black text-slate-950 print:text-black">{tournamentInfo.name || "Eliminator Tournament"}</h1>
+          <p className="mt-1 text-sm font-semibold text-slate-700 print:text-black">
+            {tournamentInfo.center || ""} {tournamentInfo.date ? `- ${tournamentInfo.date}` : ""}
+          </p>
+          <h2 className="mt-4 text-4xl font-black text-slate-950 print:text-black">{group.label || `Opening Group ${sheetNumber}`}</h2>
+        </div>
+        <div className="min-w-[190px] rounded-xl border-2 border-slate-900 p-3 text-center print:border-black">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-600 print:text-black">Opening Round</p>
+          <p className="mt-2 text-2xl font-black text-slate-950 print:text-black">Games 1-3</p>
+          <p className="mt-2 text-xs font-bold text-slate-600 print:text-black">Sheet {sheetNumber}</p>
+        </div>
+      </div>
+      <table className="mt-5 w-full border-collapse text-sm print:text-[12px]">
+        <thead>
+          <tr className="bg-slate-900 text-white print:bg-white print:text-black">
+            <th className="w-20 border border-slate-900 p-2 text-left print:border-black">Lane</th>
+            <th className="border border-slate-900 p-2 text-left print:border-black">Bowler</th>
+            <th className="w-20 border border-slate-900 p-2 text-center print:border-black">G1</th>
+            <th className="w-20 border border-slate-900 p-2 text-center print:border-black">G2</th>
+            <th className="w-20 border border-slate-900 p-2 text-center print:border-black">G3</th>
+            <th className="w-24 border border-slate-900 p-2 text-center print:border-black">Total</th>
+            <th className="w-28 border border-slate-900 p-2 text-center print:border-black">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: Math.max(8, group.openingRows?.length || 0) }, (_, rowIndex) => {
+            const row = group.openingRows?.[rowIndex];
+            return (
+              <tr key={`elim-opening-print-${sheetNumber}-${rowIndex}`}>
+                <td className="h-12 border border-slate-900 p-2 font-black print:border-black">{row?.lane || ""}</td>
+                <td className="border border-slate-900 p-2 font-bold print:border-black">{row?.name || ""}</td>
+                <td className="border border-slate-900 p-2 print:border-black" />
+                <td className="border border-slate-900 p-2 print:border-black" />
+                <td className="border border-slate-900 p-2 print:border-black" />
+                <td className="border border-slate-900 p-2 print:border-black" />
+                <td className="border border-slate-900 p-2 print:border-black" />
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="mt-5 rounded-xl border-2 border-slate-900 p-4 text-sm font-bold print:border-black">
+        Notes:
+        <div className="mt-6 border-b border-slate-900 print:border-black" />
+        <div className="mt-6 border-b border-slate-900 print:border-black" />
+      </div>
+    </div>
+  );
+  const PrintablePairEliminationSheet = ({ group, sheetNumber }) => {
+    return (
+      <div className="print-sheet rounded-2xl border border-slate-300 bg-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-4 print:border-black">
+          <div>
+            <h1 className="text-3xl font-black text-slate-950 print:text-black">{tournamentInfo.name || "Eliminator Tournament"}</h1>
+            <p className="mt-1 text-sm font-semibold text-slate-700 print:text-black">
+              {tournamentInfo.center || ""} {tournamentInfo.date ? `- ${tournamentInfo.date}` : ""}
+            </p>
+            <h2 className="mt-4 text-4xl font-black text-slate-950 print:text-black">{group.label || `Opening Group ${sheetNumber}`}</h2>
+          </div>
+          <div className="min-w-[190px] rounded-xl border-2 border-slate-900 p-3 text-center print:border-black">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-600 print:text-black">Pair Eliminations</p>
+            <p className="mt-2 text-2xl font-black text-slate-950 print:text-black">Games 1-2</p>
+            <p className="mt-2 text-xs font-bold text-slate-600 print:text-black">Sheet {sheetNumber}</p>
+          </div>
+        </div>
+        {[0, 1].map((roundIndex) => {
+          const fallbackRows = roundIndex === 0 ? 4 : 2;
+
+          return (
+            <div key={`pair-elim-print-${sheetNumber}-${roundIndex}`} className={roundIndex === 0 ? "mt-5" : "mt-7"}>
+              <div className="mb-2 flex items-center justify-between border-b-2 border-slate-900 pb-1 print:border-black">
+                <h3 className="text-2xl font-black text-slate-950 print:text-black">Elimination Game {roundIndex + 1}</h3>
+                <p className="text-sm font-black uppercase text-slate-700 print:text-black">
+                  {roundIndex === 0 ? "Lower half out" : "Pair winner advances"}
+                </p>
+              </div>
+              <table className="w-full border-collapse text-sm print:text-[12px]">
+                <thead>
+                  <tr className="bg-slate-900 text-white print:bg-white print:text-black">
+                    <th className="w-20 border border-slate-900 p-2 text-left print:border-black">Lane</th>
+                    <th className="border border-slate-900 p-2 text-left print:border-black">Bowler</th>
+                    <th className="w-28 border border-slate-900 p-2 text-center print:border-black">Score</th>
+                    <th className="w-28 border border-slate-900 p-2 text-center print:border-black">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: fallbackRows }, (_, rowIndex) => (
+                    <tr key={`pair-elim-print-row-${sheetNumber}-${roundIndex}-${rowIndex}`}>
+                      <td className="h-12 border border-slate-900 p-2 font-black print:border-black" />
+                      <td className="border border-slate-900 p-2 font-bold print:border-black" />
+                      <td className="border border-slate-900 p-2 print:border-black" />
+                      <td className="border border-slate-900 p-2 print:border-black" />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+  const PrintableSurvivorSheet = ({ group, sheetNumber }) => {
+    const rowCount = Math.max(4, group.players?.length || 0);
+    return (
+      <div className="print-sheet rounded-2xl border border-slate-300 bg-white p-6 shadow-sm">
+        <div className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-4 print:border-black">
+          <div>
+            <h1 className="text-3xl font-black text-slate-950 print:text-black">{tournamentInfo.name || "Eliminator Tournament"}</h1>
+            <p className="mt-1 text-sm font-semibold text-slate-700 print:text-black">
+              {tournamentInfo.center || ""} {tournamentInfo.date ? `- ${tournamentInfo.date}` : ""}
+            </p>
+            <h2 className="mt-4 text-4xl font-black text-slate-950 print:text-black">{group.stageTitle || "Survivor Round"}</h2>
+            <p className="mt-1 text-xl font-black text-slate-950 print:text-black">{group.label || `Group ${sheetNumber}`}</p>
+          </div>
+          <div className="min-w-[190px] rounded-xl border-2 border-slate-900 p-3 text-center print:border-black">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-600 print:text-black">Survivor Game</p>
+            <p className="mt-2 text-2xl font-black text-slate-950 print:text-black">Lower Half Out</p>
+            <p className="mt-2 text-xs font-bold text-slate-600 print:text-black">Sheet {sheetNumber}</p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3 text-sm font-black print:text-black">
+          <div className="rounded-xl border-2 border-slate-900 p-3 print:border-black">Lanes: ________________</div>
+          <div className="rounded-xl border-2 border-slate-900 p-3 print:border-black">Round: ________________</div>
+          <div className="rounded-xl border-2 border-slate-900 p-3 print:border-black">Verified By: __________</div>
+        </div>
+        <table className="mt-5 w-full border-collapse text-sm print:text-[12px]">
+          <thead>
+            <tr className="bg-slate-900 text-white print:bg-white print:text-black">
+              <th className="w-20 border border-slate-900 p-2 text-center print:border-black">Seed</th>
+              <th className="border border-slate-900 p-2 text-left print:border-black">Bowler</th>
+              <th className="w-28 border border-slate-900 p-2 text-center print:border-black">Score</th>
+              <th className="w-28 border border-slate-900 p-2 text-center print:border-black">Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: rowCount }, (_, rowIndex) => (
+              <tr key={`elim-survivor-print-${sheetNumber}-${rowIndex}`}>
+                <td className="h-14 border border-slate-900 p-2 text-center font-black print:border-black" />
+                <td className="border border-slate-900 p-2 font-bold print:border-black" />
+                <td className="border border-slate-900 p-2 print:border-black" />
+                <td className="border border-slate-900 p-2 print:border-black" />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mt-5 rounded-xl border-2 border-slate-900 p-4 text-sm font-bold print:border-black">
+          Winners / Lane Move:
+          <div className="mt-6 border-b border-slate-900 print:border-black" />
+          <div className="mt-6 border-b border-slate-900 print:border-black" />
+        </div>
+      </div>
+    );
+  };
+  const PrintableBlankSurvivorSheet = () => (
+    <PrintableSurvivorSheet group={{ stageTitle: "Survivor Round", label: "Blank Group", players: Array.from({ length: 4 }, () => ({})) }} sheetNumber={1} />
+  );
 
   return (
     <div className="space-y-3 md:space-y-4">
+      <div className="hidden print:block">
+        {printMode === "opening" && openingPrintGroups.map((group, index) => (
+          <div key={`elim-opening-print-wrap-${group.groupIndex}`} className={index === 0 ? "" : "print:break-before-page"}>
+            <PrintableOpeningSheet group={group} sheetNumber={index + 1} />
+          </div>
+        ))}
+        {printMode === "pairElimination" && openingPrintGroups.map((group, index) => (
+          <div key={`elim-pair-elim-print-wrap-${group.groupIndex}`} className={index === 0 ? "" : "print:break-before-page"}>
+            <PrintablePairEliminationSheet group={group} sheetNumber={index + 1} />
+          </div>
+        ))}
+        {printMode === "survivor" && (survivorPrintGroups.length ? survivorPrintGroups : [null]).map((group, index) => (
+          <div key={`elim-survivor-print-wrap-${group?.stageIndex || "blank"}-${group?.groupIndex || index}`} className={index === 0 ? "" : "print:break-before-page"}>
+            {group ? <PrintableSurvivorSheet group={group} sheetNumber={index + 1} /> : <PrintableBlankSurvivorSheet />}
+          </div>
+        ))}
+      </div>
+      <div className="space-y-3 md:space-y-4 print:hidden">
       <AppCard>
         <CardContent className="p-3 md:p-5">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -9200,9 +9428,20 @@ function EliminatorTournamentTab({ bowlers, setBowlers, eliminatorTournamentStat
               </p>
             </div>
             {!readOnly && (
-              <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearScores}>
-                Clear Scores
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" className="rounded-2xl" onClick={() => printEliminatorSheets("opening")}>
+                  Print Opening Sheets
+                </Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => printEliminatorSheets("pairElimination")}>
+                  Print Pair Elim Sheets
+                </Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => printEliminatorSheets("survivor")}>
+                  Print Survivor Sheets
+                </Button>
+                <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearScores}>
+                  Clear Scores
+                </Button>
+              </div>
             )}
           </div>
           <div className="grid gap-3 md:grid-cols-5">
@@ -9324,7 +9563,7 @@ function EliminatorTournamentTab({ bowlers, setBowlers, eliminatorTournamentStat
                                         className={`h-8 w-14 text-center text-xs font-bold ${gameSaved ? "bg-slate-100 text-slate-700" : ""}`}
                                         data-eliminator-opening-score="true"
                                         data-eliminator-tab-order={tabOrder}
-                                        value={result.scores[game.scoreKey] ?? ""}
+                                        value={result.scores[game.scoreKey] ?? game.score ?? ""}
                                         onChange={(event) => updateScore(game.scoreKey, event.target.value, row, gameIndex)}
                                         onKeyDown={handleOpeningScoreTab}
                                       />
@@ -9389,6 +9628,7 @@ function EliminatorTournamentTab({ bowlers, setBowlers, eliminatorTournamentStat
           </CardContent>
         </AppCard>
       ))}
+      </div>
     </div>
   );
 }
@@ -10329,6 +10569,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   const selectedArchivedTournament = tournamentHistory.find((t) => t.id === selectedArchivedTournamentId);
   const selectedSnapshot = selectedArchivedTournament?.activeSnapshot || null;
   const selectedArchiveIsMatchplay = selectedSnapshot && isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {});
+  const selectedArchiveIsEliminatorTournament = selectedSnapshot && isEliminatorTournamentStyle(selectedSnapshot.tournamentInfo?.tournamentStyle || "singles");
   const selectedArchivedRecap = selectedArchivedTournament?.tournamentRecap || selectedSnapshot?.tournamentRecap || {};
   const payoutAssignments = [];
   const [archiveSort, setArchiveSort] = useState({ column: "place", direction: "asc" });
@@ -10420,7 +10661,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
         scores.push(game2Score);
       }
 
-      const finalists = (directStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((row, index) => ({ ...row, stepSeed: index + 1 }));
+      const finalists = (directStepladder ? cutBowlers : game2Ranked).slice(0, 4).map((row, index) => ({ ...row, stepSeed: index + 1 }));
       const seedMap = Object.fromEntries(finalists.map((row) => [row.stepSeed, row]));
       const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
       const stepWinner1 = winnerFromMatch(
@@ -10472,8 +10713,29 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       return scores;
     };
 
+    const getEliminatorTournamentScoresForEntry = (entry) => {
+      const scores = [];
+      const result = buildEliminatorTournament({ bowlers, eliminatorTournamentState, tournamentInfo });
+
+      result.stages.forEach((stage) => {
+        stage.groups.forEach((group) => {
+          group.rounds.forEach((round) => {
+            round.rows.forEach((row) => {
+              if (eliminatorTournamentPlayerKey(row) === eliminatorTournamentPlayerKey(entry) && Number(row.score || 0) > 0) {
+                scores.push(Number(row.score));
+              }
+            });
+          });
+        });
+      });
+
+      return scores;
+    };
+
     const getFinalsScoresForEntry = (entry) => (
-      isMatchplayTournament(tournamentFormat, tournamentInfo)
+      isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles")
+        ? getEliminatorTournamentScoresForEntry(entry)
+        : isMatchplayTournament(tournamentFormat, tournamentInfo)
         ? getMatchplayScoresForEntry(entry)
         : tournamentFormat === "bracket"
         ? getBracketScoresForEntry(entry)
@@ -10496,6 +10758,11 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
         const overallScores = [...qualifyingScores, ...finalsScores];
         const scratch = scratchTotal(member);
         const handicap = handicapTotal(member);
+        const isEliminatorTournamentArchive = isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles");
+        const displayScores = isEliminatorTournamentArchive ? overallScores : qualifyingScores;
+        const displayScratchTotal = isEliminatorTournamentArchive
+          ? overallScores.reduce((sum, game) => sum + Number(game || 0), 0)
+          : scratch;
 
         return {
           bowlerId: member.name.trim().toLowerCase(),
@@ -10503,13 +10770,13 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
           teamName: b.isTeam ? b.name : "",
           teamNumber: b.teamNumber || null,
           place,
-          games: qualifyingScores,
+          games: displayScores,
           qualifyingGames: qualifyingScores,
           finalsGames: finalsScores,
           overallGames: overallScores,
-          scratchTotal: scratch,
+          scratchTotal: displayScratchTotal,
           handicapTotal: handicap,
-          scoringTotal: useHandicapScores ? handicap : scratch,
+          scoringTotal: useHandicapScores && !isEliminatorTournamentArchive ? handicap : displayScratchTotal,
           qualifyingAverage: qualifyingScores.length
             ? qualifyingScores.reduce((sum, game) => sum + game, 0) / qualifyingScores.length
             : 0,
@@ -10635,7 +10902,10 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                 { id: "finals", label: "Finals" },
                 { id: "sideaction", label: "Side Action" },
                 { id: "recap", label: "Recap" },
-              ].filter((section) => !(selectedArchiveIsMatchplay && section.id === "qualifying")).map((section) => <button key={section.id} type="button" onClick={() => setArchivedDetailSection(section.id)} className={archivedDetailSection === section.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}>{section.label}</button>)}
+              ]
+                .filter((section) => !((selectedArchiveIsMatchplay || selectedArchiveIsEliminatorTournament) && section.id === "qualifying"))
+                .map((section) => section.id === "finals" && selectedArchiveIsEliminatorTournament ? { ...section, label: "Eliminator Tournament" } : section)
+                .map((section) => <button key={section.id} type="button" onClick={() => setArchivedDetailSection(section.id)} className={archivedDetailSection === section.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}>{section.label}</button>)}
             </div>
             {archivedDetailSection === "results" && (
               <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
@@ -10833,13 +11103,14 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                 </table>
               </div>
             )}
-            {archivedDetailSection === "qualifying" && selectedSnapshot && !selectedArchiveIsMatchplay && <StandingsPublic ranked={getRankedTournamentEntries(selectedSnapshot.bowlers || [], Boolean(selectedSnapshot.useHandicapScores), selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedSnapshot.bowlers || []).length, ...(selectedSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} tournamentFormat={selectedSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"} />}
+            {archivedDetailSection === "qualifying" && selectedSnapshot && !selectedArchiveIsMatchplay && !selectedArchiveIsEliminatorTournament && <StandingsPublic ranked={getRankedTournamentEntries(selectedSnapshot.bowlers || [], Boolean(selectedSnapshot.useHandicapScores), selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedSnapshot.bowlers || []).length, ...(selectedSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} tournamentFormat={selectedSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"} />}
             {archivedDetailSection === "qualifying" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "finals" && selectedSnapshot && isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && <PublicMatchplayBracketView bowlers={selectedSnapshot.bowlers || []} matchplayState={selectedSnapshot.matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
-            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && selectedSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} bracketState={selectedSnapshot.bracketState || { manualQualifiers: "", scores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
-            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && selectedSnapshot.tournamentFormat === "eliminator" && <PublicEliminatorView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} eliminatorState={selectedSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
-            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && selectedSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} laneEliminatorState={selectedSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
-            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && selectedSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format — no finals bracket.</p>}
+            {archivedDetailSection === "finals" && selectedSnapshot && selectedArchiveIsEliminatorTournament && <EliminatorTournamentTab bowlers={selectedSnapshot.bowlers || []} eliminatorTournamentState={selectedSnapshot.eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
+            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} bracketState={selectedSnapshot.bracketState || { manualQualifiers: "", scores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
+            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "eliminator" && <PublicEliminatorView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} eliminatorState={selectedSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
+            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} laneEliminatorState={selectedSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
+            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format — no finals bracket.</p>}
             {archivedDetailSection === "finals" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "sideaction" && selectedSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} sidePotState={selectedSnapshot.sidePotState} qualifyingGames={selectedSnapshot.qualifyingGames || 4} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "sideaction" && !selectedSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
@@ -13459,9 +13730,40 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setIsAdminMode(false);
     setActiveTab("tournamentInfo");
   };
+  const exportFullBackup = () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    downloadJson(`bowler-builders-full-backup-${stamp}.json`, {
+      backedUpAt: new Date().toISOString(),
+      qualifyingGames,
+      savedScoreGames,
+      savedFinalsRounds,
+      bowlers,
+      useHandicapScores,
+      tournamentFormat,
+      tournamentInfo,
+      tournamentRecap,
+      reservationState,
+      multiDayEvent,
+      payoutState,
+      bracketState,
+      eliminatorState,
+      laneEliminatorState,
+      matchplayState,
+      eliminatorTournamentState,
+      sidePotState,
+      paidPayouts,
+      paidSideActionPayouts,
+      scheduleItems,
+      scheduleLocked,
+      tournamentHistory,
+      manualTitles,
+      bowlerIdentities,
+      savedTournamentDrafts,
+    });
+  };
 
   useEffect(() => {
-    if (isMatchplayTournament(tournamentFormat, tournamentInfo) && activeTab === "public") {
+    if ((isMatchplayTournament(tournamentFormat, tournamentInfo) || isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles")) && activeTab === "public") {
       setActiveTab("publicfinals");
       return;
     }
@@ -13533,9 +13835,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                 </div>
 
                 {isAdminMode ? (
-                  <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={lockAdmin}>
-                    Lock Admin
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={exportFullBackup}>
+                      Export Full Backup
+                    </Button>
+                    <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={lockAdmin}>
+                      Lock Admin
+                    </Button>
+                  </div>
                 ) : (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Input
@@ -13594,7 +13901,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   </AppErrorBoundary>
 )}
         {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} />}
-        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo}   />}
+        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo} eliminatorTournamentState={eliminatorTournamentState} setEliminatorTournamentState={setEliminatorTournamentState}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} matchplayLineageGames={matchplayLineageGames} />}
@@ -13721,8 +14028,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   matchplayState={matchplayState}
 />
 )}
-        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} scheduleItems={scheduleItems} /></AppErrorBoundary>}
-        {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} /></AppErrorBoundary>}
+        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} /></AppErrorBoundary>}
+        {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} /></AppErrorBoundary>}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
         {activeTab === "highgame" && <AppErrorBoundary key="highgame"><HighGameTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
