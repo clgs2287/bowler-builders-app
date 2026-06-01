@@ -535,12 +535,39 @@ function getReservationRegistrationNumber(reservation = {}, fallback = "") {
   return reservation.registrationNumber || reservation.confirmationNumber || fallback;
 }
 
+function normalizeReservationIdentity(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isDuplicateReservation(existing = {}, next = {}) {
+  const existingEmail = normalizeReservationIdentity(existing.email);
+  const nextEmail = normalizeReservationIdentity(next.email);
+  if (existingEmail && nextEmail && existingEmail === nextEmail) return true;
+
+  const existingName = normalizeReservationIdentity(existing.name);
+  const nextName = normalizeReservationIdentity(next.name);
+  const existingNickname = normalizeReservationIdentity(existing.nickname);
+  const nextNickname = normalizeReservationIdentity(next.nickname);
+  const existingDisplay = normalizeReservationIdentity(getReservationDisplayName(existing));
+  const nextDisplay = normalizeReservationIdentity(getReservationDisplayName(next));
+  return Boolean(
+    (existingName && nextName && existingName === nextName) ||
+    (existingNickname && nextNickname && existingNickname === nextNickname) ||
+    (existingDisplay && nextDisplay && existingDisplay === nextDisplay)
+  );
+}
+
 function getNextReservationNumber(reservationState = {}) {
   const existingNumbers = (reservationState.reservations || [])
     .map((reservation) => Number(getReservationRegistrationNumber(reservation, 0)))
     .filter((number) => Number.isFinite(number) && number > 0);
 
-  return Math.max(Number(reservationState.reservationNextNumber || 1), ...existingNumbers.map((number) => number + 1), 1);
+  return Math.max(
+    Number(reservationState.reservationNextNumber || 1),
+    Number(reservationState.reservationCount || 0) + 1,
+    ...existingNumbers.map((number) => number + 1),
+    1
+  );
 }
 
 function getTournamentStartDateTime(date, startTime) {
@@ -6135,6 +6162,7 @@ function PublicReservations({
   tournamentInfo,
   onReservationSubmit = () => Promise.resolve(),
 }) {
+  const [submittingReservation, setSubmittingReservation] = useState(false);
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -6240,16 +6268,14 @@ const registrationStatus =
         />
 
 <Button
-  disabled={!formValid}
+  disabled={!formValid || submittingReservation}
   className={`mt-5 rounded-2xl px-5 py-3 text-sm font-bold ${
-    formValid
+    formValid && !submittingReservation
       ? "bg-blue-800 hover:bg-blue-900"
       : "cursor-not-allowed bg-slate-400"
   }`}
-  onClick={() => {
-    const registrationNumber = getNextReservationNumber(reservationState);
-    const newReservation = {
-      id: Date.now(),
+  onClick={async () => {
+    const pendingReservation = {
       tournament:
         reservationState.tournamentName ||
         tournamentInfo.name,
@@ -6259,35 +6285,57 @@ const registrationStatus =
       phone: formatPhoneNumber(form.phone),
       email: form.email,
       note: form.note,
+    };
+    const duplicateReservation = currentReservations.find((reservation) =>
+      isDuplicateReservation(reservation, pendingReservation)
+    );
+    if (duplicateReservation) {
+      alert(`${getReservationDisplayName(duplicateReservation) || form.name} is already on the reservation list for this tournament.`);
+      return;
+    }
+    const registrationNumber = getNextReservationNumber(reservationState);
+    const newReservation = {
+      id: Date.now(),
+      ...pendingReservation,
       status: registrationStatus,
       registrationNumber,
       confirmationNumber: registrationNumber,
       createdAt: new Date().toISOString(),
     };
 
+    let savedReservation = newReservation;
+    try {
+      setSubmittingReservation(true);
+      savedReservation = {
+        ...newReservation,
+        ...(await Promise.resolve(onReservationSubmit(newReservation))),
+      };
+    } catch (error) {
+      alert(error.message || "Could not save this reservation. Please try again.");
+      return;
+    } finally {
+      setSubmittingReservation(false);
+    }
+
     setReservationState((current) => {
       const currentReservations = current.reservations || [];
       const nextReservations = [
         ...currentReservations,
-        newReservation,
+        savedReservation,
       ];
       const currentCount = Number(current.reservationCount ?? currentReservations.length);
       return {
         ...current,
-        reservationNextNumber: Math.max(Number(current.reservationNextNumber || 1), registrationNumber + 1),
+        reservationNextNumber: Math.max(Number(current.reservationNextNumber || 1), Number(savedReservation.registrationNumber || registrationNumber) + 1),
         reservationCount: Math.max(currentCount + 1, nextReservations.length),
         reservations: nextReservations,
       };
     });
 
-    Promise.resolve(onReservationSubmit(newReservation)).catch((error) => {
-      console.warn("Could not save public reservation to Supabase", error);
-    });
-
     alert(
-      registrationStatus === "Registered"
-        ? `Registration submitted successfully! Confirmation #${newReservation.registrationNumber}`
-        : `You have been added to the waitlist. Confirmation #${newReservation.registrationNumber}`
+      savedReservation.status === "Registered"
+        ? `Registration submitted successfully! Confirmation #${savedReservation.registrationNumber}`
+        : `You have been added to the waitlist. Confirmation #${savedReservation.registrationNumber}`
     );
 
     setForm({
@@ -6299,7 +6347,9 @@ const registrationStatus =
     });
   }}
 >
-  {registrationStatus === "Registered"
+  {submittingReservation
+    ? "Submitting..."
+    : registrationStatus === "Registered"
     ? "Register"
     : "Join Waitlist"}
 </Button>
@@ -14908,10 +14958,24 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   };
 
   const submitReservationToSupabase = async (reservation) => {
-    if (!supabase) return;
-    const record = reservationRecordFromItem(reservation, 0, reservation.tournamentKey || reservationKeyFromState(reservationState));
-    const { error } = await supabase.from("reservations").insert(record);
+    if (!supabase) return reservation;
+    const tournamentKey = reservation.tournamentKey || reservationKeyFromState(reservationState);
+    const duplicate = allReservationItemsFromState(reservationState).find((existing) =>
+      String(existing.id) !== String(reservation.id) &&
+      (existing.tournamentKey || reservationKeyFromState(reservationState)) === tournamentKey &&
+      isDuplicateReservation(existing, reservation)
+    );
+    if (duplicate) {
+      throw new Error(`${getReservationDisplayName(duplicate) || "This bowler"} is already on the reservation list.`);
+    }
+    const { data, error } = await supabase.rpc("create_public_reservation", {
+      payload: {
+        ...reservation,
+        tournamentKey,
+      },
+    });
     if (error) throw error;
+    return data || reservation;
   };
 
   const restoreTournament = (archivedTournament) => {
