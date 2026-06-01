@@ -2917,6 +2917,7 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   const submit = async () => {
     setError("");
@@ -2924,7 +2925,10 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
     const result = await onSignIn(email.trim(), password);
     setSubmitting(false);
     if (result?.error) setError(result.error);
-    else setPassword("");
+    else {
+      setPassword("");
+      setExpanded(false);
+    }
   };
 
   if (!hasSupabaseConfig) {
@@ -2950,8 +2954,20 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
     );
   }
 
+  if (!expanded) {
+    return (
+      <Button
+        variant="outline"
+        className="rounded-2xl bg-white/95 text-blue-950 hover:bg-blue-50"
+        onClick={() => setExpanded(true)}
+      >
+        Admin Login
+      </Button>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-2 rounded-2xl border border-white/20 bg-slate-950/70 p-2 sm:flex-row sm:items-center">
       <Input
         type="email"
         value={email}
@@ -2971,6 +2987,9 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
       />
       <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={submit} disabled={submitting}>
         {submitting ? "Signing In..." : "Admin Sign In"}
+      </Button>
+      <Button variant="outline" className="rounded-2xl bg-white/80 text-blue-950 hover:bg-blue-50" onClick={() => { setExpanded(false); setError(""); }}>
+        Cancel
       </Button>
       {error && <span className="text-xs font-bold text-yellow-200">{error}</span>}
     </div>
@@ -15329,15 +15348,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                 />
               </div>
 
-              <div className="bb-access-panel flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-white/15 md:flex-row md:items-center md:justify-between">
+              <div className={isAdminMode ? "bb-access-panel flex flex-col gap-2 rounded-2xl p-3 ring-1 ring-white/15 md:flex-row md:items-center md:justify-between" : "flex justify-end"}>
+                {isAdminMode && (
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">
                     Access
                   </p>
                   <p className="text-sm font-semibold text-white">
-                    {isAdminMode ? "Admin mode is unlocked for this browser session." : "Public mode shows Tournament Home only."}
+                    Admin mode is unlocked for this browser session.
                   </p>
                 </div>
+                )}
 
                 {isAdminMode ? (
                   <div className="flex flex-wrap gap-2">
