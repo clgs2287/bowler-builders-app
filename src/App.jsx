@@ -5789,6 +5789,10 @@ function ReservationsTab({
   const addReservationToRoster = (reservation) => {
     const result = onAddReservationToRegistration(reservation);
     const name = result?.name || getReservationDisplayName(reservation) || "Reservation";
+    if (result?.rosterFull) {
+      setRosterNotice(`${name} could not be added. Registration is full at ${result.limit} entries. Delete someone from Registration first.`);
+      return;
+    }
     setReservationState((current) => ({
       ...current,
       reservations: (current.reservations || []).map((item) =>
@@ -14988,12 +14992,18 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       : 0;
     const currentReservationKey = reservation.tournamentKey || reservationKeyFromState(reservationState);
     let alreadyExists = false;
+    let rosterFull = false;
+    const rosterLimit = Number(reservationState.reservationLimit || 0);
 
     setBowlers((current) => {
       const existingIndex = current.findIndex((bowler) => {
         return reservation.id && String(bowler.reservationId || "") === String(reservation.id);
       });
       alreadyExists = existingIndex >= 0;
+      if (!alreadyExists && rosterLimit > 0 && current.length >= rosterLimit) {
+        rosterFull = true;
+        return current;
+      }
       const maxSeed = Math.max(
         0,
         ...current
@@ -15029,7 +15039,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return [...current, nextBowler];
     });
 
-    return { name: displayName, alreadyExists };
+    return { name: displayName, alreadyExists, rosterFull, limit: rosterLimit };
   };
 
   const submitReservationToSupabase = async (reservation) => {
