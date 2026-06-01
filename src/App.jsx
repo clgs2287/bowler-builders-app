@@ -604,6 +604,15 @@ function getTournamentStartDateTime(date, startTime) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function isTournamentDayOrLater(date) {
+  if (!date) return false;
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return parsed.getTime() <= today.getTime();
+}
+
 function isTournamentRegistrationWindow(date, startTime) {
   const startDateTime = getTournamentStartDateTime(date, startTime);
   if (!startDateTime) return false;
@@ -15208,6 +15217,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     : getAutoFinalsLineageGames({ entries, tournamentFormat, tournamentStyle });
   const financials = useMemo(() => calculateFinancials({ entries, lineageEntries: bowlers.length, ...payoutState, finalsGames: financialFinalsGames, totalLineageGames: financialLineageGames }), [entries, bowlers.length, payoutState, financialFinalsGames, financialLineageGames]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides }), [financials, payoutState]);
+  const headerEventLabel = isTournamentDayOrLater(tournamentInfo.date || reservationState.tournamentDate)
+    ? "Active Event"
+    : "Upcoming Event";
   const lockAdmin = () => {
     setIsAdminMode(false);
     setActiveTab("tournamentInfo");
@@ -15301,7 +15313,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   <div className="text-right text-xs">
     <div className="rounded-2xl bg-white/10 px-4 py-2 ring-1 ring-white/20">
       <p className="uppercase tracking-[0.2em] text-blue-200">
-        Active Event
+        {headerEventLabel}
       </p>
       <p className="font-bold text-white">
         {tournamentInfo.name || "Tournament"}
