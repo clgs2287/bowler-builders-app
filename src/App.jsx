@@ -2360,13 +2360,13 @@ const infoRows = [
 
   return (
     <AppCard>
-      <CardContent className="p-4 md:p-6">
-        <h2 className="mb-5 text-center text-2xl font-bold text-blue-900">
+      <CardContent className="p-3 md:p-6">
+        <h2 className="mb-3 text-center text-xl font-bold text-blue-900 md:mb-5 md:text-2xl">
           Tournament Info
         </h2>
 
-        <div className="rounded-2xl border border-blue-200 bg-white p-5">
-          <div className="space-y-4">
+        <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-5">
+          <div className="space-y-2.5 md:space-y-4">
 {infoRows.map(([label, value]) => {
   const isCurrentStage = label === "Current Stage";
 
@@ -2375,15 +2375,15 @@ const infoRows = [
       key={label}
       className={
         isCurrentStage
-          ? "flex items-center justify-between gap-6 rounded-2xl border border-green-300 bg-green-50 p-4"
-          : "flex items-center justify-between gap-6 border-b pb-3"
+          ? "flex items-center justify-between gap-3 rounded-2xl border border-green-300 bg-green-50 p-3 md:gap-6 md:p-4"
+          : "flex items-center justify-between gap-3 border-b pb-2 md:gap-6 md:pb-3"
       }
     >
       <span
         className={
           isCurrentStage
-            ? "text-lg font-bold text-blue-900"
-            : "font-semibold text-blue-900"
+            ? "text-sm font-bold text-blue-900 md:text-lg"
+            : "text-sm font-semibold text-blue-900 md:text-base"
         }
       >
         {label}
@@ -2392,8 +2392,8 @@ const infoRows = [
       <span
         className={
           isCurrentStage
-            ? "text-right text-2xl font-black text-green-700"
-            : "text-right font-bold text-slate-900"
+            ? "text-right text-lg font-black text-green-700 md:text-2xl"
+            : "text-right text-sm font-bold text-slate-900 md:text-base"
         }
       >
         {value}
@@ -2402,9 +2402,9 @@ const infoRows = [
   );
 })}
 
-            <div className="flex items-center justify-between gap-6">
-              <span className="font-semibold text-blue-900">Tournament Director</span>
-              <span className="text-right font-bold text-slate-900">
+            <div className="flex items-center justify-between gap-3 md:gap-6">
+              <span className="text-sm font-semibold text-blue-900 md:text-base">Tournament Director</span>
+              <span className="text-right text-sm font-bold text-slate-900 md:text-base">
                 {tournamentInfo.director || "TBD"}
 {tournamentInfo.directorEmail && (
   <>
@@ -2431,10 +2431,10 @@ const infoRows = [
         </div>
 
         {(sponsorList.length > 0 || logoLinks.length > 0 || announcementImages.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="mt-3 grid gap-3 md:mt-5 md:gap-4 lg:grid-cols-2">
             {sponsorList.length > 0 && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                <h3 className="mb-3 text-lg font-black text-blue-950">Sponsors</h3>
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 md:p-4">
+                <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Sponsors</h3>
                 <div className="flex flex-wrap gap-2">
                   {sponsorList.map((sponsor) => (
                     <span key={sponsor} className="rounded-full bg-white px-3 py-1 text-sm font-bold text-blue-900 shadow-sm">
@@ -2446,8 +2446,8 @@ const infoRows = [
             )}
 
             {logoLinks.length > 0 && (
-              <div className="rounded-2xl border border-blue-200 bg-white p-4">
-                <h3 className="mb-3 text-lg font-black text-blue-950">Featured Logos</h3>
+              <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4">
+                <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Featured Logos</h3>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                   {logoLinks.map((link) => (
                     <div key={link} className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2">
@@ -2459,17 +2459,12 @@ const infoRows = [
             )}
 
             {announcementImages.length > 0 && (
-              <div className="rounded-2xl border border-blue-200 bg-white p-4 lg:col-span-2">
-                <h3 className="mb-3 text-lg font-black text-blue-950">Flyers & Announcements</h3>
-                <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4 lg:col-span-2">
+                <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Flyers & Announcements</h3>
+                <div className="grid gap-3 md:grid-cols-2 md:gap-4">
                   {announcementImages.map((image) => (
                     <figure key={image.id || image.src} className="overflow-hidden rounded-2xl border border-blue-100 bg-slate-50">
-                      <img src={image.src} alt={image.name || "Tournament announcement"} className="max-h-[520px] w-full object-contain" />
-                      {image.name && (
-                        <figcaption className="border-t border-blue-100 px-3 py-2 text-xs font-bold text-blue-900">
-                          {image.name}
-                        </figcaption>
-                      )}
+                      <img src={image.src} alt={image.name || "Tournament announcement"} className="max-h-[340px] w-full object-contain md:max-h-[520px]" />
                     </figure>
                   ))}
                 </div>
@@ -2477,8 +2472,8 @@ const infoRows = [
             )}
 
             {watchLinks.length > 0 && (
-              <div className="rounded-2xl border border-blue-200 bg-white p-4">
-                <h3 className="mb-3 text-lg font-black text-blue-950">Watch & Follow</h3>
+              <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4">
+                <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Watch & Follow</h3>
                 <div className="space-y-2">
                   {watchLinks.map((link) => (
                     <a key={`${link.label}-${link.href}`} href={link.href} target="_blank" rel="noreferrer" className="block rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-900 hover:bg-blue-100">
@@ -2490,8 +2485,8 @@ const infoRows = [
             )}
 
             {tournamentInfo.notes && (
-              <div className="rounded-2xl border border-blue-200 bg-slate-50 p-4">
-                <h3 className="mb-3 text-lg font-black text-blue-950">Tournament Notes</h3>
+              <div className="rounded-2xl border border-blue-200 bg-slate-50 p-3 md:p-4">
+                <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Tournament Notes</h3>
                 <p className="whitespace-pre-wrap text-sm font-semibold text-slate-700">{tournamentInfo.notes}</p>
               </div>
             )}
@@ -3451,8 +3446,7 @@ function DashboardTab({
       {tournamentInfo.announcementImages.map((image) => (
         <div key={image.id || image.src} className="rounded-xl border border-blue-200 bg-white p-2">
           <img src={image.src} alt={image.name || "Tournament announcement"} className="h-24 w-full rounded-lg object-contain" />
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="truncate text-xs font-bold text-blue-900">{image.name || "Uploaded image"}</span>
+          <div className="mt-2 flex justify-end">
             <button
               type="button"
               onClick={() => deleteAnnouncementImage(image.id)}
