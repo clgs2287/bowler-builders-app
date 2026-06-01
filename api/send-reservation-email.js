@@ -24,6 +24,15 @@ const formatStartTime = (time = "") => {
   return `${displayHour}:${minuteText.padStart(2, "0")} ${suffix}`;
 };
 
+const getSenderAddress = () => {
+  const configuredSender = process.env.RESERVATION_EMAIL_FROM || "";
+  const unverifiedPublicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "icloud.com"];
+  const usesPublicDomain = unverifiedPublicDomains.some((domain) => configuredSender.toLowerCase().includes(`@${domain}`));
+  return configuredSender && !usesPublicDomain
+    ? configuredSender
+    : "Bowler Builders <onboarding@resend.dev>";
+};
+
 const reservationHtml = ({ reservation = {}, tournament = {} }) => {
   const confirmationNumber = reservation.registrationNumber || reservation.confirmationNumber || "Pending";
   const status = reservation.status || "Registered";
@@ -85,7 +94,7 @@ export default async function handler(request, response) {
 
     const confirmationNumber = reservation.registrationNumber || reservation.confirmationNumber || "";
     const subject = `Reservation ${confirmationNumber ? `#${confirmationNumber} ` : ""}${reservation.status || "Confirmed"} - ${tournament.name || reservation.tournament || "Tournament"}`;
-    const from = process.env.RESERVATION_EMAIL_FROM || "Bowler Builders <onboarding@resend.dev>";
+    const from = getSenderAddress();
 
     const emailResponse = await fetch(RESEND_ENDPOINT, {
       method: "POST",
