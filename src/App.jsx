@@ -494,8 +494,28 @@ function reservationBucketFromState(reservationState = {}) {
     tournamentAddress: reservationState.tournamentAddress || "",
     reservationLimit: Number(reservationState.reservationLimit || 48),
     reservationNextNumber: Number(reservationState.reservationNextNumber || 1),
+    reservationCount: (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0),
     reservations: reservationState.reservations || [],
   };
+}
+
+function sanitizeReservationsByTournament(reservationsByTournament = {}) {
+  return Object.fromEntries(
+    Object.entries(reservationsByTournament || {}).map(([key, bucket]) => [
+      key,
+      {
+        tournamentName: bucket?.tournamentName || "",
+        tournamentDate: bucket?.tournamentDate || "",
+        tournamentStartTime: bucket?.tournamentStartTime || "",
+        tournamentCenter: bucket?.tournamentCenter || "",
+        tournamentAddress: bucket?.tournamentAddress || "",
+        reservationLimit: Number(bucket?.reservationLimit || 48),
+        reservationNextNumber: Number(bucket?.reservationNextNumber || 1),
+        reservationCount: (bucket?.reservations || []).length || Number(bucket?.reservationCount || 0),
+        reservations: [],
+      },
+    ])
+  );
 }
 
 function isPlaceholderValue(value) {
@@ -2757,11 +2777,11 @@ function SupabaseMigrationCard({
     setChecking(true);
     setCheckMessage("Checking database rows...");
     try {
-      const [scheduleRows, titleRows, identityRows, reservationRows, archiveRows, activeRows] = await Promise.all([
+      const [scheduleRows, titleRows, identityRows, reservationCountRows, archiveRows, activeRows] = await Promise.all([
         loadSupabaseRestRows("schedule_events", "?select=id"),
         loadSupabaseRestRows("manual_titles", "?select=id"),
         loadSupabaseRestRows("bowler_identities", "?select=id"),
-        loadSupabaseRestRows("reservations", "?select=id"),
+        loadSupabaseRestRows("reservation_public_counts", "?select=reservation_count"),
         loadSupabaseRestRows("archived_tournaments", "?select=id"),
         loadSupabaseRestRows("active_tournament_snapshots", "?select=id"),
       ]);
@@ -2770,7 +2790,7 @@ function SupabaseMigrationCard({
         schedule: scheduleRows.length || 0,
         titles: titleRows.length || 0,
         identities: identityRows.length || 0,
-        reservations: reservationRows.length || 0,
+        reservations: (reservationCountRows || []).reduce((total, row) => total + Number(row.reservation_count || 0), 0),
         archives: archiveRows.length || 0,
         activeSnapshots: activeRows.length || 0,
       });
@@ -3005,14 +3025,14 @@ function activeSnapshotRecordFromSnapshot(snapshot = {}) {
   };
 }
 
-async function loadSupabaseRestRows(table, query = "", signal) {
+async function loadSupabaseRestRows(table, query = "", signal, accessToken = "") {
   if (!supabaseUrl || !supabasePublishableKey) throw new Error("Supabase config is missing.");
   const baseUrl = supabaseUrl.replace(/\/$/, "");
   const response = await fetch(`${baseUrl}/rest/v1/${table}${query}`, {
     signal,
     headers: {
       apikey: supabasePublishableKey,
-      Authorization: `Bearer ${supabasePublishableKey}`,
+      Authorization: `Bearer ${accessToken || supabasePublishableKey}`,
     },
   });
 
@@ -5657,7 +5677,7 @@ function ReservationsTab({
   const [editingReservationId, setEditingReservationId] = useState(null);
   const [editingReservation, setEditingReservation] = useState(null);
   const selectedScheduledTournament = (scheduleItems || []).find((item) => item.name === reservationState.tournamentName);
-  const reservedCount = (reservationState.reservations || []).length;
+  const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
 
@@ -5729,6 +5749,7 @@ function ReservationsTab({
         tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
         reservationLimit: Number(savedBucket.reservationLimit || current.reservationLimit || 48),
         reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
+        reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
         reservations: savedBucket.reservations || [],
       };
     });
@@ -5759,6 +5780,7 @@ function ReservationsTab({
     setReservationState((current) => ({
       ...current,
       reservations: [],
+      reservationCount: 0,
       reservationsByTournament: {},
     }));
     setRosterNotice("All reservations were cleared.");
@@ -5873,6 +5895,7 @@ function ReservationsTab({
           tournamentCenter: "",
           tournamentAddress: "",
           reservationNextNumber: 1,
+          reservationCount: 0,
           reservations: [],
         }))
       }
@@ -6132,9 +6155,12 @@ function PublicReservations({
   form.email.trim();
   const currentReservations =
   reservationState.reservations || [];
+  const currentReservationCount = Number(
+    reservationState.reservationCount ?? currentReservations.length
+  );
 
 const registrationStatus =
-  currentReservations.length <
+  currentReservationCount <
   Number(reservationState.reservationLimit || 48)
     ? "Registered"
     : "Waitlisted";
@@ -6239,14 +6265,20 @@ const registrationStatus =
       createdAt: new Date().toISOString(),
     };
 
-    setReservationState((current) => ({
-      ...current,
-      reservationNextNumber: Math.max(Number(current.reservationNextNumber || 1), registrationNumber + 1),
-      reservations: [
-        ...current.reservations,
+    setReservationState((current) => {
+      const currentReservations = current.reservations || [];
+      const nextReservations = [
+        ...currentReservations,
         newReservation,
-      ],
-    }));
+      ];
+      const currentCount = Number(current.reservationCount ?? currentReservations.length);
+      return {
+        ...current,
+        reservationNextNumber: Math.max(Number(current.reservationNextNumber || 1), registrationNumber + 1),
+        reservationCount: Math.max(currentCount + 1, nextReservations.length),
+        reservations: nextReservations,
+      };
+    });
 
     Promise.resolve(onReservationSubmit(newReservation)).catch((error) => {
       console.warn("Could not save public reservation to Supabase", error);
@@ -14428,6 +14460,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       "Saving schedule settings"
     );
 
+    const currentReservationKey = reservationKeyFromState(reservationState);
+    const reservationsForSettings = { ...(reservationState.reservationsByTournament || {}) };
+    if (currentReservationKey) {
+      reservationsForSettings[currentReservationKey] = reservationBucketFromState(reservationState);
+    }
     const reservationSettings = {
       entriesOpen: Boolean(reservationState.entriesOpen),
       registrationEmail: reservationState.registrationEmail || "",
@@ -14438,7 +14475,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       tournamentAddress: reservationState.tournamentAddress || "",
       reservationLimit: Number(reservationState.reservationLimit || 48),
       reservationNextNumber: getNextReservationNumber(reservationState),
-      reservationsByTournament: reservationState.reservationsByTournament || {},
+      reservationCount: (reservationState.reservations || []).length,
+      reservationsByTournament: sanitizeReservationsByTournament(reservationsForSettings),
     };
     await withTimeout(
       supabaseRestRequest("app_settings", "?on_conflict=id", {
@@ -14504,21 +14542,26 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), 12000);
       try {
+        const adminAccessToken = supabaseAdminProfile ? supabaseSession?.access_token || "" : "";
+        const reservationRead = adminAccessToken
+          ? loadSupabaseRestRows("reservations", "?select=id,data,tournament_id,added_to_roster&order=created_at.asc", controller.signal, adminAccessToken)
+          : Promise.resolve([]);
         const reads = await Promise.allSettled([
           loadSupabaseRestRows("schedule_events", "?select=id,data,sort_date&order=sort_date.asc", controller.signal),
-          loadSupabaseRestRows("app_settings", "?select=id,value&id=in.(schedule_locked,reservation_state)", controller.signal),
+          loadSupabaseRestRows("public_app_settings", "?select=id,value&id=in.(schedule_locked,reservation_state)", controller.signal),
           loadSupabaseRestRows("manual_titles", "?select=id,data&order=created_at.asc", controller.signal),
           loadSupabaseRestRows("bowler_identities", "?select=id,data&order=created_at.asc", controller.signal),
-          loadSupabaseRestRows("reservations", "?select=id,data,tournament_id,added_to_roster&order=created_at.asc", controller.signal),
+          reservationRead,
+          loadSupabaseRestRows("reservation_public_counts", "?select=tournament_id,reservation_count", controller.signal),
           loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal),
           loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
         ]);
 
-        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "archive", "active snapshot"];
+        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "archive", "active snapshot"];
         const failedReads = reads
           .map((result, index) => result.status === "rejected" ? `${readNames[index]}: ${result.reason?.message || "failed"}` : "")
           .filter(Boolean);
-        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, archiveRows, activeSnapshotRows] = reads.map((result) =>
+        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, archiveRows, activeSnapshotRows] = reads.map((result) =>
           result.status === "fulfilled" ? result.value : []
         );
 
@@ -14539,6 +14582,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             addedToRoster: Boolean(data.addedToRoster || row.added_to_roster),
           };
         });
+        const reservationCountByTournament = Object.fromEntries(
+          (reservationCountRows || []).map((row) => [row.tournament_id || "", Number(row.reservation_count || 0)])
+        );
         const nextArchives = (archiveRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
         const nextActiveSnapshot = dataFromRow((activeSnapshotRows || [])[0] || {});
 
@@ -14551,6 +14597,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         if (reservationSettings && typeof reservationSettings === "object") {
           const currentReservationKey = reservationKeyFromState(reservationSettings);
           const reservationsByTournament = { ...(reservationSettings.reservationsByTournament || {}) };
+          Object.entries(reservationCountByTournament).forEach(([tournamentKey, count]) => {
+            if (!tournamentKey) return;
+            reservationsByTournament[tournamentKey] = {
+              ...(reservationsByTournament[tournamentKey] || {}),
+              reservationCount: count,
+              reservations: reservationsByTournament[tournamentKey]?.reservations || [],
+            };
+          });
           nextReservations.forEach((reservation) => {
             const tournamentKey = reservation.tournamentKey || currentReservationKey;
             if (!reservationsByTournament[tournamentKey]) {
@@ -14570,11 +14624,20 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
               reservation,
             ];
           });
+          const currentTournamentReservations = nextReservations.filter((reservation) => (reservation.tournamentKey || "") === currentReservationKey);
+          const currentReservationCount = Number(
+            reservationCountByTournament[currentReservationKey] ??
+            reservationSettings.reservationCount ??
+            0
+          );
           setReservationState((current) => ({
             ...current,
             ...reservationSettings,
             reservationsByTournament,
-            reservations: nextReservations.filter((reservation) => (reservation.tournamentKey || "") === currentReservationKey),
+            reservationCount: nextReservations.length
+              ? currentTournamentReservations.length
+              : currentReservationCount,
+            reservations: currentTournamentReservations,
           }));
         }
 
@@ -14600,7 +14663,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return () => {
       cancelled = true;
     };
-  }, [hasLoadedHistory, hasLoadedSavedData]);
+  }, [hasLoadedHistory, hasLoadedSavedData, supabaseAdminProfile, supabaseSession]);
 
   useEffect(() => {
     if (!supabase || !supabaseAdminProfile) {

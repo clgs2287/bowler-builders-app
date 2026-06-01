@@ -77,6 +77,25 @@ create table if not exists public.admin_profiles (
   updated_at timestamptz not null default now()
 );
 
+create or replace view public.reservation_public_counts as
+select
+  tournament_id,
+  count(*)::integer as reservation_count
+from public.reservations
+group by tournament_id;
+
+create or replace view public.public_app_settings as
+select
+  id,
+  case
+    when id = 'reservation_state' then
+      (value - 'reservationsByTournament') ||
+      jsonb_build_object('reservationsByTournament', '{}'::jsonb)
+    else value
+  end as value
+from public.app_settings
+where id in ('schedule_locked', 'reservation_state');
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -137,13 +156,18 @@ alter table public.active_tournament_snapshots enable row level security;
 alter table public.admin_profiles enable row level security;
 
 grant usage on schema public to anon, authenticated;
-grant select on public.app_settings to anon, authenticated;
+revoke select on public.app_settings from anon;
+grant select on public.app_settings to authenticated;
+grant select on public.public_app_settings to anon, authenticated;
 grant select on public.schedule_events to anon, authenticated;
 grant select on public.manual_titles to anon, authenticated;
 grant select on public.bowler_identities to anon, authenticated;
 grant select on public.archived_tournaments to anon, authenticated;
 grant select on public.active_tournament_snapshots to anon, authenticated;
-grant select, insert on public.reservations to anon, authenticated;
+grant select on public.reservation_public_counts to anon, authenticated;
+revoke select on public.reservations from anon;
+grant insert on public.reservations to anon;
+grant select, insert on public.reservations to authenticated;
 grant select on public.admin_profiles to authenticated;
 grant insert, update, delete on public.app_settings to authenticated;
 grant insert, update, delete on public.schedule_events to authenticated;
@@ -182,9 +206,11 @@ grant execute on function public.is_admin() to authenticated;
 grant execute on function public.my_admin_profile() to authenticated;
 
 drop policy if exists "Public read app settings" on public.app_settings;
-create policy "Public read app settings"
+drop policy if exists "Admins read app settings" on public.app_settings;
+create policy "Admins read app settings"
 on public.app_settings for select
-using (true);
+to authenticated
+using (public.is_admin());
 
 drop policy if exists "Public read schedule events" on public.schedule_events;
 create policy "Public read schedule events"
@@ -212,9 +238,6 @@ on public.active_tournament_snapshots for select
 using (true);
 
 drop policy if exists "Public read reservations" on public.reservations;
-create policy "Public read reservations"
-on public.reservations for select
-using (true);
 
 drop policy if exists "Public create reservations" on public.reservations;
 create policy "Public create reservations"
