@@ -14235,6 +14235,16 @@ const [scheduleItems, setScheduleItems] = useState([
     fkmTitle: false,
   },
 ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    window.scrollTo({ top: 0, left: 0 });
+    const timeoutId = window.setTimeout(() => window.scrollTo({ top: 0, left: 0 }), 100);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
 const [scheduleLocked, setScheduleLocked] = useState(false);
 
 const [tournamentRecap, setTournamentRecap] = useState({
