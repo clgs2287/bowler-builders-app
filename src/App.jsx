@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
 function Card({ className = "", children }) {
@@ -14236,15 +14236,6 @@ const [scheduleItems, setScheduleItems] = useState([
   },
 ]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-    window.scrollTo({ top: 0, left: 0 });
-    const timeoutId = window.setTimeout(() => window.scrollTo({ top: 0, left: 0 }), 100);
-    return () => window.clearTimeout(timeoutId);
-  }, []);
 const [scheduleLocked, setScheduleLocked] = useState(false);
 
 const [tournamentRecap, setTournamentRecap] = useState({
@@ -14265,9 +14256,37 @@ const [reservationState, setReservationState] = useState({
   reservationsByTournament: {},
 });
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
+  const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
   const supabasePublicDataLoadedRef = useRef(false);
   const supabaseSaveSkipRef = useRef(true);
+
+  const scrollAppToTop = () => {
+    if (typeof window === "undefined") return;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    if (appTopRef.current) {
+      appTopRef.current.scrollIntoView({ block: "start" });
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0 });
+  };
+
+  useLayoutEffect(() => {
+    scrollAppToTop();
+    const timerIds = [0, 75, 200, 500, 1000].map((delay) =>
+      window.setTimeout(scrollAppToTop, delay)
+    );
+    return () => timerIds.forEach((timerId) => window.clearTimeout(timerId));
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedHistory || !hasLoadedSavedData) return;
+    if (supabase && !supabaseLoadReady) return;
+    const timerId = window.setTimeout(scrollAppToTop, 0);
+    return () => window.clearTimeout(timerId);
+  }, [hasLoadedHistory, hasLoadedSavedData, supabaseLoadReady]);
 
   const loadSupabaseAdminProfile = async (session) => {
     if (!supabase || !session?.user) {
@@ -15019,7 +15038,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   }, [activeTab, isAdminMode, publicResultsUnlocked, tournamentFormat, tournamentInfo]);
 
   return (
-    <div className="bb-stage min-h-screen p-2 md:p-8">
+    <div ref={appTopRef} className="bb-stage min-h-screen p-2 md:p-8">
       <style>{numberInputStyles}</style>
       <div className="bb-app-shell mx-auto max-w-7xl space-y-3 md:space-y-6">
         <div className="overflow-hidden rounded-3xl border border-blue-300/60 bg-slate-950 shadow-xl print:hidden">
