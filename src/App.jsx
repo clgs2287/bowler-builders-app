@@ -496,6 +496,7 @@ function reservationBucketFromState(reservationState = {}) {
     tournamentCenter: reservationState.tournamentCenter || "",
     tournamentAddress: reservationState.tournamentAddress || "",
     reservationLimit: Number(reservationState.reservationLimit || 48),
+    reservationNextNumber: Number(reservationState.reservationNextNumber || 1),
     reservations: reservationState.reservations || [],
   };
 }
@@ -511,6 +512,18 @@ function getReservationDisplayName(reservation = {}) {
   if (!isPlaceholderValue(nickname)) return nickname;
   if (!isPlaceholderValue(name)) return name;
   return nickname || name || "";
+}
+
+function getReservationRegistrationNumber(reservation = {}, fallback = "") {
+  return reservation.registrationNumber || reservation.confirmationNumber || fallback;
+}
+
+function getNextReservationNumber(reservationState = {}) {
+  const existingNumbers = (reservationState.reservations || [])
+    .map((reservation) => Number(getReservationRegistrationNumber(reservation, 0)))
+    .filter((number) => Number.isFinite(number) && number > 0);
+
+  return Math.max(Number(reservationState.reservationNextNumber || 1), ...existingNumbers.map((number) => number + 1), 1);
 }
 
 function getTournamentStartDateTime(date, startTime) {
@@ -833,6 +846,24 @@ function calculateFinancials({
     bottomSpots,
     format,
   };
+}
+
+function getAutoFinalsLineageGames({ entries = 0, tournamentFormat = "eliminator", tournamentStyle = "singles" } = {}) {
+  if (isLaneDrawMatchplayStyle(tournamentStyle)) return 0;
+  if (tournamentFormat === "sweeper") return 0;
+
+  if (tournamentFormat === "eliminator") {
+    const qualifiers = Math.max(4, Math.ceil(Number(entries || 0) / 4));
+    return qualifiers + Math.ceil(qualifiers / 2) + 6;
+  }
+
+  if (tournamentFormat === "bracket") {
+    const qualifiers = Math.max(4, Math.ceil(Number(entries || 0) / 4));
+    const bracketSize = getBracketSize(qualifiers);
+    return typeof bracketSize === "number" ? qualifiers + bracketSize - 2 : 0;
+  }
+
+  return 0;
 }
 
 function getTournamentStage({
@@ -3596,9 +3627,10 @@ function DashboardTab({
   );
 }
 
-function LockedCellInput({ value, onChange, type = "text", className = "", displayValue }) {
+function LockedCellInput({ value, onChange, type = "text", className = "", displayValue, inputProps = {} }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
+  const { onKeyDown: inputKeyDown, ...fieldProps } = inputProps;
 
   useEffect(() => {
     if (!editing) setDraft(value ?? "");
@@ -3614,7 +3646,9 @@ function LockedCellInput({ value, onChange, type = "text", className = "", displ
       <button
         type="button"
         onClick={() => setEditing(true)}
+        onKeyDown={inputKeyDown}
         className={`min-h-[34px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1.5 text-left text-sm font-semibold text-blue-950 shadow-sm hover:bg-blue-100 ${className}`}
+        {...fieldProps}
       >
 {displayValue !== undefined && displayValue !== null
   ? displayValue
@@ -3632,9 +3666,12 @@ function LockedCellInput({ value, onChange, type = "text", className = "", displ
       onChange={(e) => setDraft(e.target.value)}
       onBlur={save}
       onKeyDown={(e) => {
+        inputKeyDown?.(e);
+        if (e.defaultPrevented) return;
         if (e.key === "Enter") save();
         if (e.key === "Escape") setEditing(false);
       }}
+      {...fieldProps}
     />
   );
 }
@@ -3644,6 +3681,7 @@ function LockedCellNumberInput({
   onChange,
   width = "w-10 md:w-12",
   displayValue,
+  inputProps = {},
 }) {
   const hasValue =
     value !== undefined &&
@@ -3656,6 +3694,7 @@ function LockedCellNumberInput({
       className={`${width} text-center`}
       value={hasValue ? value : ""}
       displayValue={displayValue}
+      inputProps={inputProps}
       onChange={(next) =>
         onChange(Number(next || 0))
       }
@@ -3663,20 +3702,22 @@ function LockedCellNumberInput({
   );
 }
 
-function LockedBowlerNameAutocomplete({ value, onChange, names, onSelectBowler }) {
+function LockedBowlerNameAutocomplete({ value, onChange, names, onSelectBowler, inputProps = {} }) {
   const [editing, setEditing] = useState(!value);
+  const { onKeyDown: inputKeyDown, ...fieldProps } = inputProps;
   if (!editing) {
     return (
-      <button type="button" onClick={() => setEditing(true)} className="min-h-[34px] min-w-[120px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1.5 text-left text-sm font-semibold text-blue-950 shadow-sm hover:bg-blue-100 md:min-w-[150px]">
+      <button type="button" onClick={() => setEditing(true)} onKeyDown={inputKeyDown} className="min-h-[34px] min-w-[120px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1.5 text-left text-sm font-semibold text-blue-950 shadow-sm hover:bg-blue-100 md:min-w-[150px]" {...fieldProps}>
         {value || "—"}
       </button>
     );
   }
-  return <BowlerNameAutocomplete value={value} names={names} onChange={onChange} onSelectBowler={onSelectBowler} onDone={() => setEditing(false)} />;
+  return <BowlerNameAutocomplete value={value} names={names} onChange={onChange} onSelectBowler={onSelectBowler} onDone={() => setEditing(false)} inputProps={inputProps} />;
 }
 
-function BowlerNameAutocomplete({ value, onChange, names, onSelectBowler, onDone }) {
+function BowlerNameAutocomplete({ value, onChange, names, onSelectBowler, onDone, inputProps = {} }) {
   const [focused, setFocused] = useState(false);
+  const { onKeyDown: inputKeyDown, ...fieldProps } = inputProps;
   const query = String(value || "").trim().toLowerCase();
   const nameOptions = names.map((item) => typeof item === "string" ? { name: item } : item);
   const matches = query
@@ -3698,6 +3739,8 @@ function BowlerNameAutocomplete({ value, onChange, names, onSelectBowler, onDone
         onBlur={() => setTimeout(() => { setFocused(false); onDone?.(); }, 120)}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
+          inputKeyDown?.(e);
+          if (e.defaultPrevented) return;
           if (e.key === "Tab" && singleMatch && singleMatch.name !== value) {
             chooseBowler(singleMatch);
             onDone?.();
@@ -3707,6 +3750,7 @@ function BowlerNameAutocomplete({ value, onChange, names, onSelectBowler, onDone
             onDone?.();
           }
         }}
+        {...fieldProps}
       />
       {focused && matches.length > 0 && (
         <div className="absolute left-0 top-full z-50 mt-1 max-h-52 w-56 overflow-auto rounded-xl border border-blue-200 bg-white shadow-lg">
@@ -3750,28 +3794,32 @@ function buildLanePositionOptions(lanesUsed, tournamentStyle = "singles") {
   );
 }
 
-function LaneSelector({ value, onChange, lanesUsed = "", tournamentStyle = "singles" }) {
+function LaneSelector({ value, onChange, lanesUsed = "", tournamentStyle = "singles", inputProps = {} }) {
   const laneMatch = String(value || "").match(/[0-9]+/);
   const laneNumber = laneMatch ? laneMatch[0] : "";
   const options = buildLanePositionOptions(lanesUsed, tournamentStyle);
   const fallbackOptions = getLaneLetterOptions(value, tournamentStyle).map((letter) => String(laneNumber) + letter);
   const laneOptions = options.length ? options : fallbackOptions;
-
-  if (!laneNumber && !laneOptions.length) {
-    return <LockedCellInput className="w-16 text-center md:w-20" value={value || ""} onChange={onChange} />;
-  }
+  const listId = useMemo(() => `lane-options-${Math.random().toString(36).slice(2)}`, []);
 
   return (
-    <select
-      className="w-16 rounded-xl border border-blue-200 bg-white px-2 py-2 text-center text-sm font-semibold text-blue-950 md:w-20"
-      value={laneOptions.includes(value) ? value : ""}
-      onChange={(e) => onChange(e.target.value)}
-    >
-      {!laneOptions.includes(value) && <option value="">{value || "Lane"}</option>}
-      {laneOptions.map((option) => (
-        <option key={option} value={option}>{option}</option>
-      ))}
-    </select>
+    <>
+      <Input
+        className="w-16 text-center uppercase md:w-20"
+        value={value || ""}
+        list={listId}
+        onChange={(event) => onChange(event.target.value.toUpperCase())}
+        placeholder="Lane"
+        {...inputProps}
+      />
+      {laneOptions.length > 0 && (
+        <datalist id={listId}>
+          {laneOptions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      )}
+    </>
   );
 }
 
@@ -3872,7 +3920,7 @@ function RosterSizeInput({ entries, onSave }) {
   );
 }
 
-function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {} }) {
+function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, setReservationState = null }) {
   const [registrationSort, setRegistrationSort] = useState({ key: "entry", direction: "asc" });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
@@ -4033,6 +4081,38 @@ const updateBowler = (index, field, value) => {
     })
   );
 };
+  const focusRegistrationCell = (rowIndex, colIndex) => {
+    const nextField = document.querySelector(
+      `[data-registration-row="${rowIndex}"][data-registration-col="${colIndex}"]`
+    );
+
+    if (!nextField || typeof nextField.focus !== "function") return false;
+
+    nextField.focus();
+    if (typeof nextField.select === "function") {
+      nextField.select();
+    }
+    return true;
+  };
+
+  const handleRegistrationArrowNav = (event, rowIndex, colIndex) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+    const rowChange =
+      event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+
+    if (!rowChange) return;
+    if (focusRegistrationCell(rowIndex + rowChange, colIndex)) {
+      event.preventDefault();
+    }
+  };
+
+  const registrationNavProps = (rowIndex, colIndex) => ({
+    "data-registration-row": rowIndex,
+    "data-registration-col": colIndex,
+    onKeyDown: (event) => handleRegistrationArrowNav(event, rowIndex, colIndex),
+  });
+
   const addBowler = () => setBowlers((current) => {
     return [
       ...current,
@@ -4067,6 +4147,7 @@ const updateBowler = (index, field, value) => {
   const deleteBowler = (index) => {
     const confirmed = window.confirm(`Delete ${bowlers[index]?.name || "this bowler"} from the roster? Lane assignments on remaining bowlers will stay as-is.`);
     if (!confirmed) return;
+    const bowlerToRemove = bowlers[index];
     const seedToRemove = bowlers[index]?.seed;
     const laneToRemove = bowlers[index]?.lane;
     setBowlers((current) =>
@@ -4084,6 +4165,20 @@ const updateBowler = (index, field, value) => {
       });
       return { ...current, bracketSets: nextBracketSets };
     });
+    if (bowlerToRemove?.reservationId && setReservationState) {
+      setReservationState((current) => ({
+        ...current,
+        reservations: (current.reservations || []).map((reservation) =>
+          String(reservation.id) === String(bowlerToRemove.reservationId)
+            ? {
+                ...reservation,
+                rosterAdded: false,
+                rosterAddedAt: "",
+              }
+            : reservation
+        ),
+      }));
+    }
   };
   const updateBracketEntries = (seed, setKey, value) => setSidePotState((current) => ({
     ...current,
@@ -4187,6 +4282,14 @@ averageSource: archivedData?.eligible
         const laneDiff = laneAssignmentSortValue(a.bowler.lane) - laneAssignmentSortValue(b.bowler.lane);
         if (laneDiff !== 0) return laneDiff * direction;
       }
+      if (registrationSort.key === "name") {
+        const nameDiff = String(a.bowler.name || "").localeCompare(String(b.bowler.name || ""));
+        if (nameDiff !== 0) return nameDiff * direction;
+      }
+      const entryDiff =
+        Number(a.bowler.registrationNumber || a.index + 1) -
+        Number(b.bowler.registrationNumber || b.index + 1);
+      if (entryDiff !== 0) return entryDiff * direction;
       return (a.index - b.index) * direction;
     });
   const toggleRegistrationSort = (key) => {
@@ -4197,7 +4300,7 @@ averageSource: archivedData?.eligible
   };
   const registrationSortLabel = (key) =>
     "";
-  const rosterCsv = [["#", "Name", "Hdcp", "Lane", "Paid", "Scratch Brackets", "Hdcp Brackets", "HG Scratch", "HG Hdcp", "Phone", "Email"], ...bowlers.map((b, i) => [i + 1, b.name, handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", Number(bracketSets.early?.[b.seed] || 0), Number(bracketSets.handicapEarly?.[b.seed] || 0), b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
+  const rosterCsv = [["#", "Name", "Hdcp", "Lane", "Paid", "Scratch Brackets", "Hdcp Brackets", "HG Scratch", "HG Hdcp", "Phone", "Email"], ...bowlers.map((b, i) => [b.registrationNumber || i + 1, b.name, handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", Number(bracketSets.early?.[b.seed] || 0), Number(bracketSets.handicapEarly?.[b.seed] || 0), b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
 
   return (
     <AppCard>
@@ -4393,7 +4496,11 @@ averageSource: archivedData?.eligible
                     #{registrationSortLabel("entry")}
                   </button>
                 </th>
-                <th className="p-2 text-left md:p-2.5">Name</th>
+                <th className="p-2 text-left md:p-2.5">
+                  <button type="button" className="font-bold" onClick={() => toggleRegistrationSort("name")}>
+                    Name{registrationSortLabel("name")}
+                  </button>
+                </th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp</th>}
                 <th className="p-2 text-center md:p-2.5">
                   <button type="button" className="font-bold" onClick={() => toggleRegistrationSort("lane")}>
@@ -4413,7 +4520,27 @@ averageSource: archivedData?.eligible
               </tr>
             </thead>
             <tbody>
-              {sortedRegistrationRows.map(({ bowler: b, index }, displayIndex) => (
+              {sortedRegistrationRows.map(({ bowler: b, index }, displayIndex) => {
+                let registrationNavCol = 0;
+                const nameNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const handicapNavProps = useHandicapScores
+                  ? registrationNavProps(displayIndex, registrationNavCol++)
+                  : null;
+                const laneNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const scratchBracketNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const handicapBracketNavProps = useHandicapScores
+                  ? registrationNavProps(displayIndex, registrationNavCol++)
+                  : null;
+                const middleBracketNavProps = enabledBracketSets.middle
+                  ? registrationNavProps(displayIndex, registrationNavCol++)
+                  : null;
+                const lateBracketNavProps = enabledBracketSets.late
+                  ? registrationNavProps(displayIndex, registrationNavCol++)
+                  : null;
+                const phoneNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const emailNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+
+                return (
                 <React.Fragment key={`${b.seed}-${index}`}>
                 {teamSize > 1 && index % teamSize === 0 && (
                   <tr className="bb-team-header-row border-t bg-blue-950 text-white">
@@ -4439,8 +4566,8 @@ averageSource: archivedData?.eligible
                   </tr>
                 )}
                 <tr className="border-t">
-                  <td className="p-2 font-semibold">{registrationSort.key === "lane" ? displayIndex + 1 : index + 1}</td>
-                  <td className="p-1.5"><LockedBowlerNameAutocomplete value={b.name} names={previousBowlerNames} onChange={(name) => updateBowler(index, "name", name)} onSelectBowler={(item) => applyPreviousBowler(index, item)} /></td>
+                  <td className="p-2 font-semibold">{b.registrationNumber || index + 1}</td>
+                  <td className="p-1.5"><LockedBowlerNameAutocomplete value={b.name} names={previousBowlerNames} onChange={(name) => updateBowler(index, "name", name)} onSelectBowler={(item) => applyPreviousBowler(index, item)} inputProps={nameNavProps} /></td>
                   {useHandicapScores && (
   <td className="p-1.5 text-center">
 <LockedCellNumberInput
@@ -4460,19 +4587,20 @@ averageSource: archivedData?.eligible
     updateBowler(index, "handicap", value)
   }
   width="w-10 md:w-12"
+  inputProps={handicapNavProps}
 />
   </td>
 )}
-                  <td className="p-1.5 text-center"><LaneSelector value={b.lane || ""} lanesUsed={tournamentInfo.lanesUsed} tournamentStyle={tournamentStyle} onChange={(value) => updateBowler(index, "lane", value)} /></td>
+                  <td className="p-1.5 text-center"><LaneSelector value={b.lane || ""} lanesUsed={tournamentInfo.lanesUsed} tournamentStyle={tournamentStyle} onChange={(value) => updateBowler(index, "lane", value)} inputProps={laneNavProps} /></td>
                   <td className="p-2 text-center"><Switch compact checked={Boolean(b.paid)} onCheckedChange={(v) => updateBowler(index, "paid", v)} /></td>
-                  <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.early?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "early", value)} width="w-10 md:w-12" /></td>
-                  {useHandicapScores && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.handicapEarly?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "handicapEarly", value)} width="w-10 md:w-12" /></td>}
-                  {enabledBracketSets.middle && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.middle?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "middle", value)} width="w-10 md:w-12" /></td>}
-                  {enabledBracketSets.late && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.late?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "late", value)} width="w-10 md:w-12" /></td>}
+                  <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.early?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "early", value)} width="w-10 md:w-12" inputProps={scratchBracketNavProps} /></td>
+                  {useHandicapScores && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.handicapEarly?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "handicapEarly", value)} width="w-10 md:w-12" inputProps={handicapBracketNavProps} /></td>}
+                  {enabledBracketSets.middle && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.middle?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "middle", value)} width="w-10 md:w-12" inputProps={middleBracketNavProps} /></td>}
+                  {enabledBracketSets.late && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.late?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "late", value)} width="w-10 md:w-12" inputProps={lateBracketNavProps} /></td>}
                   <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.scratchHighGame)} onCheckedChange={(v) => updateSidePot(index, "scratchHighGame", v)} /></td>
                   {useHandicapScores && <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.handicapHighGame)} onCheckedChange={(v) => updateSidePot(index, "handicapHighGame", v)} /></td>}
-                  <td className="p-1.5"><LockedCellInput className="min-w-[85px] md:min-w-[100px]" value={b.phone || ""} onChange={(value) => updateBowler(index, "phone", formatPhoneNumber(value))} /></td>
-                  <td className="p-1.5"><LockedCellInput className="min-w-[100px] md:min-w-[130px]" value={b.email || ""} onChange={(value) => updateBowler(index, "email", value)} /></td>
+                  <td className="p-1.5"><LockedCellInput className="min-w-[85px] md:min-w-[100px]" value={b.phone || ""} onChange={(value) => updateBowler(index, "phone", formatPhoneNumber(value))} inputProps={phoneNavProps} /></td>
+                  <td className="p-1.5"><LockedCellInput className="min-w-[100px] md:min-w-[130px]" value={b.email || ""} onChange={(value) => updateBowler(index, "email", value)} inputProps={emailNavProps} /></td>
                   <td className="p-2 text-right">
   <div className="flex justify-end pr-2">
   <Button
@@ -4487,7 +4615,8 @@ averageSource: archivedData?.eligible
 </td>
                 </tr>
                 </React.Fragment>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -4720,17 +4849,16 @@ const saveCurrentGame = () => {
                 </div>
 
 <div className="hidden print:block">
-  <h1 className="mb-1 text-2xl font-black text-black">  {tournamentInfo.name || "Tournament"}
+  <h1 className="mb-1 text-xl font-black text-black">  {tournamentInfo.name || "Tournament"}
 </h1>
 
   {printableScoreEntryLaneKeys.map((laneKey) => (
-  <div key={`print-score-entry-lane-${laneKey}`} className="mb-4 break-inside-avoid">
-  <h2 className="mb-1 text-lg font-black text-black">Lane {laneKey}</h2>
-  <table className="w-full border-collapse text-xs text-black">
+  <div key={`print-score-entry-lane-${laneKey}`} className="mb-2 break-inside-avoid">
+  <table className="w-full border-collapse text-[11px] text-black">
     <thead>
       <tr>
         <th className="border border-black p-1 text-left">#</th>
-        <th className="w-32 border border-black p-1 text-left">Bowler</th>
+        <th className="w-28 border border-black p-1 text-left">Bowler</th>
         <th className="border border-black p-1 text-center">Pos</th>
         {useHandicapScores && <th className="border border-black p-1 text-center">Hdcp</th>}
         {Array.from({ length: qualifyingGames }, (_, gi) => (
@@ -4761,7 +4889,7 @@ const saveCurrentGame = () => {
       {printableScoreEntryGroups[laneKey].map(({ bowler: b, index }, displayIndex) => (
         <tr key={`print-score-row-${b.seed}-${index}`}>
           <td className="border border-black p-1 font-bold">{displayIndex + 1}</td>
-          <td className="w-32 border border-black p-1 font-bold">{b.name || ""}</td>
+          <td className="w-28 border border-black p-1 font-bold">{b.name || ""}</td>
           <td className="border border-black p-1 text-center">{b.lane || ""}</td>
           {useHandicapScores && (
             <td className="border border-black p-1 text-center font-bold">
@@ -4769,7 +4897,7 @@ const saveCurrentGame = () => {
             </td>
           )}
           {Array.from({ length: qualifyingGames }, (_, gi) => (
-            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-10 border border-black p-1" />
+            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-1" />
           ))}
           <td className="border border-black p-1" />
         </tr>
@@ -4844,32 +4972,7 @@ function PayoutsTab({
     : Number(matchplayLineageGames || 0);
 
   const autoFinalsGames = (() => {
-    if (isMatchplayFormat) {
-      return 0;
-    }
-
-    if (tournamentFormat === "sweeper") {
-      return 0;
-    }
-
-if (tournamentFormat === "eliminator") {
-  const qualifiers = Math.max(4, Math.ceil(entries / 4));
-
-  return qualifiers + Math.ceil(qualifiers / 2) + 6;
-}
-
-if (tournamentFormat === "bracket") {
-  const qualifiers = Math.max(4, Math.ceil(entries / 4));
-  const bracketSize = getBracketSize(qualifiers);
-
-  if (typeof bracketSize !== "number") {
-    return 0;
-  }
-
-  return qualifiers + bracketSize - 2;
-}
-
-    return 0;
+    return getAutoFinalsLineageGames({ entries, tournamentFormat, tournamentStyle });
   })();
 
   const finalsGames =
@@ -5560,7 +5663,58 @@ function ReservationsTab({
   onAddReservationToRegistration = () => {},
 }) {
   const [rosterNotice, setRosterNotice] = useState("");
+  const [editingReservationId, setEditingReservationId] = useState(null);
+  const [editingReservation, setEditingReservation] = useState(null);
   const selectedScheduledTournament = (scheduleItems || []).find((item) => item.name === reservationState.tournamentName);
+  const reservedCount = (reservationState.reservations || []).length;
+  const reservationLimit = Number(reservationState.reservationLimit || 0);
+  const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
+
+  const startEditReservation = (reservation) => {
+    setEditingReservationId(reservation.id);
+    setEditingReservation({
+      name: reservation.name || "",
+      nickname: reservation.nickname || "",
+      phone: reservation.phone || "",
+      email: reservation.email || "",
+      note: reservation.note || "",
+    });
+  };
+
+  const cancelEditReservation = () => {
+    setEditingReservationId(null);
+    setEditingReservation(null);
+  };
+
+  const updateEditingReservation = (field, value) => {
+    setEditingReservation((current) => ({
+      ...(current || {}),
+      [field]: field === "phone" ? formatPhoneNumber(value) : value,
+    }));
+  };
+
+  const saveEditReservation = () => {
+    if (!editingReservationId || !editingReservation) return;
+    setReservationState((current) => ({
+      ...current,
+      reservations: (current.reservations || []).map((reservation) =>
+        reservation.id === editingReservationId
+          ? {
+              ...reservation,
+              name: editingReservation.name,
+              nickname: editingReservation.nickname,
+              phone: formatPhoneNumber(editingReservation.phone || ""),
+              email: editingReservation.email,
+              note: editingReservation.note,
+              updatedAt: new Date().toISOString(),
+            }
+          : reservation
+      ),
+    }));
+    setRosterNotice(`${editingReservation.name || "Reservation"} was updated.`);
+    cancelEditReservation();
+  };
+
   const selectScheduledTournament = (name) => {
     const item = (scheduleItems || []).find((scheduleItem) => scheduleItem.name === name);
     const nextKey = reservationKeyFromScheduleItem(item || { name });
@@ -5583,6 +5737,7 @@ function ReservationsTab({
         tournamentCenter: item?.center || savedBucket.tournamentCenter || "",
         tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
         reservationLimit: Number(savedBucket.reservationLimit || current.reservationLimit || 48),
+        reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
         reservations: savedBucket.reservations || [],
       };
     });
@@ -5604,22 +5759,6 @@ function ReservationsTab({
       ),
     }));
     setRosterNotice(result?.alreadyExists ? `${name} is already on the registration roster. The existing row was updated.` : `${name} was sent to Registration.`);
-  };
-
-  const resetReservationRosterStatus = (reservation) => {
-    setReservationState((current) => ({
-      ...current,
-      reservations: (current.reservations || []).map((item) =>
-        item.id === reservation.id
-          ? {
-              ...item,
-              rosterAdded: false,
-              rosterAddedAt: "",
-            }
-          : item
-      ),
-    }));
-    setRosterNotice(`${getReservationDisplayName(reservation) || "Reservation"} can be added to Registration again.`);
   };
 
   const clearAllReservations = () => {
@@ -5714,6 +5853,11 @@ function ReservationsTab({
       }
       placeholder="Reservation Limit"
     />
+    <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-900">
+      Reserved: {reservedCount}
+      {reservationLimit > 0 ? ` / ${reservationLimit}` : ""}
+      {reservationLimit > 0 ? ` (${remainingReservationSpots} open)` : ""}
+    </div>
   </div>
 
   <div className="space-y-2 md:col-span-2">
@@ -5737,6 +5881,7 @@ function ReservationsTab({
           tournamentStartTime: "",
           tournamentCenter: "",
           tournamentAddress: "",
+          reservationNextNumber: 1,
           reservations: [],
         }))
       }
@@ -5783,6 +5928,7 @@ function ReservationsTab({
     <thead className="bg-blue-800 text-white">
 <tr>
   <th className="p-3 text-left">Status</th>
+  <th className="p-3 text-left">#</th>
   <th className="p-3 text-left">Name</th>
   <th className="p-3 text-left">Nickname</th>
   <th className="p-3 text-left">Phone</th>
@@ -5798,6 +5944,7 @@ function ReservationsTab({
       {(reservationState.reservations || []).map(
         (reservation) => {
           const rosterAdded = Boolean(reservation.rosterAdded || reservation.rosterAddedAt);
+          const isEditing = editingReservationId === reservation.id;
 
           return (
           <tr
@@ -5816,20 +5963,48 @@ function ReservationsTab({
               </span>
             </td>
 
+            <td className="p-3 font-black text-blue-950">
+              {getReservationRegistrationNumber(reservation, "—")}
+            </td>
+
             <td className="p-3 font-semibold">
-              {reservation.name}
+              {isEditing ? (
+                <Input
+                  value={editingReservation?.name || ""}
+                  onChange={(event) => updateEditingReservation("name", event.target.value)}
+                  placeholder="Full Name"
+                />
+              ) : reservation.name}
             </td>
 
             <td className="p-3">
-              {reservation.nickname || "—"}
+              {isEditing ? (
+                <Input
+                  value={editingReservation?.nickname || ""}
+                  onChange={(event) => updateEditingReservation("nickname", event.target.value)}
+                  placeholder="Nickname"
+                />
+              ) : reservation.nickname || "—"}
             </td>
 
             <td className="p-3">
-              {reservation.phone}
+              {isEditing ? (
+                <Input
+                  value={editingReservation?.phone || ""}
+                  onChange={(event) => updateEditingReservation("phone", event.target.value)}
+                  placeholder="Phone"
+                />
+              ) : reservation.phone || "—"}
             </td>
 
             <td className="p-3">
-              {reservation.email}
+              {isEditing ? (
+                <Input
+                  value={editingReservation?.email || ""}
+                  onChange={(event) => updateEditingReservation("email", event.target.value)}
+                  placeholder="Email"
+                />
+              ) : reservation.email || "—"}
             </td>
 
             <td className="p-3">
@@ -5837,7 +6012,14 @@ function ReservationsTab({
             </td>
 
             <td className="max-w-[220px] p-3">
-              {reservation.note || "—"}
+              {isEditing ? (
+                <textarea
+                  className="min-h-[80px] w-full rounded-xl border border-blue-200 p-2 text-sm"
+                  value={editingReservation?.note || ""}
+                  onChange={(event) => updateEditingReservation("note", event.target.value)}
+                  placeholder="Note"
+                />
+              ) : reservation.note || "—"}
             </td>
 
 <td className="p-3 text-xs text-slate-500">
@@ -5850,6 +6032,32 @@ function ReservationsTab({
 
 <td className="p-3 text-right">
   <div className="flex justify-end gap-2">
+  {isEditing ? (
+    <>
+      <Button
+        variant="outline"
+        className="rounded-xl border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+        onClick={saveEditReservation}
+      >
+        Save
+      </Button>
+      <Button
+        variant="outline"
+        className="rounded-xl border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+        onClick={cancelEditReservation}
+      >
+        Cancel
+      </Button>
+    </>
+  ) : (
+  <>
+  <Button
+    variant="outline"
+    className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+    onClick={() => startEditReservation(reservation)}
+  >
+    Edit
+  </Button>
   <Button
     variant="outline"
     className={rosterAdded
@@ -5861,15 +6069,6 @@ function ReservationsTab({
   >
     {rosterAdded ? "Added to Roster" : "Add to Roster"}
   </Button>
-  {rosterAdded && (
-    <Button
-      variant="outline"
-      className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
-      onClick={() => resetReservationRosterStatus(reservation)}
-    >
-      Undo
-    </Button>
-  )}
   <Button
     variant="outline"
     className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
@@ -5890,6 +6089,8 @@ onClick={() => {
   >
     Delete
   </Button>
+  </>
+  )}
   </div>
 </td>
           </tr>
@@ -5900,7 +6101,7 @@ onClick={() => {
       {reservationState.reservations?.length === 0 && (
         <tr>
           <td
-            colSpan={9}
+            colSpan={10}
             className="p-5 text-center text-blue-700"
           >
             No reservations submitted yet.
@@ -5937,7 +6138,6 @@ function PublicReservations({
 
   const formValid =
   form.name.trim() &&
-  form.phone.trim() &&
   form.email.trim();
   const currentReservations =
   reservationState.reservations || [];
@@ -6001,7 +6201,7 @@ const registrationStatus =
             onChange={(e) =>
               updateField("phone", formatPhoneNumber(e.target.value))
             }
-            placeholder="Phone Number *"
+            placeholder="Phone Number"
           />
 
           <Input
@@ -6030,6 +6230,7 @@ const registrationStatus =
       : "cursor-not-allowed bg-slate-400"
   }`}
   onClick={() => {
+    const registrationNumber = getNextReservationNumber(reservationState);
     const newReservation = {
       id: Date.now(),
       tournament:
@@ -6042,11 +6243,14 @@ const registrationStatus =
       email: form.email,
       note: form.note,
       status: registrationStatus,
+      registrationNumber,
+      confirmationNumber: registrationNumber,
       createdAt: new Date().toISOString(),
     };
 
     setReservationState((current) => ({
       ...current,
+      reservationNextNumber: Math.max(Number(current.reservationNextNumber || 1), registrationNumber + 1),
       reservations: [
         ...current.reservations,
         newReservation,
@@ -6059,8 +6263,8 @@ const registrationStatus =
 
     alert(
       registrationStatus === "Registered"
-        ? "Registration submitted successfully!"
-        : "You have been added to the waitlist."
+        ? `Registration submitted successfully! Confirmation #${newReservation.registrationNumber}`
+        : `You have been added to the waitlist. Confirmation #${newReservation.registrationNumber}`
     );
 
     setForm({
@@ -14026,6 +14230,7 @@ const [reservationState, setReservationState] = useState({
   tournamentName: "",
   tournamentStartTime: "",
   reservationLimit: 48,
+  reservationNextNumber: 1,
   reservations: [],
   reservationsByTournament: {},
 });
@@ -14265,6 +14470,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       tournamentCenter: reservationState.tournamentCenter || "",
       tournamentAddress: reservationState.tournamentAddress || "",
       reservationLimit: Number(reservationState.reservationLimit || 48),
+      reservationNextNumber: getNextReservationNumber(reservationState),
       reservationsByTournament: reservationState.reservationsByTournament || {},
     };
     await withTimeout(
@@ -14398,6 +14604,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                 tournamentCenter: "",
                 tournamentAddress: "",
                 reservationLimit: Number(reservationSettings.reservationLimit || 48),
+                reservationNextNumber: Number(reservationSettings.reservationNextNumber || 1),
                 reservations: [],
               };
             }
@@ -14487,7 +14694,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           });
         }
         if (parsed.tournamentRecap) setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...parsed.tournamentRecap });
-        if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: 48, reservations: [], reservationsByTournament: {}, ...parsed.reservationState });
+        if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: 48, reservationNextNumber: 1, reservations: [], reservationsByTournament: {}, ...parsed.reservationState });
         if (parsed.multiDayEvent) setMultiDayEvent({ ...createDefaultMultiDayEvent(), ...parsed.multiDayEvent });
         if (parsed.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
         if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, ...parsed.bracketState });
@@ -14630,6 +14837,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         email: reservation.email || "",
         reservationId: reservation.id || "",
         reservationTournamentKey: currentReservationKey,
+        registrationNumber: getReservationRegistrationNumber(reservation, existingIndex >= 0 ? current[existingIndex]?.registrationNumber : maxSeed + 1),
         average: archivedData?.eligible ? archivedData.average : "",
         handicap: archivedHandicap,
         handicapPerGame: archivedHandicap,
@@ -14712,7 +14920,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const financialLineageGames = isMatchplayLineageEvent
     ? (payoutState.matchplayLineageGamesOverrideEnabled ? Number(payoutState.matchplayLineageGames || 0) : matchplayLineageGames)
     : undefined;
-  const financials = useMemo(() => calculateFinancials({ entries, lineageEntries: bowlers.length, totalLineageGames: financialLineageGames, ...payoutState }), [entries, bowlers.length, payoutState, financialLineageGames]);
+  const financialFinalsGames = payoutState.finalsGamesOverrideEnabled
+    ? Number(payoutState.finalsGames || 0)
+    : getAutoFinalsLineageGames({ entries, tournamentFormat, tournamentStyle });
+  const financials = useMemo(() => calculateFinancials({ entries, lineageEntries: bowlers.length, ...payoutState, finalsGames: financialFinalsGames, totalLineageGames: financialLineageGames }), [entries, bowlers.length, payoutState, financialFinalsGames, financialLineageGames]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides }), [financials, payoutState]);
   const unlockAdmin = () => {
     const normalizedCode = adminCodeDraft.trim().toLowerCase();
@@ -14946,7 +15157,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     />
   </AppErrorBoundary>
 )}
-        {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} />}
+        {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} setReservationState={setReservationState} />}
         {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo} eliminatorTournamentState={eliminatorTournamentState} setEliminatorTournamentState={setEliminatorTournamentState}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} financials={financials} />}
