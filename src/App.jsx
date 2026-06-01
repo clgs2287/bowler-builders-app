@@ -302,6 +302,34 @@ const numberInputStyles = String.raw`
   box-shadow: 0 4px 12px rgba(3, 20, 43, 0.12);
 }
 
+@media (max-width: 640px) {
+  .bb-mobile-table {
+    font-size: 10.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  .bb-mobile-table th,
+  .bb-mobile-table td {
+    padding: 0.35rem !important;
+  }
+
+  .bb-mobile-tight {
+    min-width: 30rem !important;
+  }
+
+  .bb-mobile-medium {
+    min-width: 34rem !important;
+  }
+
+  .bb-mobile-wide {
+    min-width: 38rem !important;
+  }
+
+  .bb-mobile-hide {
+    display: none !important;
+  }
+}
+
 @media print {
   .bb-stage,
   .bb-stage::before,
@@ -7717,7 +7745,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
 
   const renderScheduleArchiveResults = (archive, snapshot) => (
     <div className="overflow-auto rounded-2xl border border-blue-200">
-      <table className="w-full min-w-[620px] text-xs md:text-sm">
+      <table className="bb-mobile-table bb-mobile-medium w-full min-w-[620px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-2 text-left md:p-3">Place</th>
@@ -8451,7 +8479,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       </button>
     </div>
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-      <table className="w-full min-w-[960px] text-xs md:text-sm">
+      <table className="bb-mobile-table bb-mobile-wide w-full min-w-[960px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
@@ -8461,14 +8489,14 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             {statsMode === "scratch" && (
               <>
                 <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("qualifyingAverage")} className="font-bold">Qual Avg{sortLabel("qualifyingAverage")}</button></th>
-                <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsAverage")} className="font-bold">Finals Avg{sortLabel("finalsAverage")}</button></th>
-                <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsGames")} className="font-bold">Finals Gms{sortLabel("finalsGames")}</button></th>
+                <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsAverage")} className="font-bold">Finals Avg{sortLabel("finalsAverage")}</button></th>
+                <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsGames")} className="font-bold">Finals Gms{sortLabel("finalsGames")}</button></th>
               </>
             )}
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold">High Game{sortLabel("highGame")}</button></th>
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
+            <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
+            <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
           </tr>
         </thead>
         <tbody>
@@ -8500,25 +8528,25 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                   {statsMode === "scratch" && (
                     <>
                       <td className="p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
-                      <td className="p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
-                      <td className="p-2 text-right md:p-3">{p.finalsGames}</td>
+                      <td className="bb-mobile-hide p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
+                      <td className="bb-mobile-hide p-2 text-right md:p-3">{p.finalsGames}</td>
                     </>
                   )}
                   <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
                   <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
-                  <td className="p-2 text-right md:p-3">{p.cashes}</td>
-                  <td className="p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
+                  <td className="bb-mobile-hide p-2 text-right md:p-3">{p.cashes}</td>
+                  <td className="bb-mobile-hide p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
                 </tr>
                 {expanded && (
                   <tr className="border-t bg-blue-50/60">
                     <td colSpan={publicStatsColSpan} className="p-3">
                       <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                        <table className="w-full min-w-[820px] text-xs md:text-sm">
+                        <table className="bb-mobile-table bb-mobile-wide w-full min-w-[820px] text-xs md:text-sm">
                           <thead className="bg-blue-800 text-white">
                             <tr>
                               <th className="p-2 text-left md:p-3">Tournament</th>
                               <th className="p-2 text-left md:p-3">Date</th>
-                              <th className="p-2 text-left md:p-3">Center</th>
+                              <th className="bb-mobile-hide p-2 text-left md:p-3">Center</th>
                               <th className="p-2 text-right md:p-3">Place</th>
                               <th className="p-2 text-right md:p-3">Games</th>
                               <th className="p-2 text-right md:p-3">Total</th>
@@ -8526,12 +8554,12 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                               {statsMode === "scratch" && (
                                 <>
                                   <th className="p-2 text-right md:p-3">Qual Avg</th>
-                                  <th className="p-2 text-right md:p-3">Finals Avg</th>
+                                  <th className="bb-mobile-hide p-2 text-right md:p-3">Finals Avg</th>
                                 </>
                               )}
                               <th className="p-2 text-right md:p-3">High</th>
-                              <th className="p-2 text-right md:p-3">Cashed</th>
-                              <th className="p-2 text-right md:p-3">Title</th>
+                              <th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
+                              <th className="bb-mobile-hide p-2 text-right md:p-3">Title</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -8539,7 +8567,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                               <tr key={detail.id} className="border-t">
                                 <td className="p-2 font-semibold text-blue-950 md:p-3">{detail.tournament}</td>
                                 <td className="p-2 text-blue-900 md:p-3">{detail.date || "-"}</td>
-                                <td className="p-2 text-blue-900 md:p-3">{detail.center || "-"}</td>
+                                <td className="bb-mobile-hide p-2 text-blue-900 md:p-3">{detail.center || "-"}</td>
                                 <td className="p-2 text-right font-bold md:p-3">#{detail.place}</td>
                                 <td className="p-2 text-right md:p-3">{detail.games}</td>
                                 <td className="p-2 text-right md:p-3">{detail.total || "-"}</td>
@@ -8547,12 +8575,12 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                                 {statsMode === "scratch" && (
                                   <>
                                     <td className="p-2 text-right md:p-3">{detail.qualifyingAverage ? detail.qualifyingAverage.toFixed(2) : "-"}</td>
-                                    <td className="p-2 text-right md:p-3">{detail.finalsAverage ? detail.finalsAverage.toFixed(2) : "-"}</td>
+                                    <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.finalsAverage ? detail.finalsAverage.toFixed(2) : "-"}</td>
                                   </>
                                 )}
                                 <td className="p-2 text-right md:p-3">{detail.highGame || "-"}</td>
-                                <td className="p-2 text-right md:p-3">{detail.cashed ? "Yes" : "No"}</td>
-                                <td className="p-2 text-right md:p-3">{detail.title ? "Yes" : "No"}</td>
+                                <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.cashed ? "Yes" : "No"}</td>
+                                <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.title ? "Yes" : "No"}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -8573,16 +8601,16 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       {publicStatsTab === "archives" && (
   <div className="space-y-3 md:space-y-4">
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-      <table className="w-full min-w-[760px] text-xs md:min-w-[840px] md:text-sm">
+      <table className="bb-mobile-table bb-mobile-medium w-full min-w-[760px] text-xs md:min-w-[840px] md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-2 text-left md:p-3">Tournament Name</th>
             <th className="p-2 text-left md:p-3">Season</th>
             <th className="p-2 text-left md:p-3">Date</th>
-            <th className="p-2 text-left md:p-3">Center</th>
-            <th className="p-2 text-center md:p-3">FKM</th>
+            <th className="bb-mobile-hide p-2 text-left md:p-3">Center</th>
+            <th className="bb-mobile-hide p-2 text-center md:p-3">FKM</th>
             <th className="p-2 text-right md:p-3">Entries</th>
-            <th className="p-2 text-right md:p-3">Cashers</th>
+            <th className="bb-mobile-hide p-2 text-right md:p-3">Cashers</th>
             <th className="p-2 text-left md:p-3">Winner</th>
           </tr>
         </thead>
@@ -8598,10 +8626,10 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                 </td>
                 <td className="p-2 text-blue-900 md:p-3">{tournament.season || "Unassigned"}</td>
                 <td className="p-2 text-blue-900 md:p-3">{tournament.date || "-"}</td>
-                <td className="p-2 text-blue-900 md:p-3">{tournament.center || tournament.location || "-"}</td>
-                <td className="p-2 text-center font-bold md:p-3">{tournament.titleEligible ? "Yes" : "No"}</td>
+                <td className="bb-mobile-hide p-2 text-blue-900 md:p-3">{tournament.center || tournament.location || "-"}</td>
+                <td className="bb-mobile-hide p-2 text-center font-bold md:p-3">{tournament.titleEligible ? "Yes" : "No"}</td>
                 <td className="p-2 text-right font-semibold md:p-3">{tournament.entries || 0}</td>
-                <td className="p-2 text-right font-semibold md:p-3">{tournament.cashers || 0}</td>
+                <td className="bb-mobile-hide p-2 text-right font-semibold md:p-3">{tournament.cashers || 0}</td>
                 <td className="p-2 font-semibold text-green-700 md:p-3">{championName || "-"}</td>
               </tr>
             );
@@ -8894,7 +8922,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   </div>
 
   <div className="overflow-auto rounded-2xl border border-blue-200">
-    <table className="w-full min-w-[520px] text-xs md:text-sm">
+    <table className="bb-mobile-table bb-mobile-tight w-full min-w-[520px] text-xs md:text-sm">
       <thead className="bg-blue-800 text-white">
         <tr>
           <th className="p-3 text-left">Name</th>
@@ -8967,16 +8995,16 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
       {publicArchiveSection === "results" && (
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className="w-full min-w-[760px] text-xs md:text-sm">
+          <table className="bb-mobile-table bb-mobile-medium w-full min-w-[760px] text-xs md:text-sm">
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "place", direction: current.column === "place" && current.direction === "asc" ? "desc" : "asc" }))}>Place</th>
                 <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "name", direction: current.column === "name" && current.direction === "asc" ? "desc" : "asc" }))}>Bowler</th>
-                <th className="p-2 text-right md:p-3">Games</th>
+                <th className="bb-mobile-hide p-2 text-right md:p-3">Games</th>
                 <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "scratch", direction: current.column === "scratch" && current.direction === "asc" ? "desc" : "asc" }))}>{selectedPublicArchiveSnapshot?.useHandicapScores ? "Scratch" : "Total"}</th>
                 {selectedPublicArchiveSnapshot?.useHandicapScores && <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "handicap", direction: current.column === "handicap" && current.direction === "asc" ? "desc" : "asc" }))}>Hdcp</th>}
                 <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "average", direction: current.column === "average" && current.direction === "asc" ? "desc" : "asc" }))}>Average</th>
-                <th className="p-2 text-right md:p-3">Cashed</th>
+                <th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
               </tr>
             </thead>
             <tbody>
@@ -8997,11 +9025,11 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                     {result.name}
                     {selectedPublicArchiveSnapshot?.useHandicapScores && <span className="ml-2 text-xs font-semibold text-blue-700">(+{handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {})})</span>}
                   </td>
-                  <td className="p-2 text-right md:p-3">{(result.games || []).join("-")}</td>
+                  <td className="bb-mobile-hide p-2 text-right md:p-3">{(result.games || []).join("-")}</td>
                   <td className="p-2 text-right md:p-3">{result.scratchTotal}</td>
                   {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0)}</td>}
                   <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
-                  <td className="p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
+                  <td className="bb-mobile-hide p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
                 </tr>
               ))}
             </tbody>
@@ -11320,7 +11348,7 @@ current.results.push(result);
   </button>
 </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[1040px] text-xs md:text-sm">
+            <table className="bb-mobile-table bb-mobile-wide w-full min-w-[1040px] text-xs md:text-sm">
 <thead className="bg-blue-800 text-white">
   <tr>
     <th className="p-2 text-left md:p-3">
@@ -11375,7 +11403,7 @@ current.results.push(result);
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-mobile-hide p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("finalsAverage")}
@@ -11385,7 +11413,7 @@ current.results.push(result);
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-mobile-hide p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("finalsGames")}
@@ -11427,7 +11455,7 @@ current.results.push(result);
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-mobile-hide p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("earnings")}
@@ -11437,7 +11465,7 @@ current.results.push(result);
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-mobile-hide p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("bestFinish")}
@@ -11473,13 +11501,13 @@ current.results.push(result);
       {p.qualifyingAverage.toFixed(2)}
     </td>
 
-    <td className="p-2 text-right md:p-3">
+    <td className="bb-mobile-hide p-2 text-right md:p-3">
       {p.finalsGames > 0
         ? p.finalsAverage.toFixed(2)
         : "—"}
     </td>
 
-    <td className="p-2 text-right md:p-3">
+    <td className="bb-mobile-hide p-2 text-right md:p-3">
       {p.finalsGames}
     </td>
   </>
@@ -11497,11 +11525,11 @@ current.results.push(result);
     {p.cashes}
   </td>
 
-  <td className="p-2 text-right font-bold text-green-700 md:p-3">
+  <td className="bb-mobile-hide p-2 text-right font-bold text-green-700 md:p-3">
     {currency(p.earnings)}
   </td>
 
-  <td className="p-2 text-right md:p-3">
+  <td className="bb-mobile-hide p-2 text-right md:p-3">
     {p.bestFinish ? `#${p.bestFinish}` : "—"}
   </td>
 </tr>
@@ -11813,16 +11841,16 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       <AppCard>
         <CardContent className="p-3 md:p-5">
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[840px] text-xs md:text-sm">
+            <table className="bb-mobile-table bb-mobile-medium w-full min-w-[840px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
                 <tr>
                   <th className="p-2 text-left md:p-3">Tournament Name</th>
                   <th className="p-2 text-left md:p-3">Season</th>
                   <th className="p-2 text-left md:p-3">Date</th>
-                  <th className="p-2 text-left md:p-3">Center</th>
-                  <th className="p-2 text-center md:p-3">FKM</th>
+                  <th className="bb-mobile-hide p-2 text-left md:p-3">Center</th>
+                  <th className="bb-mobile-hide p-2 text-center md:p-3">FKM</th>
                   <th className="p-2 text-right md:p-3">Entries</th>
-                  <th className="p-2 text-right md:p-3">Cashers</th>
+                  <th className="bb-mobile-hide p-2 text-right md:p-3">Cashers</th>
                   <th className="p-2 text-left md:p-3">Winner</th>
                   <th className="p-2 text-right md:p-3">Actions</th>
                 </tr>
@@ -11833,10 +11861,10 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                     <td className="p-2 font-bold text-blue-950 md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => { setSelectedArchivedTournamentId(t.id); setArchivedDetailSection("results"); }}>{t.name}</button></td>
                     <td className="p-2 text-blue-900 md:p-3">{t.season || "Unassigned"}</td>
                     <td className="p-2 text-blue-900 md:p-3">{t.date}</td>
-                    <td className="p-2 text-blue-900 md:p-3">{t.center || t.location || "—"}</td>
-                    <td className="p-2 text-center font-bold md:p-3">{t.titleEligible ? "Yes" : "No"}</td>
+                    <td className="bb-mobile-hide p-2 text-blue-900 md:p-3">{t.center || t.location || "—"}</td>
+                    <td className="bb-mobile-hide p-2 text-center font-bold md:p-3">{t.titleEligible ? "Yes" : "No"}</td>
                     <td className="p-2 text-right font-semibold md:p-3">{t.entries}</td>
-                    <td className="p-2 text-right font-semibold md:p-3">{t.cashers}</td>
+                    <td className="bb-mobile-hide p-2 text-right font-semibold md:p-3">{t.cashers}</td>
                     <td className="p-2 font-semibold text-green-700 md:p-3">{getArchivedWinnerName(t) || "—"}</td>
                     <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button></div></td>
                   </tr>
@@ -11872,7 +11900,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             </div>
             {archivedDetailSection === "results" && (
               <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                <table className="w-full min-w-[760px] text-xs md:text-sm">
+                <table className="bb-mobile-table bb-mobile-medium w-full min-w-[760px] text-xs md:text-sm">
                   <thead className="bg-blue-800 text-white"><tr><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
@@ -11951,7 +11979,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 >
   Average
 </th>
-<th className="p-2 text-right md:p-3">Cashed</th>
+<th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
 <th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
@@ -12052,7 +12080,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
           {Number(result.average || 0).toFixed(2)}
         </td>
 
-        <td className="p-2 text-right md:p-3">
+        <td className="bb-mobile-hide p-2 text-right md:p-3">
           {result.cashed ? "Yes" : "No"}
         </td>
 
