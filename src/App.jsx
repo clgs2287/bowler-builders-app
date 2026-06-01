@@ -6410,6 +6410,9 @@ const registrationStatus =
               tournamentInfo.name}
           </span>
         </p>
+        <p className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
+          After submitting, please check your inbox and spam folder for your confirmation email.
+        </p>
 
         <div className="grid gap-4 md:grid-cols-2">
           <Input
