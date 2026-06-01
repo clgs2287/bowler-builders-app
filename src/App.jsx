@@ -7000,8 +7000,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       <div
         className={
           winner?.name && winner.name !== "TIE"
-            ? "relative rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-            : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+            ? "relative min-h-[230px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+            : "relative min-h-[230px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
         }
       >
         <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
@@ -7054,8 +7054,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     <div
       className={
         winner?.name && winner.name !== "TIE"
-          ? "relative rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-          : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+          ? "relative min-h-[92px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+          : "relative min-h-[92px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
       }
     >
       <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
@@ -7083,10 +7083,10 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
 };
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0, matchNumberOffset = 0 }) => {
-    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && !useHandicapScores ? 136 : 84;
-    const matchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 136 : 84;
-    const firstRoundGap = matchScoring === "bestOf3" ? 48 : 42;
-    const step = firstRoundMatchHeight + firstRoundGap + 18;
+    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && !useHandicapScores ? 150 : 104;
+    const matchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 150 : 104;
+    const firstRoundGap = matchScoring === "bestOf3" ? 70 : 54;
+    const step = firstRoundMatchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
       const feederStart = matchIndex * (2 ** roundIndex);
@@ -7094,9 +7094,10 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       const feederCenter = ((feederStart + feederEnd) / 2) * step + firstRoundMatchHeight / 2;
       return feederCenter - matchHeight / 2;
     };
-    const columnHeight = Math.max(1, matches.length) * step * Math.max(1, 2 ** roundIndex);
+    const columnHeight =
+      Math.max(1, bracketRounds[0]?.matches?.length || matches.length) * step;
     return (
-      <div className="min-w-[260px] flex-1">
+      <div className="min-w-[280px] flex-1">
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
         <div
   className="relative pb-8"
@@ -9148,7 +9149,7 @@ const renderPlayerName = (player) => {
 
   if (matchScoring === "bestOf3") {
     return (
-      <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
+      <div className={winner?.name && winner.name !== "TIE" ? "relative min-h-[270px] rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative min-h-[270px] rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
         <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
           Match {matchNumber}
         </div>
@@ -9211,7 +9212,7 @@ const renderPlayerName = (player) => {
   }
 
   return (
-    <div className={winner?.name && winner.name !== "TIE" ? "relative rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+    <div className={winner?.name && winner.name !== "TIE" ? "relative min-h-[104px] rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative min-h-[104px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
       <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
         Match {matchNumber}
       </div>
@@ -9266,10 +9267,10 @@ function BracketRoundColumn({
   matchNumberOffset = 0,
   setSavedFinalsRounds,
 }) {
-  const firstRoundMatchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && !useHandicapScores ? 148 : 96;
-  const matchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 148 : 96;
-  const firstRoundGap = matchScoring === "bestOf3" ? 36 : 24;
-  const step = firstRoundMatchHeight + firstRoundGap + 18;
+  const firstRoundMatchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && !useHandicapScores ? 158 : 112;
+  const matchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 158 : 112;
+  const firstRoundGap = matchScoring === "bestOf3" ? 70 : 54;
+  const step = firstRoundMatchHeight + firstRoundGap;
 
   const getTop = (matchIndex) => {
     if (roundIndex === 0) {
@@ -9280,9 +9281,9 @@ function BracketRoundColumn({
     const feederCenter = ((feederStart + feederEnd) / 2) * step + firstRoundMatchHeight / 2;
     return feederCenter - matchHeight / 2;
   };
-  const columnHeight = Math.max(1, matches.length) * step * Math.max(1, 2 ** roundIndex);
+  const columnHeight = Math.max(1, matches.length * (2 ** roundIndex)) * step;
   return (
-    <div className="min-w-[260px] flex-1">
+    <div className="min-w-[280px] flex-1">
       <div className="mb-3 flex flex-col items-center gap-2">
   <h3 className="text-center font-semibold text-blue-900">
     {title}
@@ -11400,11 +11401,15 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 ).forEach((round) => {
     (round.matches || []).forEach((match) => {
       const leftScore = Number(
-        bracketState?.scores?.[`${match.id}-l`] || 0
+        (bracketState?.scratchScores?.[`${match.id}-l`] ??
+          bracketState?.scores?.[`${match.id}-l`]) ||
+          0
       );
 
       const rightScore = Number(
-        bracketState?.scores?.[`${match.id}-r`] || 0
+        (bracketState?.scratchScores?.[`${match.id}-r`] ??
+          bracketState?.scores?.[`${match.id}-r`]) ||
+          0
       );
 
       if (
@@ -13340,7 +13345,7 @@ row.matches.push({
                     <td colSpan={2} className="p-2 md:p-3">
                       <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                         <table className="w-full min-w-[520px] text-xs md:text-sm">
-                          <thead className="bg-blue-100 text-blue-900">
+                          <thead className="bg-blue-800 text-white">
                             <tr>
                               <th className="p-2 text-left">Bracket / Game</th>
                               <th className="p-2 text-center">Result</th>
@@ -13368,15 +13373,15 @@ row.matches.push({
                                   {match.result || "—"}
                                 </td>
 <td className="p-2 text-right font-bold">
-  {match.playerBreakdown ? (
+  {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
-        ({match.playerBreakdown})
+        {match.opponentBreakdown}
       </span>
-      <span>{match.playerScore}</span>
+      <span>{match.opponentScore}</span>
     </span>
   ) : (
-    match.playerScore
+    match.opponentScore
   )}
 </td>
                                 <td className="p-2 font-semibold">{match.opponent}</td>
@@ -13825,7 +13830,7 @@ row.matches.push({
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-100 text-blue-900"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
