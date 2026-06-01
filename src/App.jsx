@@ -2510,7 +2510,7 @@ function AppCard({ children, className = "" }) {
   return <Card className={`bb-card rounded-xl border bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
 }
 
-function LockedTextField({ label, value, onChange, type = "text", placeholder = "", listId = "" }) {
+function LockedTextField({ label, value, onChange, type = "text", placeholder = "", listId = "", commitOnChange = false }) {
   const isBlank = !String(value || "").trim();
   const [editing, setEditing] = useState(isBlank);
   const [draftValue, setDraftValue] = useState(value || "");
@@ -2563,7 +2563,10 @@ function LockedTextField({ label, value, onChange, type = "text", placeholder = 
         placeholder={placeholder}
         list={listId || undefined}
         autoFocus
-        onChange={(e) => setDraftValue(e.target.value)}
+        onChange={(e) => {
+          setDraftValue(e.target.value);
+          if (commitOnChange) onChange(e.target.value);
+        }}
         onBlur={saveValue}
         onKeyDown={(e) => {
           if (e.key === "Enter") saveValue();
@@ -3412,6 +3415,7 @@ function DashboardTab({
   label="Livestream Link"
   value={tournamentInfo.streamLink || ""}
   onChange={(value) => update("streamLink", value)}
+  commitOnChange
 />
 
 <LockedTextField
@@ -3419,6 +3423,7 @@ function DashboardTab({
   value={tournamentInfo.bbtvYoutubeLink || ""}
   onChange={(value) => update("bbtvYoutubeLink", value)}
   placeholder={DEFAULT_BBTV_YOUTUBE_LINK}
+  commitOnChange
 />
 
 <LockedTextField
@@ -3426,6 +3431,7 @@ function DashboardTab({
   value={tournamentInfo.facebookLink || ""}
   onChange={(value) => update("facebookLink", value)}
   placeholder={DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK || "Bowler Builders Facebook page link"}
+  commitOnChange
 />
 
 <LockedTextField
@@ -3433,6 +3439,7 @@ function DashboardTab({
   value={tournamentInfo.recentVideoLink || ""}
   onChange={(value) => update("recentVideoLink", value)}
   placeholder="Recent tournament video link"
+  commitOnChange
 />
 
 <LockedTextField
@@ -3440,6 +3447,7 @@ function DashboardTab({
   value={tournamentInfo.sponsors || ""}
   onChange={(value) => update("sponsors", value)}
   placeholder="Separate sponsors with commas"
+  commitOnChange
 />
 
 <LockedTextField
@@ -3447,6 +3455,7 @@ function DashboardTab({
   value={tournamentInfo.logoLinks || ""}
   onChange={(value) => update("logoLinks", value)}
   placeholder="Image URLs separated by commas"
+  commitOnChange
 />
 
 <div className="space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3">
