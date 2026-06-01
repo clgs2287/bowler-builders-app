@@ -3005,10 +3005,11 @@ function allReservationItemsFromState(reservationState = {}) {
   };
 
   const currentKey = reservationKeyFromState(reservationState);
-  (reservationState.reservations || []).forEach((reservation) => addReservation(reservation, currentKey));
   Object.entries(reservationState.reservationsByTournament || {}).forEach(([tournamentKey, bucket]) => {
+    if (tournamentKey === currentKey) return;
     (bucket?.reservations || []).forEach((reservation) => addReservation(reservation, tournamentKey));
   });
+  (reservationState.reservations || []).forEach((reservation) => addReservation(reservation, currentKey));
 
   return Array.from(byId.values());
 }
@@ -6120,12 +6121,26 @@ onClick={() => {
 
   if (!confirmed) return;
 
-  setReservationState((current) => ({
-    ...current,
-    reservations: (current.reservations || []).filter(
+  setReservationState((current) => {
+    const currentKey = reservationKeyFromState(current);
+    const nextReservations = (current.reservations || []).filter(
       (item) => item.id !== reservation.id
-    ),
-  }));
+    );
+    const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+    if (currentKey) {
+      reservationsByTournament[currentKey] = {
+        ...reservationBucketFromState(current),
+        reservations: nextReservations,
+        reservationCount: nextReservations.length,
+      };
+    }
+    return {
+      ...current,
+      reservations: nextReservations,
+      reservationCount: nextReservations.length,
+      reservationsByTournament,
+    };
+  });
 }}
   >
     Delete
