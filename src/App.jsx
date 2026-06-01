@@ -14907,7 +14907,34 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [scheduleItems, scheduleLocked, manualTitles, bowlerIdentities, reservationState, tournamentHistory, supabaseAdminProfile, supabaseSession, supabaseLoadReady]);
+  }, [
+    scheduleItems,
+    scheduleLocked,
+    manualTitles,
+    bowlerIdentities,
+    reservationState,
+    tournamentHistory,
+    qualifyingGames,
+    savedScoreGames,
+    savedFinalsRounds,
+    bowlers,
+    useHandicapScores,
+    tournamentFormat,
+    tournamentInfo,
+    tournamentRecap,
+    payoutState,
+    bracketState,
+    eliminatorState,
+    laneEliminatorState,
+    matchplayState,
+    eliminatorTournamentState,
+    sidePotState,
+    paidPayouts,
+    paidSideActionPayouts,
+    supabaseAdminProfile,
+    supabaseSession,
+    supabaseLoadReady,
+  ]);
 
   useEffect(() => {
     try {
