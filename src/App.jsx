@@ -5945,7 +5945,7 @@ function ReservationsTab({
           reservationsByTournament,
         };
       });
-      setRosterNotice(removedCount ? `Removed ${removedCount} hidden reservation row${removedCount === 1 ? "" : "s"}.` : "No hidden reservations matched that search.");
+      setRosterNotice(removedCount ? `Removed ${removedCount} reservation row${removedCount === 1 ? "" : "s"} matching "${searchText}". You can submit that bowler again now.` : `No reservation rows matched "${searchText}" for the selected tournament.`);
     } catch (error) {
       window.alert(error.message || "Could not remove hidden reservation rows.");
     }
@@ -6352,6 +6352,7 @@ function PublicReservations({
   onReservationSubmit = () => Promise.resolve(),
 }) {
   const [submittingReservation, setSubmittingReservation] = useState(false);
+  const [submitNotice, setSubmitNotice] = useState("");
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -6523,13 +6524,21 @@ const registrationStatus =
       };
     });
 
-    sendReservationConfirmationEmail({
-      reservation: savedReservation,
-      reservationState,
-      tournamentInfo,
-    }).catch((error) => {
+    let emailNotice = "Confirmation email was sent.";
+    try {
+      const emailResult = await sendReservationConfirmationEmail({
+        reservation: savedReservation,
+        reservationState,
+        tournamentInfo,
+      });
+      if (emailResult?.skipped) {
+        emailNotice = "Reservation saved. Confirmation email is not configured yet.";
+      }
+    } catch (error) {
+      emailNotice = `Reservation saved, but email did not send: ${error.message || "unknown email issue"}`;
       console.warn("Reservation email could not be sent", error);
-    });
+    }
+    setSubmitNotice(emailNotice);
 
     alert(
       savedReservation.status === "Registered"
@@ -6552,6 +6561,11 @@ const registrationStatus =
     ? "Register"
     : "Join Waitlist"}
 </Button>
+        {submitNotice && (
+          <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-bold text-blue-900">
+            {submitNotice}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
