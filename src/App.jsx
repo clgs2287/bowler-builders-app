@@ -617,10 +617,7 @@ async function sendReservationConfirmationEmail({ reservation, reservationState 
         center: reservationState.tournamentCenter || tournamentInfo.center || "",
         address: reservationState.tournamentAddress || tournamentInfo.location || "",
       },
-      notificationEmails: [
-        reservationState.registrationEmail,
-        tournamentInfo.directorEmail,
-      ].filter(Boolean).join(","),
+      notificationEmails: reservationState.registrationEmail || "",
     }),
   });
 
