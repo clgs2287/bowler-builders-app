@@ -336,9 +336,6 @@ const TOURNAMENT_STYLES = {
   eliminatorTournament: { label: "Eliminator Tournament", teamSize: 1, laneDraw: true },
 };
 
-const ADMIN_ACCESS_CODES = ["bowlerbuilders2026", "bowler builders 2026", "bowler-builders-2026"];
-const ADMIN_EMAILS = ["cory.lagner@gmail.com"];
-const ADMIN_SESSION_KEY = "bowler-builders-admin-session";
 const DEFAULT_TOURNAMENT_DIRECTOR = "Jimmy Clark";
 const DEFAULT_TOURNAMENT_DIRECTOR_EMAIL = "jimmy_clark79@yahoo.com";
 const PUBLIC_TAB_IDS = new Set([
@@ -2595,7 +2592,6 @@ function SupabaseConnectionCard() {
 
 function SupabaseAdminStatusCard({ session, adminProfile }) {
   const [writeStatus, setWriteStatus] = useState("Not tested");
-  const isFallback = adminProfile?.source === "local-email-fallback";
   const hasSession = Boolean(session?.access_token);
 
   useEffect(() => {
@@ -2641,15 +2637,10 @@ function SupabaseAdminStatusCard({ session, adminProfile }) {
               <p>Supabase user: {session?.user?.email || "Not signed in"}</p>
               <p>User ID: {session?.user?.id || "None"}</p>
               <p>Admin profile: {adminProfile ? "Found" : "Not found"}</p>
-              <p>Admin source: {isFallback ? "Temporary email fallback" : adminProfile ? "Supabase admin_profiles" : "None"}</p>
+              <p>Admin source: {adminProfile ? "Supabase admin_profiles" : "None"}</p>
               <p>Role: {adminProfile?.role || "None"}</p>
               <p>Write test: {writeStatus}</p>
             </div>
-            {isFallback && (
-              <p className="mt-2 text-xs font-semibold text-amber-700">
-                Temporary fallback is active. Before launch, we should make this rely on Supabase admin profiles only.
-              </p>
-            )}
           </div>
           <Button variant="outline" className="rounded-2xl" onClick={testWriteAccess} disabled={!hasSession}>
             Test Write Access
@@ -14161,24 +14152,16 @@ class AppErrorBoundary extends React.Component {
 export default function BowlingPayoutApp() {
   const [paidPayouts, setPaidPayouts] = useState({});
   const [paidSideActionPayouts, setPaidSideActionPayouts] = useState({});
-  const [isAdminMode, setIsAdminMode] = useState(() => {
-    try {
-      return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get("view") === "public") return "tournamentInfo";
-      return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "true" ? "dashboard" : "tournamentInfo";
+      return "tournamentInfo";
     } catch {
       return "tournamentInfo";
     }
   });
-  const [adminCodeDraft, setAdminCodeDraft] = useState("");
-  const [adminCodeError, setAdminCodeError] = useState("");
   const [supabaseSession, setSupabaseSession] = useState(null);
   const [supabaseAdminProfile, setSupabaseAdminProfile] = useState(null);
   const [supabaseAuthLoading, setSupabaseAuthLoading] = useState(hasSupabaseConfig);
@@ -14244,27 +14227,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const supabasePublicDataLoadedRef = useRef(false);
   const supabaseSaveSkipRef = useRef(true);
 
-  const fallbackAdminProfileForSession = (session) => {
-    const email = String(session?.user?.email || "").trim().toLowerCase();
-    if (!email || !ADMIN_EMAILS.includes(email)) return null;
-    return {
-      user_id: session.user.id || "",
-      email: session.user.email,
-      role: "admin",
-      source: "local-email-fallback",
-    };
-  };
-
   const loadSupabaseAdminProfile = async (session) => {
     if (!supabase || !session?.user) {
       setSupabaseAdminProfile(null);
       return null;
     }
-    const fallbackProfile = fallbackAdminProfileForSession(session);
     const accessToken = session.access_token;
-    if (fallbackProfile) {
-      setSupabaseAdminProfile(fallbackProfile);
-    }
 
     if (accessToken) {
       try {
@@ -14304,8 +14272,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       }
     }
 
-    setSupabaseAdminProfile(fallbackProfile);
-    return fallbackProfile;
+    setSupabaseAdminProfile(null);
+    return null;
   };
 
   useEffect(() => {
@@ -14359,12 +14327,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
     const profile = await loadSupabaseAdminProfile(data?.session || null);
     if (!profile) return { error: "Signed in, but this user is not listed as an admin yet." };
-
-    try {
-      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
-    } catch {
-      // Session storage may be blocked in some browsers.
-    }
 
     setIsAdminMode(true);
     setActiveTab("dashboard");
@@ -14497,16 +14459,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
     setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${archiveRecords.length} archives, active snapshot`);
   };
-
-  useEffect(() => {
-    if (!supabaseAdminProfile) return;
-    try {
-      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
-    } catch {
-      // Session storage may be blocked in some browsers.
-    }
-    setIsAdminMode(true);
-  }, [supabaseAdminProfile]);
 
   useEffect(() => {
     window.__currentTournamentFormat = tournamentFormat;
@@ -14930,32 +14882,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     : getAutoFinalsLineageGames({ entries, tournamentFormat, tournamentStyle });
   const financials = useMemo(() => calculateFinancials({ entries, lineageEntries: bowlers.length, ...payoutState, finalsGames: financialFinalsGames, totalLineageGames: financialLineageGames }), [entries, bowlers.length, payoutState, financialFinalsGames, financialLineageGames]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides }), [financials, payoutState]);
-  const unlockAdmin = () => {
-    const normalizedCode = adminCodeDraft.trim().toLowerCase();
-
-    if (!ADMIN_ACCESS_CODES.includes(normalizedCode)) {
-      setAdminCodeError("That admin code is not correct.");
-      return;
-    }
-
-    try {
-      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
-    } catch {
-      // Session storage may be blocked in some browsers; keep this session unlocked in memory.
-    }
-
-    setIsAdminMode(true);
-    setAdminCodeDraft("");
-    setAdminCodeError("");
-    setActiveTab("dashboard");
-  };
   const lockAdmin = () => {
-    try {
-      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
-    } catch {
-      // Nothing to clear if session storage is unavailable.
-    }
-
     setIsAdminMode(false);
     setActiveTab("tournamentInfo");
   };
@@ -14990,6 +14917,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       savedTournamentDrafts,
     });
   };
+
+  useEffect(() => {
+    if (supabaseAuthLoading) return;
+
+    const hasAdminProfile = Boolean(supabaseAdminProfile);
+    setIsAdminMode(hasAdminProfile);
+
+    if (!hasAdminProfile && !PUBLIC_TAB_IDS.has(activeTab)) {
+      setActiveTab("tournamentInfo");
+    }
+  }, [activeTab, supabaseAdminProfile, supabaseAuthLoading]);
 
   useEffect(() => {
     if ((isMatchplayTournament(tournamentFormat, tournamentInfo) || isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles")) && activeTab === "public") {
@@ -15093,24 +15031,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                       onSignIn={signInSupabaseAdmin}
                       onSignOut={signOutSupabaseAdmin}
                     />
-                    <span className="hidden text-xs font-bold text-blue-100 sm:inline">or</span>
-                    <Input
-                      type="password"
-                      value={adminCodeDraft}
-                      onChange={(e) => {
-                        setAdminCodeDraft(e.target.value);
-                        setAdminCodeError("");
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") unlockAdmin();
-                      }}
-                      placeholder="Admin code"
-                      className="h-10 min-w-[180px]"
-                    />
-                    <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={unlockAdmin}>
-                      Admin Access
-                    </Button>
-                    {adminCodeError && <span className="text-xs font-bold text-yellow-200">{adminCodeError}</span>}
                   </div>
                 )}
               </div>
