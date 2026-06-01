@@ -14703,7 +14703,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const archiveRecords = (tournamentHistory || []).map(archivedTournamentRecordFromItem);
     const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || {});
 
-    const syncTable = async (table, records) => {
+    const syncTable = async (table, records, { removeStale = true } = {}) => {
       setSupabaseSaveStatus(`Saving ${table}...`);
       const existingRows = await withTimeout(
         supabaseRestRequest(table, "?select=id", { accessToken }),
@@ -14721,6 +14721,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           `Saving ${table}`
         );
       }
+
+      if (!removeStale) return;
 
       const nextIds = new Set(records.map((record) => String(record.id)));
       const staleIds = (existingRows || []).map((row) => String(row.id)).filter((id) => !nextIds.has(id));
@@ -14780,7 +14782,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     await syncTable("schedule_events", scheduleRecords);
     await syncTable("manual_titles", titleRecords);
     await syncTable("bowler_identities", identityRecords);
-    await syncTable("reservations", reservationRecords);
+    await syncTable("reservations", reservationRecords, { removeStale: false });
     await syncTable("archived_tournaments", archiveRecords);
     await syncTable("active_tournament_snapshots", [activeSnapshotRecord]);
 
