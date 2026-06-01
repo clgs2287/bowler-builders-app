@@ -86,14 +86,13 @@ export default async function handler(request, response) {
     const body = request.body || {};
     const reservation = body.reservation || {};
     const tournament = body.tournament || {};
-    const notificationEmails = [
+    const notificationEmails = [...new Set([
       ...splitEmails(process.env.RESERVATION_NOTIFICATION_EMAILS),
       ...splitEmails(body.notificationEmails),
-    ];
+    ])];
     const to = splitEmails(reservation.email);
-    const bcc = [...new Set(notificationEmails.filter((email) => !to.includes(email)))];
 
-    if (!to.length && !bcc.length) {
+    if (!to.length && !notificationEmails.length) {
       return response.status(400).json({ error: "No email recipients were provided." });
     }
 
@@ -101,8 +100,7 @@ export default async function handler(request, response) {
     const subject = `Reservation ${confirmationNumber ? `#${confirmationNumber} ` : ""}${reservation.status || "Confirmed"} - ${tournament.name || reservation.tournament || "Tournament"}`;
     const from = getSenderAddress();
     const replyTo = getReplyToAddress();
-
-    const emailResponse = await fetch(RESEND_ENDPOINT, {
+    const sendEmail = async ({ recipients, emailSubject }) => fetch(RESEND_ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -110,20 +108,28 @@ export default async function handler(request, response) {
       },
       body: JSON.stringify({
         from,
-        to: to.length ? to : bcc,
-        bcc: to.length ? bcc : [],
-        subject,
+        to: recipients,
+        subject: emailSubject,
         html: reservationHtml({ reservation, tournament }),
         ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
 
-    const result = await emailResponse.json().catch(() => ({}));
-    if (!emailResponse.ok) {
-      return response.status(emailResponse.status).json({ error: result.message || "Email could not be sent.", details: result });
+    const sends = [];
+    if (to.length) sends.push({ kind: "entrant", response: await sendEmail({ recipients: to, emailSubject: subject }) });
+    if (notificationEmails.length) sends.push({ kind: "copy", response: await sendEmail({ recipients: notificationEmails, emailSubject: `Copy: ${subject}` }) });
+
+    const results = [];
+    for (const sentEmail of sends) {
+      const result = await sentEmail.response.json().catch(() => ({}));
+      results.push({ kind: sentEmail.kind, ok: sentEmail.response.ok, status: sentEmail.response.status, result });
+    }
+    const failed = results.find((item) => !item.ok);
+    if (failed) {
+      return response.status(failed.status).json({ error: failed.result.message || `${failed.kind} email could not be sent.`, details: failed.result, results });
     }
 
-    return response.status(200).json({ sent: true, id: result.id || "" });
+    return response.status(200).json({ sent: true, results });
   } catch (error) {
     return response.status(500).json({ error: error.message || "Email could not be sent." });
   }
