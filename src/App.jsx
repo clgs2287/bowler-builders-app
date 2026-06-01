@@ -5701,6 +5701,7 @@ function ReservationsTab({
   scheduleItems = [],
   onAddReservationToRegistration = () => {},
   onDeleteReservation = () => Promise.resolve(),
+  onRemoveHiddenReservation = () => Promise.resolve(0),
 }) {
   const [rosterNotice, setRosterNotice] = useState("");
   const [deletingReservationId, setDeletingReservationId] = useState(null);
@@ -5816,6 +5817,44 @@ function ReservationsTab({
     setRosterNotice("All reservations were cleared.");
   };
 
+  const removeHiddenDuplicateReservation = async () => {
+    const searchText = window.prompt("Enter the bowler name, nickname, or email to remove from hidden reservations:");
+    if (!searchText?.trim()) return;
+    const confirmed = window.confirm(`Remove hidden reservation rows matching "${searchText}" for this tournament?`);
+    if (!confirmed) return;
+
+    try {
+      const removedCount = await Promise.resolve(onRemoveHiddenReservation(searchText));
+      setReservationState((current) => {
+        const currentKey = reservationKeyFromState(current);
+        const nextReservations = (current.reservations || []).filter((reservation) =>
+          !isDuplicateReservation(reservation, {
+            name: searchText,
+            nickname: searchText,
+            email: searchText,
+          })
+        );
+        const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+        if (currentKey) {
+          reservationsByTournament[currentKey] = {
+            ...reservationBucketFromState(current),
+            reservations: nextReservations,
+            reservationCount: Math.max(0, Number(current.reservationCount || nextReservations.length) - removedCount),
+          };
+        }
+        return {
+          ...current,
+          reservations: nextReservations,
+          reservationCount: Math.max(0, Number(current.reservationCount || nextReservations.length) - removedCount),
+          reservationsByTournament,
+        };
+      });
+      setRosterNotice(removedCount ? `Removed ${removedCount} hidden reservation row${removedCount === 1 ? "" : "s"}.` : "No hidden reservations matched that search.");
+    } catch (error) {
+      window.alert(error.message || "Could not remove hidden reservation rows.");
+    }
+  };
+
   const deleteReservation = async (reservation) => {
     const confirmed = window.confirm(
       `Delete reservation for ${reservation.name || getReservationDisplayName(reservation) || "this bowler"}?`
@@ -5875,6 +5914,13 @@ function ReservationsTab({
             onClick={clearAllReservations}
           >
             Clear All Reservations
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            onClick={removeHiddenDuplicateReservation}
+          >
+            Remove Hidden Duplicate
           </Button>
 
           <div className="flex items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-2">
@@ -15024,6 +15070,50 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     );
   };
 
+  const removeHiddenReservationFromSupabase = async (searchText) => {
+    if (!supabase) return 0;
+    const accessToken = supabaseSession?.access_token;
+    if (!accessToken) {
+      throw new Error("Sign in as admin before cleaning hidden reservations.");
+    }
+    const tournamentKey = reservationKeyFromState(reservationState);
+    if (!tournamentKey) {
+      throw new Error("Select the tournament before cleaning hidden reservations.");
+    }
+    const rows = await withTimeout(
+      loadSupabaseRestRows(
+        "reservations",
+        `?select=id,data,tournament_id,name,email,phone&tournament_id=eq.${postgrestEq(tournamentKey)}`,
+        undefined,
+        accessToken
+      ),
+      "Finding hidden reservations",
+      5000
+    );
+    const searchReservation = {
+      name: searchText,
+      nickname: searchText,
+      email: searchText,
+    };
+    const matchingRows = (rows || []).filter((row) =>
+      isDuplicateReservation({ id: row.id, ...dataFromRow(row), name: row.name, email: row.email, phone: row.phone }, searchReservation)
+    );
+
+    for (const row of matchingRows) {
+      await withTimeout(
+        supabaseRestRequest("reservations", `?id=eq.${postgrestEq(row.id)}`, {
+          method: "DELETE",
+          accessToken,
+          prefer: "return=minimal",
+        }),
+        "Removing hidden reservation",
+        5000
+      );
+    }
+
+    return matchingRows.length;
+  };
+
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
     if (!confirmed) return;
@@ -15313,6 +15403,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   scheduleItems={scheduleItems}
   onAddReservationToRegistration={addReservationToRegistration}
   onDeleteReservation={deleteReservationFromSupabase}
+  onRemoveHiddenReservation={removeHiddenReservationFromSupabase}
 />
 )}
 {activeTab === "multiDaySetup" && (
