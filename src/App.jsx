@@ -5700,8 +5700,10 @@ function ReservationsTab({
   setReservationState,
   scheduleItems = [],
   onAddReservationToRegistration = () => {},
+  onDeleteReservation = () => Promise.resolve(),
 }) {
   const [rosterNotice, setRosterNotice] = useState("");
+  const [deletingReservationId, setDeletingReservationId] = useState(null);
   const [editingReservationId, setEditingReservationId] = useState(null);
   const [editingReservation, setEditingReservation] = useState(null);
   const selectedScheduledTournament = (scheduleItems || []).find((item) => item.name === reservationState.tournamentName);
@@ -5812,6 +5814,44 @@ function ReservationsTab({
       reservationsByTournament: {},
     }));
     setRosterNotice("All reservations were cleared.");
+  };
+
+  const deleteReservation = async (reservation) => {
+    const confirmed = window.confirm(
+      `Delete reservation for ${reservation.name || getReservationDisplayName(reservation) || "this bowler"}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingReservationId(reservation.id);
+      await Promise.resolve(onDeleteReservation(reservation));
+      setReservationState((current) => {
+        const currentKey = reservationKeyFromState(current);
+        const nextReservations = (current.reservations || []).filter(
+          (item) => String(item.id) !== String(reservation.id)
+        );
+        const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+        if (currentKey) {
+          reservationsByTournament[currentKey] = {
+            ...reservationBucketFromState(current),
+            reservations: nextReservations,
+            reservationCount: nextReservations.length,
+          };
+        }
+        return {
+          ...current,
+          reservations: nextReservations,
+          reservationCount: nextReservations.length,
+          reservationsByTournament,
+        };
+      });
+      setRosterNotice(`${getReservationDisplayName(reservation) || reservation.name || "Reservation"} was deleted.`);
+    } catch (error) {
+      window.alert(error.message || "Could not delete this reservation from Supabase.");
+    } finally {
+      setDeletingReservationId(null);
+    }
   };
 
   return (
@@ -6114,36 +6154,10 @@ function ReservationsTab({
   <Button
     variant="outline"
     className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-onClick={() => {
-  const confirmed = window.confirm(
-    `Delete reservation for ${reservation.name}?`
-  );
-
-  if (!confirmed) return;
-
-  setReservationState((current) => {
-    const currentKey = reservationKeyFromState(current);
-    const nextReservations = (current.reservations || []).filter(
-      (item) => item.id !== reservation.id
-    );
-    const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
-    if (currentKey) {
-      reservationsByTournament[currentKey] = {
-        ...reservationBucketFromState(current),
-        reservations: nextReservations,
-        reservationCount: nextReservations.length,
-      };
-    }
-    return {
-      ...current,
-      reservations: nextReservations,
-      reservationCount: nextReservations.length,
-      reservationsByTournament,
-    };
-  });
-}}
+    disabled={deletingReservationId === reservation.id}
+    onClick={() => deleteReservation(reservation)}
   >
-    Delete
+    {deletingReservationId === reservation.id ? "Deleting..." : "Delete"}
   </Button>
   </>
   )}
@@ -14993,6 +15007,23 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return data || reservation;
   };
 
+  const deleteReservationFromSupabase = async (reservation) => {
+    if (!supabase) return;
+    const accessToken = supabaseSession?.access_token;
+    if (!accessToken) {
+      throw new Error("Sign in as admin before deleting reservations.");
+    }
+    await withTimeout(
+      supabaseRestRequest("reservations", `?id=eq.${postgrestEq(reservation.id)}`, {
+        method: "DELETE",
+        accessToken,
+        prefer: "return=minimal",
+      }),
+      "Deleting reservation",
+      5000
+    );
+  };
+
   const restoreTournament = (archivedTournament) => {
     const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
     if (!confirmed) return;
@@ -15281,6 +15312,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   setReservationState={setReservationState}
   scheduleItems={scheduleItems}
   onAddReservationToRegistration={addReservationToRegistration}
+  onDeleteReservation={deleteReservationFromSupabase}
 />
 )}
 {activeTab === "multiDaySetup" && (
