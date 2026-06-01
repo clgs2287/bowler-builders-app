@@ -6365,12 +6365,14 @@ const registrationStatus =
       email: form.email,
       note: form.note,
     };
-    const duplicateReservation = currentReservations.find((reservation) =>
-      isDuplicateReservation(reservation, pendingReservation)
-    );
-    if (duplicateReservation) {
-      alert(`${getReservationDisplayName(duplicateReservation) || form.name} is already on the reservation list for this tournament.`);
-      return;
+    if (!supabase) {
+      const duplicateReservation = currentReservations.find((reservation) =>
+        isDuplicateReservation(reservation, pendingReservation)
+      );
+      if (duplicateReservation) {
+        alert(`${getReservationDisplayName(duplicateReservation) || form.name} is already on the reservation list for this tournament.`);
+        return;
+      }
     }
     const registrationNumber = getNextReservationNumber(reservationState);
     const newReservation = {
