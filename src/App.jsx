@@ -598,6 +598,39 @@ function getNextReservationNumber(reservationState = {}) {
   );
 }
 
+async function sendReservationConfirmationEmail({ reservation, reservationState = {}, tournamentInfo = {} }) {
+  const response = await fetch("/api/send-reservation-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      reservation: {
+        ...reservation,
+        tournamentDate: reservationState.tournamentDate || tournamentInfo.date || "",
+        tournamentStartTime: reservationState.tournamentStartTime || tournamentInfo.startTime || "",
+        tournamentCenter: reservationState.tournamentCenter || tournamentInfo.center || "",
+        tournamentAddress: reservationState.tournamentAddress || tournamentInfo.location || "",
+      },
+      tournament: {
+        name: reservationState.tournamentName || tournamentInfo.name || reservation.tournament || "",
+        date: reservationState.tournamentDate || tournamentInfo.date || "",
+        startTime: reservationState.tournamentStartTime || tournamentInfo.startTime || "",
+        center: reservationState.tournamentCenter || tournamentInfo.center || "",
+        address: reservationState.tournamentAddress || tournamentInfo.location || "",
+      },
+      notificationEmails: [
+        reservationState.registrationEmail,
+        tournamentInfo.directorEmail,
+      ].filter(Boolean).join(","),
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error || "Reservation email could not be sent.");
+  }
+  return result;
+}
+
 function getTournamentStartDateTime(date, startTime) {
   if (!date || !startTime) return null;
   const parsed = new Date(`${date}T${startTime}`);
@@ -6051,6 +6084,24 @@ function ReservationsTab({
   </div>
 
   <div className="space-y-2 md:col-span-2">
+    <Label>Confirmation Email Copies</Label>
+
+    <Input
+      value={reservationState.registrationEmail || ""}
+      onChange={(e) =>
+        setReservationState((current) => ({
+          ...current,
+          registrationEmail: e.target.value,
+        }))
+      }
+      placeholder="director@example.com, you@example.com"
+    />
+    <p className="text-xs font-semibold text-blue-700">
+      These addresses receive a copy of each reservation confirmation.
+    </p>
+  </div>
+
+  <div className="space-y-2 md:col-span-2">
     <Label>Manual Tournament Name</Label>
 
     <Input
@@ -6470,6 +6521,14 @@ const registrationStatus =
         reservationCount: Math.max(currentCount + 1, nextReservations.length),
         reservations: nextReservations,
       };
+    });
+
+    sendReservationConfirmationEmail({
+      reservation: savedReservation,
+      reservationState,
+      tournamentInfo,
+    }).catch((error) => {
+      console.warn("Reservation email could not be sent", error);
     });
 
     alert(
