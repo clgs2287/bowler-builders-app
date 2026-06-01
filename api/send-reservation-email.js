@@ -33,6 +33,11 @@ const getSenderAddress = () => {
     : "Bowler Builders <onboarding@resend.dev>";
 };
 
+const getReplyToAddress = () => {
+  const configuredReplyTo = process.env.RESERVATION_REPLY_TO || "";
+  return configuredReplyTo.trim() || undefined;
+};
+
 const reservationHtml = ({ reservation = {}, tournament = {} }) => {
   const confirmationNumber = reservation.registrationNumber || reservation.confirmationNumber || "Pending";
   const status = reservation.status || "Registered";
@@ -95,6 +100,7 @@ export default async function handler(request, response) {
     const confirmationNumber = reservation.registrationNumber || reservation.confirmationNumber || "";
     const subject = `Reservation ${confirmationNumber ? `#${confirmationNumber} ` : ""}${reservation.status || "Confirmed"} - ${tournament.name || reservation.tournament || "Tournament"}`;
     const from = getSenderAddress();
+    const replyTo = getReplyToAddress();
 
     const emailResponse = await fetch(RESEND_ENDPOINT, {
       method: "POST",
@@ -108,6 +114,7 @@ export default async function handler(request, response) {
         bcc: to.length ? bcc : [],
         subject,
         html: reservationHtml({ reservation, tournament }),
+        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
 

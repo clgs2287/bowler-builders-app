@@ -9,6 +9,7 @@ To enable delivery in production, add these environment variables in Vercel:
 
 - `RESEND_API_KEY`: API key from Resend.
 - `RESERVATION_EMAIL_FROM`: Verified sender address, for example `Bowler Builders <reservations@yourdomain.com>`.
+- `RESERVATION_REPLY_TO`: Optional reply address, for example `bowlerbuildersproshop@yahoo.com`.
 - `RESERVATION_NOTIFICATION_EMAILS`: Optional comma-separated admin/director copy list.
 
 The Reservations admin page also has a "Confirmation Email Copies" box for tournament-specific copy recipients.
