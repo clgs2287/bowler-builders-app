@@ -568,10 +568,6 @@ function normalizeReservationIdentity(value = "") {
 }
 
 function isDuplicateReservation(existing = {}, next = {}) {
-  const existingEmail = normalizeReservationIdentity(existing.email);
-  const nextEmail = normalizeReservationIdentity(next.email);
-  if (existingEmail && nextEmail && existingEmail === nextEmail) return true;
-
   const existingName = normalizeReservationIdentity(existing.name);
   const nextName = normalizeReservationIdentity(next.name);
   const existingNickname = normalizeReservationIdentity(existing.nickname);

@@ -235,8 +235,7 @@ begin
     from public.reservations
     where tournament_id = next_tournament_id
       and (
-        (next_email <> '' and lower(trim(coalesce(email, ''))) = next_email)
-        or (next_name <> '' and lower(trim(coalesce(name, ''))) = next_name)
+        (next_name <> '' and lower(trim(coalesce(name, ''))) = next_name)
         or (next_name <> '' and lower(trim(coalesce(data->>'name', ''))) = next_name)
         or (next_nickname <> '' and lower(trim(coalesce(data->>'nickname', ''))) = next_nickname)
       )
