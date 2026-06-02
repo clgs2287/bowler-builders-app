@@ -3133,6 +3133,18 @@ function activeSnapshotRecordFromSnapshot(snapshot = {}) {
   };
 }
 
+function tournamentDraftRecordFromItem(draft, index) {
+  const id = String(draft?.id || `draft-${index + 1}`);
+  const data = { ...(draft || {}), id };
+  return {
+    id,
+    data,
+    name: data.name || "",
+    saved_at: data.savedAt || null,
+    event_date: dateForSupabase(data.snapshot?.tournamentInfo?.date),
+  };
+}
+
 async function loadSupabaseRestRows(table, query = "", signal, accessToken = "") {
   if (!supabaseUrl || !supabasePublishableKey) throw new Error("Supabase config is missing.");
   const baseUrl = supabaseUrl.replace(/\/$/, "");
@@ -14701,6 +14713,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const reservationRecords = allReservationItemsFromState(reservationState).map(reservationRecordFromItem);
     const archiveRecords = (tournamentHistory || []).map(archivedTournamentRecordFromItem);
     const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || {});
+    const draftRecords = (savedTournamentDrafts || []).map(tournamentDraftRecordFromItem);
 
     const syncTable = async (table, records, { removeStale = true } = {}) => {
       setSupabaseSaveStatus(`Saving ${table}...`);
@@ -14784,8 +14797,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     await syncTable("reservations", reservationRecords, { removeStale: false });
     await syncTable("archived_tournaments", archiveRecords);
     await syncTable("active_tournament_snapshots", [activeSnapshotRecord]);
+    await syncTable("tournament_drafts", draftRecords);
 
-    setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${archiveRecords.length} archives, active snapshot`);
+    setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${archiveRecords.length} archives, ${draftRecords.length} drafts, active snapshot`);
   };
 
   useEffect(() => {
@@ -14836,6 +14850,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         const reservationRead = adminAccessToken
           ? loadSupabaseRestRows("reservations", "?select=id,data,tournament_id,added_to_roster&order=created_at.asc", controller.signal, adminAccessToken)
           : Promise.resolve([]);
+        const draftRead = adminAccessToken
+          ? loadSupabaseRestRows("tournament_drafts", "?select=id,data,saved_at&order=saved_at.desc", controller.signal, adminAccessToken)
+          : Promise.resolve([]);
         const reads = await Promise.allSettled([
           loadSupabaseRestRows("schedule_events", "?select=id,data,sort_date&order=sort_date.asc", controller.signal),
           loadSupabaseRestRows("public_app_settings", "?select=id,value&id=in.(schedule_locked,reservation_state)", controller.signal),
@@ -14845,13 +14862,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           loadSupabaseRestRows("reservation_public_counts", "?select=tournament_id,reservation_count", controller.signal),
           loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal),
           loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
+          draftRead,
         ]);
 
-        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "archive", "active snapshot"];
+        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "archive", "active snapshot", "draft"];
         const failedReads = reads
           .map((result, index) => result.status === "rejected" ? `${readNames[index]}: ${result.reason?.message || "failed"}` : "")
           .filter(Boolean);
-        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, archiveRows, activeSnapshotRows] = reads.map((result) =>
+        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, archiveRows, activeSnapshotRows, draftRows] = reads.map((result) =>
           result.status === "fulfilled" ? result.value : []
         );
 
@@ -14877,12 +14895,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         );
         const nextArchives = (archiveRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
         const nextActiveSnapshot = dataFromRow((activeSnapshotRows || [])[0] || {});
+        const nextDrafts = (draftRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
 
         if (nextSchedule.length) setScheduleItems(nextSchedule);
         if (typeof scheduleSettings?.value?.locked === "boolean") setScheduleLocked(scheduleSettings.value.locked);
         if (nextTitles.length) setManualTitles(nextTitles);
         if (nextIdentities.length) setBowlerIdentities(nextIdentities);
         if (nextArchives.length) setTournamentHistory(nextArchives);
+        if (adminAccessToken) setSavedTournamentDrafts(nextDrafts);
         if (Object.keys(nextActiveSnapshot).length) applyActiveTournamentSnapshot(nextActiveSnapshot);
         if (reservationSettings && typeof reservationSettings === "object") {
           const currentReservationKey = reservationKeyFromState(reservationSettings);
@@ -14934,7 +14954,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         supabasePublicDataLoadedRef.current = true;
         supabaseSaveSkipRef.current = true;
         setSupabaseLoadReady(true);
-        const loadedMessage = `Loaded ${nextSchedule.length} schedule, ${nextTitles.length} title/HOF, ${nextIdentities.length} name rows, ${nextReservations.length} reservations, ${nextArchives.length} archives, ${Object.keys(nextActiveSnapshot).length ? "1" : "0"} active snapshot`;
+        const loadedMessage = `Loaded ${nextSchedule.length} schedule, ${nextTitles.length} title/HOF, ${nextIdentities.length} name rows, ${nextReservations.length} reservations, ${nextArchives.length} archives, ${nextDrafts.length} drafts, ${Object.keys(nextActiveSnapshot).length ? "1" : "0"} active snapshot`;
         setSupabaseLoadStatus(failedReads.length ? `${loadedMessage}. Issues: ${failedReads.join("; ")}` : loadedMessage);
       } catch (error) {
         const message = error.name === "AbortError" ? "Supabase load timed out." : error.message || "Could not load Supabase data.";
@@ -14985,6 +15005,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     bowlerIdentities,
     reservationState,
     tournamentHistory,
+    savedTournamentDrafts,
     qualifyingGames,
     savedScoreGames,
     savedFinalsRounds,

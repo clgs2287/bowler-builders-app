@@ -69,6 +69,16 @@ create table if not exists public.active_tournament_snapshots (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.tournament_drafts (
+  id text primary key,
+  data jsonb not null default '{}'::jsonb,
+  name text,
+  saved_at timestamptz,
+  event_date date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.admin_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   email text,
@@ -141,6 +151,11 @@ create trigger set_active_tournament_snapshots_updated_at
 before update on public.active_tournament_snapshots
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_tournament_drafts_updated_at on public.tournament_drafts;
+create trigger set_tournament_drafts_updated_at
+before update on public.tournament_drafts
+for each row execute function public.set_updated_at();
+
 drop trigger if exists set_admin_profiles_updated_at on public.admin_profiles;
 create trigger set_admin_profiles_updated_at
 before update on public.admin_profiles
@@ -153,6 +168,7 @@ alter table public.bowler_identities enable row level security;
 alter table public.archived_tournaments enable row level security;
 alter table public.reservations enable row level security;
 alter table public.active_tournament_snapshots enable row level security;
+alter table public.tournament_drafts enable row level security;
 alter table public.admin_profiles enable row level security;
 
 grant usage on schema public to anon, authenticated;
@@ -165,6 +181,8 @@ grant select on public.bowler_identities to anon, authenticated;
 grant select on public.archived_tournaments to anon, authenticated;
 grant select on public.active_tournament_snapshots to anon, authenticated;
 grant select on public.reservation_public_counts to anon, authenticated;
+revoke select on public.tournament_drafts from anon;
+grant select on public.tournament_drafts to authenticated;
 revoke select on public.reservations from anon;
 revoke insert on public.reservations from anon;
 grant select, insert on public.reservations to authenticated;
@@ -175,6 +193,7 @@ grant insert, update, delete on public.manual_titles to authenticated;
 grant insert, update, delete on public.bowler_identities to authenticated;
 grant insert, update, delete on public.archived_tournaments to authenticated;
 grant insert, update, delete on public.active_tournament_snapshots to authenticated;
+grant insert, update, delete on public.tournament_drafts to authenticated;
 grant update, delete on public.reservations to authenticated;
 
 create or replace function public.is_admin()
@@ -312,6 +331,12 @@ create policy "Public read active tournament snapshots"
 on public.active_tournament_snapshots for select
 using (true);
 
+drop policy if exists "Admins read tournament drafts" on public.tournament_drafts;
+create policy "Admins read tournament drafts"
+on public.tournament_drafts for select
+to authenticated
+using (public.is_admin());
+
 drop policy if exists "Public read reservations" on public.reservations;
 
 drop policy if exists "Public create reservations" on public.reservations;
@@ -366,6 +391,13 @@ with check (public.is_admin());
 drop policy if exists "Admins write active tournament snapshots" on public.active_tournament_snapshots;
 create policy "Admins write active tournament snapshots"
 on public.active_tournament_snapshots for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins write tournament drafts" on public.tournament_drafts;
+create policy "Admins write tournament drafts"
+on public.tournament_drafts for all
 to authenticated
 using (public.is_admin())
 with check (public.is_admin());
