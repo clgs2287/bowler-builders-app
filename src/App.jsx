@@ -40,6 +40,13 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 
 const HISTORICAL_TITLE_SERIES_OPTIONS = ["M.I.S.T.", "KWT", "F.B.E.T.", "FDDS", "Handicap/Non-FKM"];
 const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
+const TOURNAMENT_SERIES_LABELS = {
+  "M.I.S.T.": "Maine Invitational Scratch Tournament",
+  "F.B.E.T.": "Frankie's Bowling Emporium Tournament",
+  KWT: "Karl's World Tour",
+  FDDS: "Frankie and Ding Dong Series",
+  "Handicap/Non-FKM": "Handicap / Non-FKM",
+};
 const DEFAULT_LANE_ELIMINATOR_STATE = {
   manualQualifiers: "",
   groupSize: 4,
@@ -2570,6 +2577,23 @@ function AppCard({ children, className = "" }) {
   return <Card className={`bb-card rounded-xl border bg-white/95 shadow-md backdrop-blur md:rounded-2xl ${className}`}>{children}</Card>;
 }
 
+function SeriesLegend({ className = "" }) {
+  return (
+    <div className={`rounded-2xl border border-blue-100 bg-blue-50 p-3 text-xs font-semibold text-blue-900 ${className}`}>
+      <p className="mb-2 font-black text-blue-950">Series Key</p>
+      <div className="grid gap-1 sm:grid-cols-2">
+        {Object.entries(TOURNAMENT_SERIES_LABELS).map(([abbr, label]) => (
+          <p key={abbr}>
+            <span className="font-black">{abbr}</span>
+            {" = "}
+            {label}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LockedTextField({ label, value, onChange, type = "text", placeholder = "", listId = "", commitOnChange = false }) {
   const isBlank = !String(value || "").trim();
   const [editing, setEditing] = useState(isBlank);
@@ -3628,6 +3652,7 @@ function DashboardTab({
     ))}
   </select>
 </div>
+<SeriesLegend className="md:ml-[132px]" />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
                   <Label className="text-left text-sm font-bold text-blue-900">FKM Eligible</Label>
                   <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 shadow-sm">
@@ -8595,6 +8620,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
           ))}
         </select>
       </div>
+      <SeriesLegend className="sm:max-w-xl" />
     </div>
   );
 
@@ -13037,6 +13063,7 @@ else current.nonFkmTitles += titleCount;
               Clear
             </Button>
           </div>
+          <SeriesLegend className="mb-3" />
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[760px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Tournament</th><th className="p-2 text-left md:p-3">Date</th><th className="p-2 text-left md:p-3">Season</th><th className="p-2 text-right md:p-3">Count</th><th className="p-2 text-left md:p-3">Category</th><th className="p-2 text-right md:p-3">Actions</th></tr></thead>
