@@ -3652,7 +3652,6 @@ function DashboardTab({
     ))}
   </select>
 </div>
-<SeriesLegend className="md:ml-[132px]" />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
                   <Label className="text-left text-sm font-bold text-blue-900">FKM Eligible</Label>
                   <div className="flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 shadow-sm">
@@ -14583,7 +14582,7 @@ export default function BowlingPayoutApp() {
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
-  const [tournamentFormat, setTournamentFormat] = useState("eliminator");
+  const [tournamentFormat, setTournamentFormat] = useState("bracket");
   const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
@@ -15448,7 +15447,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setQualifyingGames(4);
     setBowlers(buildInitialBowlers(0, 4));
     setUseHandicapScores(false);
-    setTournamentFormat("eliminator");
+    setTournamentFormat("bracket");
     setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
