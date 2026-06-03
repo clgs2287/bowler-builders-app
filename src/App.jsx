@@ -8375,6 +8375,7 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
   const [publicTitleFilter, setPublicTitleFilter] = useState("all");
   const [publicTitleSeriesFilter, setPublicTitleSeriesFilter] = useState("All");
   const [publicTitleView, setPublicTitleView] = useState("leaderboard");
+  const [publicTitleSort, setPublicTitleSort] = useState({ column: "titles", direction: "desc" });
   const [publicHofYearFilter, setPublicHofYearFilter] = useState("All");
   const publicIdentityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
   const publicRealNameFor = (nickname) => publicIdentityMap.get(getIdentityKey(nickname))?.realName || "";
@@ -8509,12 +8510,23 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         String(a.tournament || "").localeCompare(String(b.tournament || ""))
     ),
   }))
-  .sort(
-    (a, b) =>
-      b.titles - a.titles ||
+  .sort((a, b) => {
+    const direction = publicTitleSort.direction === "asc" ? 1 : -1;
+    const aValue = a[publicTitleSort.column];
+    const bValue = b[publicTitleSort.column];
+    if (publicTitleSort.column === "latest") {
+      return (
+        String(aValue || "").localeCompare(String(bValue || "")) * direction ||
+        b.titles - a.titles ||
+        String(a.displayName || a.bowler || "").localeCompare(String(b.displayName || b.bowler || ""))
+      );
+    }
+    return (
+      (Number(aValue || 0) - Number(bValue || 0)) * direction ||
       b.majors - a.majors ||
       String(a.displayName || a.bowler || "").localeCompare(String(b.displayName || b.bowler || ""))
-  );
+    );
+  });
 
   const playerStats = filteredPublicHistory
     .flatMap((tournament) => (tournament.results || []).map((result) => ({
@@ -8654,6 +8666,14 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       <SeriesLegend className="sm:max-w-xl" />
     </div>
   );
+  const publicTitleSortLabel = (column) =>
+    publicTitleSort.column === column ? (publicTitleSort.direction === "asc" ? " ^" : " v") : "";
+  const changePublicTitleSort = (column) => {
+    setPublicTitleSort((current) => ({
+      column,
+      direction: current.column === column && current.direction === "desc" ? "asc" : "desc",
+    }));
+  };
 
 
   return (
@@ -8945,7 +8965,13 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             </th>
 
             <th className="p-3 text-right">
-              Titles
+              <button
+                type="button"
+                onClick={() => changePublicTitleSort("titles")}
+                className="font-black text-white underline-offset-2 hover:underline"
+              >
+                Titles{publicTitleSortLabel("titles")}
+              </button>
             </th>
 
             <th className="p-3 text-right">
@@ -8961,7 +8987,13 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             </th>
 
             <th className="p-3 text-left">
-              Latest
+              <button
+                type="button"
+                onClick={() => changePublicTitleSort("latest")}
+                className="font-black text-white underline-offset-2 hover:underline"
+              >
+                Latest{publicTitleSortLabel("latest")}
+              </button>
             </th>
           </tr>
         </thead>
