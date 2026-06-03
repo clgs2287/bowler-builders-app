@@ -383,6 +383,18 @@ const PUBLIC_TAB_IDS = new Set([
   "publicreservations",
 ]);
 
+function getInitialPublicTabRequest() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get("tab");
+    return params.get("view") === "public" && ["public", "publicfinals"].includes(requestedTab)
+      ? requestedTab
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 const defaultRatios = { first: 0.4, second: 0.27, third: 0.19, fourth: 0.14 };
 const defaultOverrides = { first: 23.3, second: 14, third: 8.85, fourth: "", middle: 6.75, bottom: 4.5 };
 const DEFAULT_PAYOUT_STATE = {
@@ -14571,17 +14583,7 @@ export default function BowlingPayoutApp() {
   const [paidPayouts, setPaidPayouts] = useState({});
   const [paidSideActionPayouts, setPaidSideActionPayouts] = useState({});
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const initialPublicTabRequest = (() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const requestedTab = params.get("tab");
-      return params.get("view") === "public" && ["public", "publicfinals"].includes(requestedTab)
-        ? requestedTab
-        : "";
-    } catch {
-      return "";
-    }
-  })();
+  const initialPublicTabRequestRef = useRef(getInitialPublicTabRequest());
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -14622,7 +14624,8 @@ export default function BowlingPayoutApp() {
   const [savedScoreGames, setSavedScoreGames] = useState({});
   const [savedFinalsRounds, setSavedFinalsRounds] = useState({});
   const hasSavedPublicScoreGame = Object.values(savedScoreGames || {}).some(Boolean);
-  const publicResultsUnlocked = hasSavedPublicScoreGame || (bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid)));
+  const requestedPublicResultsTab = initialPublicTabRequestRef.current;
+  const publicResultsUnlocked = Boolean(requestedPublicResultsTab) || hasSavedPublicScoreGame || (bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid)));
 const [scheduleItems, setScheduleItems] = useState([
   {
     name: "",
@@ -15558,10 +15561,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return;
     }
 
-    if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(activeTab) && initialPublicTabRequest !== activeTab) {
+    if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(activeTab) && requestedPublicResultsTab !== activeTab) {
       setActiveTab("tournamentInfo");
     }
-  }, [activeTab, initialPublicTabRequest, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, tournamentFormat, tournamentInfo]);
+  }, [activeTab, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, requestedPublicResultsTab, tournamentFormat, tournamentInfo]);
 
   return (
     <div ref={appTopRef} className="bb-stage min-h-screen p-2 md:p-8">
