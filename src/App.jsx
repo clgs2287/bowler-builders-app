@@ -14663,6 +14663,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const activeTournamentSnapshotRef = useRef(null);
   const supabasePublicDataLoadedRef = useRef(false);
   const supabaseSaveSkipRef = useRef(true);
+  const restoredInitialPublicTabRef = useRef(false);
 
   const scrollAppToTop = () => {
     if (typeof window === "undefined") return;
@@ -15550,6 +15551,16 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
   useEffect(() => {
     if (!publicRoutingDataReady) return;
+
+    if (
+      requestedPublicResultsTab &&
+      activeTab === "tournamentInfo" &&
+      !restoredInitialPublicTabRef.current
+    ) {
+      restoredInitialPublicTabRef.current = true;
+      setActiveTab(requestedPublicResultsTab);
+      return;
+    }
 
     if ((isMatchplayTournament(tournamentFormat, tournamentInfo) || isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles")) && activeTab === "public") {
       setActiveTab("publicfinals");
