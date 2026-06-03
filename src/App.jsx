@@ -8975,15 +8975,33 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             </th>
 
             <th className="p-3 text-right">
-              Majors
+              <button
+                type="button"
+                onClick={() => changePublicTitleSort("majors")}
+                className="font-black text-white underline-offset-2 hover:underline"
+              >
+                Majors{publicTitleSortLabel("majors")}
+              </button>
             </th>
 
             <th className="p-3 text-right">
-              FKM
+              <button
+                type="button"
+                onClick={() => changePublicTitleSort("fkmTitles")}
+                className="font-black text-white underline-offset-2 hover:underline"
+              >
+                FKM{publicTitleSortLabel("fkmTitles")}
+              </button>
             </th>
 
             <th className="p-3 text-right">
-              Non-FKM
+              <button
+                type="button"
+                onClick={() => changePublicTitleSort("nonFkmTitles")}
+                className="font-black text-white underline-offset-2 hover:underline"
+              >
+                Non-FKM{publicTitleSortLabel("nonFkmTitles")}
+              </button>
             </th>
 
             <th className="p-3 text-left">
