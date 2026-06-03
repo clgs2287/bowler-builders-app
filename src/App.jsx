@@ -7038,14 +7038,14 @@ Lane {lanePairForGame(
         <div className="space-y-3 print:space-y-3">
           <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-sm">
             <span className="font-bold">Bowler 1:</span>
-            <div className="min-w-0 flex-1 border-b border-slate-900" />
+            <div className="min-w-0 flex-1 translate-y-1 border-b border-slate-900" />
             <span className="font-bold">Score:</span>
             <div className="w-12 border-b border-slate-900" />
           </div>
 
           <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-sm">
             <span className="font-bold">Bowler 2:</span>
-            <div className="min-w-0 flex-1 border-b border-slate-900" />
+            <div className="min-w-0 flex-1 translate-y-1 border-b border-slate-900" />
             <span className="font-bold">Score:</span>
             <div className="w-12 border-b border-slate-900" />
           </div>
