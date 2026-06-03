@@ -5831,6 +5831,8 @@ function ReservationsTab({
   reservationState,
   setReservationState,
   scheduleItems = [],
+  bowlerIdentities = [],
+  setBowlerIdentities = () => {},
   onAddReservationToRegistration = () => {},
   onDeleteReservation = () => Promise.resolve(),
   onRemoveHiddenReservation = () => Promise.resolve(0),
@@ -5843,6 +5845,26 @@ function ReservationsTab({
   const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
+
+  const saveReservationNameMapping = (reservation) => {
+    const nickname = String(reservation.nickname || "").trim();
+    const realName = String(reservation.name || "").trim();
+    if (!nickname || !realName) return;
+
+    setBowlerIdentities((current) => {
+      const nextIdentity = { id: getIdentityKey(nickname), nickname, realName, aliases: [] };
+      const existingIdentity = (current || []).find((identity) =>
+        getBowlerIdentityAliases(identity).some((alias) =>
+          [nickname, realName].some((nextAlias) => getIdentityKey(alias) === getIdentityKey(nextAlias))
+        )
+      );
+      return existingIdentity
+        ? current.map((identity) => identity === existingIdentity ? { ...identity, nickname: identity.nickname || nickname, realName: identity.realName || realName } : identity)
+        : [nextIdentity, ...(current || [])];
+    });
+
+    setRosterNotice(`Saved name mapping: ${nickname} = ${realName}.`);
+  };
 
   const startEditReservation = (reservation) => {
     setEditingReservationId(reservation.id);
@@ -6227,6 +6249,11 @@ function ReservationsTab({
         (reservation) => {
           const rosterAdded = Boolean(reservation.rosterAdded || reservation.rosterAddedAt);
           const isEditing = editingReservationId === reservation.id;
+          const hasNameMappingCandidate = String(reservation.name || "").trim() && String(reservation.nickname || "").trim();
+          const hasExistingNameMapping = hasNameMappingCandidate && (
+            findBowlerIdentityForName(bowlerIdentities, reservation.name) ||
+            findBowlerIdentityForName(bowlerIdentities, reservation.nickname)
+          );
 
           return (
           <tr
@@ -6340,6 +6367,15 @@ function ReservationsTab({
   >
     Edit
   </Button>
+  {hasNameMappingCandidate && !hasExistingNameMapping && (
+    <Button
+      variant="outline"
+      className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+      onClick={() => saveReservationNameMapping(reservation)}
+    >
+      Save Name Mapping
+    </Button>
+  )}
   <Button
     variant="outline"
     className={rosterAdded
@@ -15643,6 +15679,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   reservationState={reservationState}
   setReservationState={setReservationState}
   scheduleItems={scheduleItems}
+  bowlerIdentities={bowlerIdentities}
+  setBowlerIdentities={setBowlerIdentities}
   onAddReservationToRegistration={addReservationToRegistration}
   onDeleteReservation={deleteReservationFromSupabase}
   onRemoveHiddenReservation={removeHiddenReservationFromSupabase}
