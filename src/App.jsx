@@ -6695,7 +6695,9 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
   const sortedPairs = Object.keys(lanePairs).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : Number(a.split("-")[0]) - Number(b.split("-")[0]));
 
   const publicUrl = `${window.location.origin}${window.location.pathname}?view=public`;
+  const publicFinalsUrl = `${window.location.origin}${window.location.pathname}?view=public&tab=publicfinals`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(publicUrl)}`;
+  const finalsQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(publicFinalsUrl)}`;
 const printableSheets =
   tournamentInfo?.movementMode === "customSplit"
     ? sortedPairs.flatMap((pair) => pair.split("-"))
@@ -7014,10 +7016,14 @@ Lane {lanePairForGame(
         key={`finals-slip-${index}`}
         className="rounded-2xl border-2 border-slate-900 bg-white p-5 print:break-inside-avoid"
       >
-        <div className="mb-4 border-b-2 border-slate-900 pb-2">
+        <div className="mb-4 flex items-start justify-between gap-3 border-b-2 border-slate-900 pb-2">
           <h2 className="text-lg font-black">
             {tournamentInfo.name || "Tournament"}
           </h2>
+          <div className="text-center">
+            <img src={finalsQrUrl} alt="Public finals QR code" className="mx-auto h-14 w-14 print:h-14 print:w-14" />
+            <p className="mt-1 text-[9px] font-black text-slate-700 print:text-black">Public Finals</p>
+          </div>
         </div>
 
         <div className="mb-3 flex gap-4 text-sm font-semibold">
@@ -14567,6 +14573,8 @@ export default function BowlingPayoutApp() {
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      const requestedTab = params.get("tab");
+      if (params.get("view") === "public" && ["tournamentInfo", "public", "publicfinals", "publicsideaction", "publicstats", "publicschedule", "publicreservations"].includes(requestedTab)) return requestedTab;
       if (params.get("view") === "public") return "tournamentInfo";
       return "tournamentInfo";
     } catch {
