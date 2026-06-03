@@ -654,12 +654,13 @@ function formatStartTime(startTime) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-function getArchivedAverageForName(tournamentHistory = [], name) {
-  const normalizedName = String(name || "").trim().toLowerCase();
-  if (!normalizedName) return null;
+function getArchivedAverageForName(tournamentHistory = [], name, bowlerIdentities = []) {
+  const lookupNames = getBowlerNameLookupList(name, bowlerIdentities);
+  const normalizedNames = new Set(lookupNames.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+  if (!normalizedNames.size) return null;
   const matches = (tournamentHistory || [])
     .flatMap((tournament) => tournament.results || [])
-    .filter((result) => String(result.name || "").trim().toLowerCase() === normalizedName);
+    .filter((result) => normalizedNames.has(String(result.name || "").trim().toLowerCase()));
   const totalGames = matches.reduce((sum, result) => sum + ((result.games || []).length || 0), 0);
   const allScores = matches.flatMap((result) => result.qualifyingGames?.length ? result.qualifyingGames : result.games || []);
   const numericScores = allScores.map((score) => Number(score || 0)).filter((score) => score > 0);
@@ -832,6 +833,39 @@ function normalizeMatchText(value) {
 
 function getIdentityKey(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function getBowlerIdentityAliases(identity = {}) {
+  return [
+    identity.nickname,
+    identity.realName,
+    identity.real_name,
+    ...(Array.isArray(identity.aliases) ? identity.aliases : []),
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function findBowlerIdentityForName(bowlerIdentities = [], name = "") {
+  const key = getIdentityKey(name);
+  if (!key) return null;
+  return (bowlerIdentities || []).find((identity) =>
+    getBowlerIdentityAliases(identity).some((alias) => getIdentityKey(alias) === key)
+  ) || null;
+}
+
+function getCanonicalBowlerName(name = "", bowlerIdentities = []) {
+  const identity = findBowlerIdentityForName(bowlerIdentities, name);
+  return String(identity?.nickname || name || "").trim();
+}
+
+function getBowlerNameLookupList(name = "", bowlerIdentities = []) {
+  const cleanName = String(name || "").trim();
+  const identity = findBowlerIdentityForName(bowlerIdentities, cleanName);
+  return [...new Set([
+    cleanName,
+    ...(identity ? getBowlerIdentityAliases(identity) : []),
+  ].map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
 function findArchivedTournamentForScheduleItem(item = {}, tournamentHistory = []) {
@@ -4056,7 +4090,7 @@ function RosterSizeInput({ entries, onSave }) {
   );
 }
 
-function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, setReservationState = null }) {
+function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, bowlerIdentities = [], setReservationState = null }) {
   const [registrationSort, setRegistrationSort] = useState({ key: "entry", direction: "asc" });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
@@ -4109,12 +4143,13 @@ if (
 ]);
 
   function getArchivedAverageForBowler(name) {
-  const normalizedName = String(name || "").trim().toLowerCase();
-  if (!normalizedName) return null;
+  const lookupNames = getBowlerNameLookupList(name, bowlerIdentities);
+  const normalizedNames = new Set(lookupNames.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean));
+  if (!normalizedNames.size) return null;
 
   const matches = (tournamentHistory || [])
     .flatMap((tournament) => tournament.results || [])
-    .filter((result) => String(result.name || "").trim().toLowerCase() === normalizedName);
+    .filter((result) => normalizedNames.has(String(result.name || "").trim().toLowerCase()));
 
   const totalGames = matches.reduce(
     (sum, result) => sum + ((result.games || []).length || 0),
@@ -4180,7 +4215,7 @@ const updateBowler = (index, field, value) => {
 
       const updatedBowler = {
         ...b,
-        [field]: value,
+        [field]: field === "name" ? getCanonicalBowlerName(value, bowlerIdentities) || value : value,
       };
 
       if (
@@ -4188,7 +4223,7 @@ const updateBowler = (index, field, value) => {
         useHandicapScores
       ) {
         const archivedData =
-          getArchivedAverageForBowler(value);
+          getArchivedAverageForBowler(updatedBowler.name);
 
         if (archivedData?.eligible) {
           const handicap = calculateRegistrationHandicap(archivedData.average);
@@ -12230,7 +12265,7 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIde
   const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "M.I.S.T.", major: false });
   const [newHistoricalTotal, setNewHistoricalTotal] = useState({ bowler: "", titleCount: "", source: "M.I.S.T.", season: "Pre-2018", eligible: true, major: false, notes: "" });
   const [newHof, setNewHof] = useState({ bowler: "", year: new Date().getFullYear().toString() });
-  const [newIdentity, setNewIdentity] = useState({ nickname: "", realName: "" });
+  const [newIdentity, setNewIdentity] = useState({ nickname: "", realName: "", aliases: "" });
   const [titleSort, setTitleSort] = useState({ column: "titles", direction: "desc" });
   const [expandedTitleBowler, setExpandedTitleBowler] = useState(null);
   const [collapsedTitleSections, setCollapsedTitleSections] = useState({});
@@ -12422,14 +12457,23 @@ else current.nonFkmTitles += titleCount;
       return;
     }
 
+    const aliases = String(newIdentity.aliases || "")
+      .split(",")
+      .map((alias) => alias.trim())
+      .filter(Boolean);
+
     setBowlerIdentities((current) => {
-      const nextIdentity = { id: getIdentityKey(nickname), nickname, realName };
-      const exists = (current || []).some((identity) => getIdentityKey(identity.nickname) === getIdentityKey(nickname));
-      return exists
-        ? current.map((identity) => getIdentityKey(identity.nickname) === getIdentityKey(nickname) ? nextIdentity : identity)
+      const nextIdentity = { id: getIdentityKey(nickname), nickname, realName, aliases };
+      const existingIdentity = (current || []).find((identity) =>
+        getBowlerIdentityAliases(identity).some((alias) =>
+          [nickname, realName, ...aliases].some((nextAlias) => getIdentityKey(alias) === getIdentityKey(nextAlias))
+        )
+      );
+      return existingIdentity
+        ? current.map((identity) => identity === existingIdentity ? { ...nextIdentity, id: existingIdentity.id || nextIdentity.id } : identity)
         : [nextIdentity, ...(current || [])];
     });
-    setNewIdentity({ nickname: "", realName: "" });
+    setNewIdentity({ nickname: "", realName: "", aliases: "" });
   };
 
   const deleteBowlerIdentity = (nickname) => {
@@ -12613,28 +12657,30 @@ else current.nonFkmTitles += titleCount;
           </div>
           {!isSectionCollapsed("names") && (
           <>
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_160px]">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_160px]">
             <div className="space-y-2"><Label>Nickname / Display Name</Label><Input value={newIdentity.nickname} onChange={(e) => setNewIdentity((current) => ({ ...current, nickname: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Name</Label><Input value={newIdentity.realName} onChange={(e) => setNewIdentity((current) => ({ ...current, realName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Aliases</Label><Input value={newIdentity.aliases} onChange={(e) => setNewIdentity((current) => ({ ...current, aliases: e.target.value }))} placeholder="Comma-separated" /></div>
             <div className="flex items-end"><Button className="w-full rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={saveBowlerIdentity}>Save Name</Button></div>
           </div>
 
           <div className="mt-4 overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[520px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
-                <tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-right md:p-3">Actions</th></tr>
+                <tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Aliases</th><th className="p-2 text-right md:p-3">Actions</th></tr>
               </thead>
               <tbody>
                 {(bowlerIdentities || []).map((identity) => (
                   <tr key={identity.id || identity.nickname} className="border-t">
                     <td className="p-2 font-semibold md:p-3">{identity.nickname}</td>
                     <td className="p-2 text-blue-900 md:p-3">{identity.realName}</td>
+                    <td className="p-2 text-blue-900 md:p-3">{(identity.aliases || []).join(", ") || "—"}</td>
                     <td className="p-2 text-right md:p-3">
                       <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteBowlerIdentity(identity.nickname)}>Delete</Button>
                     </td>
                   </tr>
                 ))}
-                {(bowlerIdentities || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={3}>No bowler name mappings yet.</td></tr>}
+                {(bowlerIdentities || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>No bowler name mappings yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -15162,9 +15208,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setSavedTournamentDrafts((current) => current.filter((item) => item.id !== draftId));
   };
   const addReservationToRegistration = (reservation) => {
-    const displayName = getReservationDisplayName(reservation);
+    const reservationDisplayName = getReservationDisplayName(reservation);
+    const displayName = getCanonicalBowlerName(reservationDisplayName, bowlerIdentities) || reservationDisplayName;
     if (!displayName) return { name: "", alreadyExists: false };
-    const archivedData = getArchivedAverageForName(tournamentHistory, displayName) || getArchivedAverageForName(tournamentHistory, reservation.name);
+    const archivedData = getArchivedAverageForName(tournamentHistory, displayName, bowlerIdentities) || getArchivedAverageForName(tournamentHistory, reservation.name, bowlerIdentities);
     const handicapBase = Number(sidePotState.handicapBase ?? 200);
     const handicapPercent = Number(sidePotState.handicapPercent ?? 90);
     const archivedHandicap = useHandicapScores && archivedData?.eligible
@@ -15569,7 +15616,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     />
   </AppErrorBoundary>
 )}
-        {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} setReservationState={setReservationState} />}
+        {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} bowlerIdentities={bowlerIdentities} setReservationState={setReservationState} />}
         {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo} eliminatorTournamentState={eliminatorTournamentState} setEliminatorTournamentState={setEliminatorTournamentState}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} financials={financials} />}
