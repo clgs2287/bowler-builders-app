@@ -7017,7 +7017,7 @@ Lane {lanePairForGame(
         className="rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl print:p-5"
       >
         <div className="mb-3 flex items-start justify-between gap-2 border-b-2 border-slate-900 pb-2 print:mb-3 print:pb-2">
-          <h2 className="text-lg font-black print:text-lg print:leading-tight">
+          <h2 className="max-h-12 min-w-0 flex-1 overflow-hidden text-lg font-black leading-tight print:max-h-10 print:text-[13px] print:leading-tight">
             {tournamentInfo.name || "Tournament"}
           </h2>
           <div className="text-center">
