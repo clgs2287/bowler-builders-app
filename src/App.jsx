@@ -785,6 +785,15 @@ function rankRows(rows, scoreKey) {
     .map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
+function getTournamentPaidKey(tournamentInfo = {}, seed = "") {
+  return [
+    String(tournamentInfo.name || "Tournament").trim().toLowerCase(),
+    String(tournamentInfo.date || "").trim(),
+    String(tournamentInfo.center || "").trim().toLowerCase(),
+    String(seed || ""),
+  ].join("|");
+}
+
 function getRankedBowlers(bowlers, useHandicapScores = true) {
   const perGameHandicap = (bowler) => handicapPerGame(bowler);
   const rows = bowlers.map((b) => ({
@@ -11333,7 +11342,10 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
                 </tr>
               </thead>
               <tbody>
-                {cashRows.map((row) => (
+                {cashRows.map((row) => {
+                  const paidKey = getTournamentPaidKey(tournamentInfo, row.seed);
+                  const isPaid = Boolean(paidPayouts[paidKey]);
+                  return (
                   <tr key={`cash-${row.seed}`} className="border-t">
                     <td className="p-3 font-bold">{row.finalPlace || row.rank}</td>
                     <td className="p-3 font-semibold">{row.name}</td>
@@ -11347,21 +11359,22 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
     onClick={() =>
       setPaidPayouts((current) => ({
         ...current,
-        [row.seed]: !current[row.seed],
+        [paidKey]: !current[paidKey],
       }))
     }
     className={
-      paidPayouts[row.seed]
+      isPaid
         ? "rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 print:hidden"
         : "rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 print:hidden"
     }
   >
-    {paidPayouts[row.seed] ? "PAID" : "UNPAID"}
+    {isPaid ? "PAID" : "UNPAID"}
   </button>
   <span className="hidden print:inline">________</span>
 </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
               <tfoot className="bg-blue-50">
                 <tr>
@@ -14514,7 +14527,10 @@ function SideActionPayoutsTab({
   </tr>
 </thead>
               <tbody>
-                {payoutRows.map((row) => (
+                {payoutRows.map((row) => {
+                  const paidKey = getTournamentPaidKey(tournamentInfo, row.seed);
+                  const isPaid = Boolean(paidSideActionPayouts[paidKey]);
+                  return (
   <tr key={`side-pay-${row.seed}`} className="border-t">
     <td className="p-2 font-semibold md:p-3">{row.name}</td>
     <td className="p-2 text-right md:p-3">{currency(row.bracket)}</td>
@@ -14529,20 +14545,21 @@ function SideActionPayoutsTab({
         onClick={() =>
           setPaidSideActionPayouts((current) => ({
             ...current,
-            [row.seed]: !current[row.seed],
+            [paidKey]: !current[paidKey],
           }))
         }
         className={
-          paidSideActionPayouts[row.seed]
+          isPaid
             ? "rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
             : "rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700"
         }
       >
-        {paidSideActionPayouts[row.seed] ? "PAID" : "UNPAID"}
+        {isPaid ? "PAID" : "UNPAID"}
       </button>
     </td>
   </tr>
-))}
+);
+})}
                 {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No side-action payouts calculated yet.</td></tr>}
               </tbody>
             </table>
