@@ -6515,6 +6515,7 @@ const registrationStatus =
         </p>
         <p className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
           After submitting, please check your inbox and spam folder for your confirmation email.
+          If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
