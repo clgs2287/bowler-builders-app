@@ -7010,40 +7010,40 @@ Lane {lanePairForGame(
 
 
 {printMode === "finals" && (
-  <div className="grid grid-cols-2 gap-3 print:grid-cols-2 print:gap-2">
-    {Array.from({ length: 8 }, (_, index) => (
+  <div className="grid grid-cols-2 gap-3 print:grid-cols-2 print:gap-3">
+    {Array.from({ length: 6 }, (_, index) => (
       <div
         key={`finals-slip-${index}`}
-        className="rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl print:p-3"
+        className="rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl print:p-4"
       >
         <div className="mb-3 flex items-start justify-between gap-2 border-b-2 border-slate-900 pb-2 print:mb-2 print:pb-1">
-          <h2 className="text-lg font-black print:text-sm print:leading-tight">
+          <h2 className="text-lg font-black print:text-base print:leading-tight">
             {tournamentInfo.name || "Tournament"}
           </h2>
           <div className="text-center">
-            <img src={finalsQrUrl} alt="Public finals QR code" className="mx-auto h-12 w-12 print:h-12 print:w-12" />
-            <p className="mt-1 text-[9px] font-black text-slate-700 print:text-[8px] print:text-black">Public Finals</p>
+            <img src={finalsQrUrl} alt="Public finals QR code" className="mx-auto h-12 w-12 print:h-14 print:w-14" />
+            <p className="mt-1 text-[9px] font-black text-slate-700 print:text-[9px] print:text-black">Public Finals</p>
           </div>
         </div>
 
-        <div className="mb-2 flex gap-3 text-sm font-semibold print:text-xs">
+        <div className="mb-3 flex gap-3 text-sm font-semibold print:text-sm">
           <div>Round: __________________</div>
           <div>Match #: ______</div>
         </div>
 
-        <div className="mb-3 text-sm font-semibold print:text-xs">
+        <div className="mb-4 text-sm font-semibold print:text-sm">
           Lane Pair: ____________
         </div>
 
-        <div className="space-y-3 print:space-y-2">
-          <div className="flex items-center gap-2 pb-2 print:pb-1 print:text-xs">
+        <div className="space-y-3 print:space-y-3">
+          <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-sm">
             <span className="font-bold">Bowler 1:</span>
             <div className="min-w-0 flex-1 border-b border-slate-900" />
             <span className="font-bold">Score:</span>
             <div className="w-12 border-b border-slate-900" />
           </div>
 
-          <div className="flex items-center gap-2 pb-2 print:pb-1 print:text-xs">
+          <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-sm">
             <span className="font-bold">Bowler 2:</span>
             <div className="min-w-0 flex-1 border-b border-slate-900" />
             <span className="font-bold">Score:</span>
