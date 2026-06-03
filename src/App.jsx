@@ -774,6 +774,10 @@ function rankRows(rows, scoreKey) {
     .sort((a, b) => {
       const scoreDiff = Number(b[scoreKey] || 0) - Number(a[scoreKey] || 0);
       if (scoreDiff !== 0) return scoreDiff;
+      const aLowGame = Math.min(...(a.games || []).map((game) => Number(game || 0)).filter((game) => game > 0));
+      const bLowGame = Math.min(...(b.games || []).map((game) => Number(game || 0)).filter((game) => game > 0));
+      const lowGameDiff = (Number.isFinite(bLowGame) ? bLowGame : 0) - (Number.isFinite(aLowGame) ? aLowGame : 0);
+      if (lowGameDiff !== 0) return lowGameDiff;
       const aSeed = Number.isFinite(Number(a.seed)) ? Number(a.seed) : Number(a.teamNumber || 0);
       const bSeed = Number.isFinite(Number(b.seed)) ? Number(b.seed) : Number(b.teamNumber || 0);
       return aSeed - bSeed;
