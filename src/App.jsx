@@ -14606,7 +14606,6 @@ export default function BowlingPayoutApp() {
   const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
-  const publicResultsUnlocked = bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid));
   const [payoutState, setPayoutState] = useState(DEFAULT_PAYOUT_STATE);
   const [bracketState, setBracketState] = useState({ manualQualifiers: "", scores: {} });
   const [eliminatorState, setEliminatorState] = useState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
@@ -14622,6 +14621,8 @@ export default function BowlingPayoutApp() {
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [savedScoreGames, setSavedScoreGames] = useState({});
   const [savedFinalsRounds, setSavedFinalsRounds] = useState({});
+  const hasSavedPublicScoreGame = Object.values(savedScoreGames || {}).some(Boolean);
+  const publicResultsUnlocked = hasSavedPublicScoreGame || (bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid)));
 const [scheduleItems, setScheduleItems] = useState([
   {
     name: "",
