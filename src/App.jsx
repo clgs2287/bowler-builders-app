@@ -6695,7 +6695,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
   }, {});
   const sortedPairs = Object.keys(lanePairs).sort((a, b) => a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : Number(a.split("-")[0]) - Number(b.split("-")[0]));
 
-  const publicUrl = `${window.location.origin}${window.location.pathname}?view=public`;
+  const publicUrl = `${window.location.origin}${window.location.pathname}?view=public&tab=public`;
   const publicFinalsUrl = `${window.location.origin}${window.location.pathname}?view=public&tab=publicfinals`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(publicUrl)}`;
   const finalsQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(publicFinalsUrl)}`;
@@ -15485,6 +15485,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const headerEventLabel = isTournamentDayOrLater(tournamentInfo.date || reservationState.tournamentDate)
     ? "Active Event"
     : "Upcoming Event";
+  const publicRoutingDataReady = hasLoadedSavedData && hasLoadedHistory && (!supabase || supabaseLoadReady);
   const lockAdmin = () => {
     setIsAdminMode(false);
     setActiveTab("tournamentInfo");
@@ -15533,6 +15534,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   }, [activeTab, supabaseAdminProfile, supabaseAuthLoading]);
 
   useEffect(() => {
+    if (!publicRoutingDataReady) return;
+
     if ((isMatchplayTournament(tournamentFormat, tournamentInfo) || isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles")) && activeTab === "public") {
       setActiveTab("publicfinals");
       return;
@@ -15546,7 +15549,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(activeTab)) {
       setActiveTab("tournamentInfo");
     }
-  }, [activeTab, isAdminMode, publicResultsUnlocked, tournamentFormat, tournamentInfo]);
+  }, [activeTab, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, tournamentFormat, tournamentInfo]);
 
   return (
     <div ref={appTopRef} className="bb-stage min-h-screen p-2 md:p-8">
