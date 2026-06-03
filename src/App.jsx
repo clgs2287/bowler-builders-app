@@ -14571,6 +14571,17 @@ export default function BowlingPayoutApp() {
   const [paidPayouts, setPaidPayouts] = useState({});
   const [paidSideActionPayouts, setPaidSideActionPayouts] = useState({});
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const initialPublicTabRequest = (() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const requestedTab = params.get("tab");
+      return params.get("view") === "public" && ["public", "publicfinals"].includes(requestedTab)
+        ? requestedTab
+        : "";
+    } catch {
+      return "";
+    }
+  })();
   const [activeTab, setActiveTab] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -15546,10 +15557,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return;
     }
 
-    if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(activeTab)) {
+    if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(activeTab) && initialPublicTabRequest !== activeTab) {
       setActiveTab("tournamentInfo");
     }
-  }, [activeTab, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, tournamentFormat, tournamentInfo]);
+  }, [activeTab, initialPublicTabRequest, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, tournamentFormat, tournamentInfo]);
 
   return (
     <div ref={appTopRef} className="bb-stage min-h-screen p-2 md:p-8">
