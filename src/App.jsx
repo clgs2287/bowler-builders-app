@@ -6538,10 +6538,11 @@ const registrationStatus =
               tournamentInfo.name}
           </span>
         </p>
-        <p className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
-          After submitting, please check your inbox and spam folder for your confirmation email.
-          If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.
-        </p>
+        <div className="mb-5 space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
+          <p>After submitting, please check your inbox and spam folder for your confirmation email.</p>
+          <p>If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.</p>
+          <p>Withdrawals should be made at least 48 hours before the tournament. Anyone withdrawing within 48 hours may be moved to the waitlist for future reservations.</p>
+        </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           <Input
