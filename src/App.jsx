@@ -374,9 +374,16 @@ const numberInputStyles = String.raw`
 }
 
 .bb-public-finals-big .bb-public-bracket-col {
-  min-width: 18rem !important;
-  max-width: 18rem !important;
-  flex: 0 0 18rem !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 1 1 0 !important;
+}
+
+.bb-public-finals-big .bb-public-finals-track {
+  min-width: 100% !important;
+  width: 100% !important;
+  gap: clamp(0.75rem, 1.25vw, 1.5rem) !important;
+  align-items: flex-start !important;
 }
 
 .bb-public-finals-big .bb-public-match-card {
@@ -7908,7 +7915,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     const columnHeight =
       Math.max(1, bracketRounds[0]?.matches?.length || matches.length) * step;
     return (
-      <div className={bigScreen ? "bb-public-bracket-col min-w-[288px] flex-none" : "bb-public-bracket-col min-w-[280px] flex-1"}>
+      <div className={bigScreen ? "bb-public-bracket-col flex-1" : "bb-public-bracket-col min-w-[280px] flex-1"}>
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
         <div
   className="relative pb-8"
@@ -8038,7 +8045,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
       : Math.max(1, openingMatches.length) * step;
 
     return (
-      <div className={bigScreen ? "bb-public-bracket-col min-w-[288px] flex-none" : "bb-public-bracket-col min-w-[280px] flex-1"}>
+      <div className={bigScreen ? "bb-public-bracket-col flex-1" : "bb-public-bracket-col min-w-[280px] flex-1"}>
         <h3 className="mb-3 text-center font-semibold text-blue-900">{round.title}</h3>
         <div className="relative pb-8" style={{ height: columnHeight + 32 }}>
           {round.matches.map((match, matchIndex) => (
