@@ -80,6 +80,10 @@ const numberInputStyles = String.raw`
     -moz-appearance: textfield;
   }
 
+@page {
+  margin: 0;
+}
+
 @media print {
   body {
     margin: 0;
