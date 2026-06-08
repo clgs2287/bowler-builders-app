@@ -4164,7 +4164,7 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   const calculateRegistrationHandicap = (average) =>
     Math.max(
       0,
-      Math.round((handicapBase - Number(average || 0)) * (handicapPercent / 100))
+      Math.floor((handicapBase - Number(average || 0)) * (handicapPercent / 100))
     );
   useEffect(() => {
   if (!useHandicapScores) return;
@@ -15444,7 +15444,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const handicapBase = Number(sidePotState.handicapBase ?? 200);
     const handicapPercent = Number(sidePotState.handicapPercent ?? 90);
     const archivedHandicap = useHandicapScores && archivedData?.eligible
-      ? Math.max(0, Math.round((handicapBase - Number(archivedData.average || 0)) * (handicapPercent / 100)))
+      ? Math.max(0, Math.floor((handicapBase - Number(archivedData.average || 0)) * (handicapPercent / 100)))
       : 0;
     const currentReservationKey = reservation.tournamentKey || reservationKeyFromState(reservationState);
     let alreadyExists = false;
