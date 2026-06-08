@@ -7337,11 +7337,15 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     if (b.rank <= displayCashers) return "bg-blue-50";
     return "bg-white";
   };
-  const bigHeaderClass = bigScreen ? "px-5 py-4 text-2xl" : "";
-  const bigCellClass = bigScreen ? "px-5 py-4 text-2xl" : "";
-  const bigRankClass = bigScreen ? "w-20 px-5 py-4 text-3xl" : "";
-  const bigNameClass = bigScreen ? "left-20 min-w-[320px] max-w-none px-5 py-4 text-3xl" : "";
-  const normalNameLeftClass = bigScreen ? "left-20" : "left-10";
+  const rankHeaderClass = bigScreen ? "sticky left-0 z-20 w-20 bg-blue-800 px-5 py-4 text-left text-3xl" : "sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3";
+  const nameHeaderClass = bigScreen ? "sticky left-20 z-20 min-w-[360px] bg-blue-800 px-5 py-4 text-left text-3xl" : "sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3";
+  const scoreHeaderClass = bigScreen ? "px-5 py-4 text-right text-3xl" : "w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm";
+  const rankCellClass = bigScreen ? "sticky left-0 z-10 w-20 px-5 py-4 text-4xl font-black" : "sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3";
+  const nameCellClass = bigScreen ? "sticky left-20 z-10 min-w-[360px] max-w-none px-5 py-4 text-4xl font-semibold" : "sticky left-10 z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm";
+  const scoreCellClass = bigScreen ? "px-5 py-4 text-right text-4xl" : "w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm";
+  const totalCellClass = bigScreen ? "px-5 py-4 text-right text-4xl font-semibold" : "w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm";
+  const diffCellClass = bigScreen ? "px-5 py-4 text-right text-4xl font-black" : "p-2 text-right text-sm font-black md:p-3 md:text-base";
+  const statusCellClass = bigScreen ? "px-5 py-4 text-right" : "p-2 text-right md:p-3";
   const bigButtonClass = bigScreen ? "text-lg px-5 py-3" : "";
 
   const statusBadge = (b) => {
@@ -7373,31 +7377,31 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
           <table className={bigScreen ? "w-full min-w-[1120px] text-2xl" : "w-full min-w-[560px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
-                <th className={`sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3 ${bigHeaderClass} ${bigScreen ? "w-20" : ""}`}>
+                <th className={rankHeaderClass}>
                   <button type="button" className="font-bold" onClick={() => sortLeaderboard("rank")}>
                     #{sortLabel("rank")}
                   </button>
                 </th>
-                <th className={`sticky z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3 ${normalNameLeftClass} ${bigHeaderClass} ${bigScreen ? "min-w-[320px]" : ""}`}>{entryLabel}</th>
-                <th className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigHeaderClass}`}>
+                <th className={nameHeaderClass}>{entryLabel}</th>
+                <th className={scoreHeaderClass}>
                   <button type="button" className="font-bold" onClick={() => sortLeaderboard("scratch")}>
                     Scratch{sortLabel("scratch")}
                   </button>
                 </th>
                 {useHandicapScores && (
-                  <th className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigHeaderClass}`}>
+                  <th className={scoreHeaderClass}>
                     Hdcp
                   </th>
                 )}
                 {useHandicapScores && (
-                  <th className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigHeaderClass}`}>
+                  <th className={scoreHeaderClass}>
                     <button type="button" className="font-bold" onClick={() => sortLeaderboard("handicap")}>
                       Total{sortLabel("handicap")}
                     </button>
                   </th>
                 )}
-                <th className={`p-2 text-right md:p-3 ${bigHeaderClass}`}>+/-</th>
-                <th className={`p-2 text-right md:p-3 ${bigHeaderClass}`}>Status / From Cut</th>
+                <th className={scoreHeaderClass}>+/-</th>
+                <th className={scoreHeaderClass}>Status / From Cut</th>
               </tr>
             </thead>
             <tbody>
@@ -7419,8 +7423,8 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                       </tr>
                     )}
                     <tr className={rowClass(b)}>
-                      <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${bg} ${bigRankClass}`}>{b.rank}</td>
-                      <td className={`sticky z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm ${bg} ${normalNameLeftClass} ${bigNameClass}`}>
+                      <td className={`${rankCellClass} ${bg}`}>{b.rank}</td>
+                      <td className={`${nameCellClass} ${bg}`}>
                         <button
                           type="button"
                           className={bigScreen ? "block max-w-none truncate text-left underline-offset-2 hover:underline" : "block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"}
@@ -7430,11 +7434,11 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                           {b.name}
                         </button>
                       </td>
-                      <td className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigCellClass}`}>{b.scratch}</td>
-                      {useHandicapScores && <td className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigCellClass}`}>{earnedHandicap}</td>}
-                      {useHandicapScores && <td className={`w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm ${bigCellClass}`}>{b.handicap}</td>}
-                      <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${bigCellClass} ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
-                      <td className={`p-2 text-right md:p-3 ${bigCellClass}`}>{statusBadge(b)}</td>
+                      <td className={scoreCellClass}>{b.scratch}</td>
+                      {useHandicapScores && <td className={scoreCellClass}>{earnedHandicap}</td>}
+                      {useHandicapScores && <td className={totalCellClass}>{b.handicap}</td>}
+                      <td className={`${diffCellClass} ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
+                      <td className={statusCellClass}>{statusBadge(b)}</td>
                     </tr>
                     {expandedSeed === b.seed && (
                       <tr className="border-t bg-white">
