@@ -103,6 +103,13 @@ const numberInputStyles = String.raw`
   .print\:hidden {
     display: none !important;
   }
+
+  body *,
+  body strong,
+  body b {
+    font-weight: 400 !important;
+    text-shadow: none !important;
+  }
 }
 
 .bb-stage {
