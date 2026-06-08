@@ -549,6 +549,7 @@ function reservationBucketFromState(reservationState = {}) {
     tournamentAddress: reservationState.tournamentAddress || "",
     reservationLimit: Number(reservationState.reservationLimit || 48),
     reservationNextNumber: Number(reservationState.reservationNextNumber || 1),
+    waitlistOnlyNames: reservationState.waitlistOnlyNames || "",
     reservationCount: (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0),
     reservations: reservationState.reservations || [],
   };
@@ -566,6 +567,7 @@ function sanitizeReservationsByTournament(reservationsByTournament = {}) {
         tournamentAddress: bucket?.tournamentAddress || "",
         reservationLimit: Number(bucket?.reservationLimit || 48),
         reservationNextNumber: Number(bucket?.reservationNextNumber || 1),
+        waitlistOnlyNames: bucket?.waitlistOnlyNames || "",
         reservationCount: (bucket?.reservations || []).length || Number(bucket?.reservationCount || 0),
         reservations: [],
       },
@@ -584,6 +586,22 @@ function getReservationDisplayName(reservation = {}) {
   if (!isPlaceholderValue(nickname)) return nickname;
   if (!isPlaceholderValue(name)) return name;
   return nickname || name || "";
+}
+
+function reservationWaitlistOnlyEntries(value = "") {
+  return String(value || "")
+    .split(/\n|,/)
+    .map((entry) => normalizeMatchText(entry))
+    .filter(Boolean);
+}
+
+function isReservationWaitlistOnly(reservation = {}, reservationState = {}) {
+  const restrictedNames = reservationWaitlistOnlyEntries(reservationState.waitlistOnlyNames);
+  if (!restrictedNames.length) return false;
+  const reservationNames = [reservation.name, reservation.nickname]
+    .map((entry) => normalizeMatchText(entry))
+    .filter(Boolean);
+  return reservationNames.some((name) => restrictedNames.includes(name));
 }
 
 function getReservationRegistrationNumber(reservation = {}, fallback = "") {
@@ -6098,6 +6116,7 @@ function ReservationsTab({
         tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
         reservationLimit: Number(savedBucket.reservationLimit || current.reservationLimit || 48),
         reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
+        waitlistOnlyNames: savedBucket.waitlistOnlyNames || "",
         reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
         reservations: savedBucket.reservations || [],
       };
@@ -6328,6 +6347,25 @@ function ReservationsTab({
   </div>
 
   <div className="space-y-2 md:col-span-2">
+    <Label>Waitlist Only Names</Label>
+
+    <textarea
+      className="min-h-[90px] w-full rounded-2xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      value={reservationState.waitlistOnlyNames || ""}
+      onChange={(e) =>
+        setReservationState((current) => ({
+          ...current,
+          waitlistOnlyNames: e.target.value,
+        }))
+      }
+      placeholder="One name or nickname per line"
+    />
+    <p className="text-xs font-semibold text-blue-700">
+      These bowlers can still reserve, but they will automatically be placed on the waitlist even when spots are open.
+    </p>
+  </div>
+
+  <div className="space-y-2 md:col-span-2">
     <Label>Manual Tournament Name</Label>
 
     <Input
@@ -6348,6 +6386,7 @@ function ReservationsTab({
           tournamentStartTime: "",
           tournamentCenter: "",
           tournamentAddress: "",
+          waitlistOnlyNames: "",
           reservationNextNumber: 1,
           reservationCount: 0,
           reservations: [],
@@ -6611,9 +6650,12 @@ function PublicReservations({
   const currentReservationCount = Number(
     reservationState.reservationCount ?? currentReservations.length
   );
+  const formForcedToWaitlist = isReservationWaitlistOnly(form, reservationState);
 
 const registrationStatus =
-  currentReservationCount <
+  formForcedToWaitlist
+    ? "Waitlisted"
+    : currentReservationCount <
   Number(reservationState.reservationLimit || 48)
     ? "Registered"
     : "Waitlisted";
@@ -14840,6 +14882,7 @@ const [reservationState, setReservationState] = useState({
   tournamentStartTime: "",
   reservationLimit: 48,
   reservationNextNumber: 1,
+  waitlistOnlyNames: "",
   reservations: [],
   reservationsByTournament: {},
 });
@@ -15096,6 +15139,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       tournamentAddress: reservationState.tournamentAddress || "",
       reservationLimit: Number(reservationState.reservationLimit || 48),
       reservationNextNumber: getNextReservationNumber(reservationState),
+      waitlistOnlyNames: reservationState.waitlistOnlyNames || "",
       reservationCount: (reservationState.reservations || []).length,
       reservationsByTournament: sanitizeReservationsByTournament(reservationsForSettings),
     };
