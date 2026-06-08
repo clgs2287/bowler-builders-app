@@ -12721,6 +12721,7 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIde
   const [editingManualTitleId, setEditingManualTitleId] = useState(null);
   const [editingManualTitle, setEditingManualTitle] = useState(null);
   const [titleDetailFilters, setTitleDetailFilters] = useState({ bowler: "", tournament: "", season: "All", series: "All" });
+  const [identitySort, setIdentitySort] = useState({ column: "realName", direction: "asc" });
   const identityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
   const realNameFor = (nickname) => identityMap.get(getIdentityKey(nickname))?.realName || "";
   const isSectionCollapsed = (sectionId) => Boolean(collapsedTitleSections[sectionId]);
@@ -12931,6 +12932,29 @@ else current.nonFkmTitles += titleCount;
     setBowlerIdentities((current) => (current || []).filter((identity) => getIdentityKey(identity.nickname) !== getIdentityKey(nickname)));
   };
 
+  const sortIdentities = (column) => {
+    setIdentitySort((current) => ({
+      column,
+      direction: current.column === column && current.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const identitySortLabel = (column) =>
+    identitySort.column === column ? (identitySort.direction === "asc" ? " ↑" : " ↓") : "";
+
+  const sortedBowlerIdentities = [...(bowlerIdentities || [])].sort((a, b) => {
+    const direction = identitySort.direction === "asc" ? 1 : -1;
+    const valueFor = (identity) => {
+      if (identitySort.column === "aliases") return (identity.aliases || []).join(", ");
+      return identity[identitySort.column] || "";
+    };
+    return (
+      String(valueFor(a)).localeCompare(String(valueFor(b))) * direction ||
+      String(a.realName || "").localeCompare(String(b.realName || "")) ||
+      String(a.nickname || "").localeCompare(String(b.nickname || ""))
+    );
+  });
+
   const deleteManualTitle = (id) => {
     const confirmed = window.confirm("Delete this manually entered title?");
     if (!confirmed) return;
@@ -13116,10 +13140,27 @@ else current.nonFkmTitles += titleCount;
           <div className="mt-4 overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[520px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
-                <tr><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Aliases</th><th className="p-2 text-right md:p-3">Actions</th></tr>
+                <tr>
+                  <th className="p-2 text-left md:p-3">
+                    <button type="button" className="font-bold" onClick={() => sortIdentities("nickname")}>
+                      Nickname{identitySortLabel("nickname")}
+                    </button>
+                  </th>
+                  <th className="p-2 text-left md:p-3">
+                    <button type="button" className="font-bold" onClick={() => sortIdentities("realName")}>
+                      Name{identitySortLabel("realName")}
+                    </button>
+                  </th>
+                  <th className="p-2 text-left md:p-3">
+                    <button type="button" className="font-bold" onClick={() => sortIdentities("aliases")}>
+                      Aliases{identitySortLabel("aliases")}
+                    </button>
+                  </th>
+                  <th className="p-2 text-right md:p-3">Actions</th>
+                </tr>
               </thead>
               <tbody>
-                {(bowlerIdentities || []).map((identity) => (
+                {sortedBowlerIdentities.map((identity) => (
                   <tr key={identity.id || identity.nickname} className="border-t">
                     <td className="p-2 font-semibold md:p-3">{identity.nickname}</td>
                     <td className="p-2 text-blue-900 md:p-3">{identity.realName}</td>
