@@ -7697,7 +7697,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   );
 }
 
-function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
+function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {}, bigScreen = false }) {
   const { scores, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
   const matchLanes = bracketState.matchLanes || {};
@@ -7722,6 +7722,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       ? winnerFromAverageAdvantageMatch(match.left, match.right, leftScore, rightScore)
       : winnerFromMatch(match.left, match.right, leftScore, rightScore);
   const seriesRecord = getBestOfThreeRecord(scores, match.id);
+  const bestOfThreeCardHeight = bigScreen ? "min-h-[340px]" : "min-h-[198px]";
+  const standardCardHeight = bigScreen ? "min-h-[168px]" : "min-h-[82px]";
 
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
   const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
@@ -7785,8 +7787,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       <div
         className={
           winner?.name && winner.name !== "TIE"
-            ? "bb-public-match-card relative min-h-[198px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-            : "bb-public-match-card relative min-h-[198px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+            ? `bb-public-match-card relative ${bestOfThreeCardHeight} rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm`
+            : `bb-public-match-card relative ${bestOfThreeCardHeight} rounded-2xl border border-blue-200 bg-white p-2 shadow-sm`
         }
       >
         {laneLabel && (
@@ -7844,8 +7846,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     <div
       className={
         winner?.name && winner.name !== "TIE"
-          ? "bb-public-match-card relative min-h-[82px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-          : "bb-public-match-card relative min-h-[82px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+          ? `bb-public-match-card relative ${standardCardHeight} rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm`
+          : `bb-public-match-card relative ${standardCardHeight} rounded-2xl border border-blue-200 bg-white p-2 shadow-sm`
       }
     >
       {laneLabel && (
@@ -7878,9 +7880,13 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
 };
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0, matchNumberOffset = 0 }) => {
-    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && !useHandicapScores ? 150 : 106;
-    const matchHeight = matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 150 : 106;
-    const firstRoundGap = matchScoring === "bestOf3" ? 48 : 38;
+    const firstRoundMatchHeight = bigScreen
+      ? matchScoring === "bestOf3" ? 380 : matchScoring === "avgAdvantage" && !useHandicapScores ? 248 : 204
+      : matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && !useHandicapScores ? 150 : 106;
+    const matchHeight = bigScreen
+      ? matchScoring === "bestOf3" ? 380 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 248 : 204
+      : matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 150 : 106;
+    const firstRoundGap = bigScreen ? (matchScoring === "bestOf3" ? 96 : 76) : (matchScoring === "bestOf3" ? 48 : 38);
     const step = firstRoundMatchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
@@ -7892,7 +7898,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     const columnHeight =
       Math.max(1, bracketRounds[0]?.matches?.length || matches.length) * step;
     return (
-      <div className="bb-public-bracket-col min-w-[280px] flex-1">
+      <div className={bigScreen ? "bb-public-bracket-col min-w-[360px] flex-1" : "bb-public-bracket-col min-w-[280px] flex-1"}>
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
         <div
   className="relative pb-8"
@@ -7934,7 +7940,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
   );
 }
 
-function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournamentInfo = {} }) {
+function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournamentInfo = {}, bigScreen = false }) {
   const pods = buildMatchplayOpeningPods(bowlers, matchplayState);
   const openingMatches = pods.flatMap((pod) =>
     pod.matches.map((match) => ({
@@ -7964,7 +7970,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
     const renderGames = (games = []) => games.map((score) => Number(score || 0) || "-").join(" / ");
 
     return (
-      <div className={match.winner ? "bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm" : "bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+      <div className={match.winner ? `${bigScreen ? "min-h-[230px]" : ""} bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm` : `${bigScreen ? "min-h-[230px]" : ""} bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm`}>
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">Match {matchNumber}</span>
           <span className="text-[10px] font-black uppercase tracking-wide text-blue-700">{match.title}</span>
@@ -7993,7 +7999,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
     const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
 
     return (
-      <div className={match.winner ? "bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm" : "bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+      <div className={match.winner ? `${bigScreen ? "min-h-[144px]" : ""} bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm` : `${bigScreen ? "min-h-[144px]" : ""} bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm`}>
         <div className="mb-2 rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">Match {matchNumber}</div>
         <div className="grid grid-cols-[1fr_auto] gap-1 text-xs">
           <span className={playerClass(leftWon)}>{playerName(match.left)}</span>
@@ -8006,10 +8012,10 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
   };
 
   const MatchplayRoundColumn = ({ round, roundIndex, matchNumberOffset }) => {
-    const matchHeight = round.type === "opening" ? 126 : 76;
-    const firstRoundHeight = 126;
-    const firstRoundGap = 30;
-    const step = firstRoundHeight + firstRoundGap + 12;
+    const matchHeight = bigScreen ? (round.type === "opening" ? 248 : 164) : (round.type === "opening" ? 126 : 76);
+    const firstRoundHeight = bigScreen ? 248 : 126;
+    const firstRoundGap = bigScreen ? 72 : 30;
+    const step = firstRoundHeight + firstRoundGap + (bigScreen ? 20 : 12);
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
       const feederStart = matchIndex * (2 ** roundIndex);
@@ -8022,7 +8028,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
       : Math.max(1, openingMatches.length) * step;
 
     return (
-      <div className="bb-public-bracket-col min-w-[280px] flex-1">
+      <div className={bigScreen ? "bb-public-bracket-col min-w-[360px] flex-1" : "bb-public-bracket-col min-w-[280px] flex-1"}>
         <h3 className="mb-3 text-center font-semibold text-blue-900">{round.title}</h3>
         <div className="relative pb-8" style={{ height: columnHeight + 32 }}>
           {round.matches.map((match, matchIndex) => (
@@ -8297,9 +8303,9 @@ function PublicViewTab({
       </Card>
 
       {publicTab === "leaderboard" && !publicIsEliminatorTournament && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} allowBigScreen={allowLeaderboardBigScreen} />}
-      {publicMode === "finals" && publicIsMatchplay && <PublicMatchplayBracketView bowlers={bowlers} matchplayState={matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={tournamentInfo} />}
+      {publicMode === "finals" && publicIsMatchplay && <PublicMatchplayBracketView bowlers={bowlers} matchplayState={matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={tournamentInfo} bigScreen={publicFinalsBigScreen} />}
       {publicMode === "finals" && publicIsEliminatorTournament && <EliminatorTournamentTab bowlers={bowlers} eliminatorTournamentState={eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={tournamentInfo} readOnly />}
-      {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} />}
+      {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} bigScreen={publicFinalsBigScreen} />}
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "eliminator" && <PublicEliminatorView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} tournamentInfo={tournamentInfo} />}
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} laneEliminatorState={laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={tournamentInfo} readOnly />}
     </div>
