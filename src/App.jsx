@@ -2442,7 +2442,15 @@ function TournamentInfoTab({
   const tournamentStartTime = tournamentInfo.startTime || reservationState.tournamentStartTime || "";
   const hasSavedQualifyingGame = Object.values(savedScoreGames || {}).some(Boolean);
   const hasMatchplayActivity = isMatchplayTournament(tournamentFormat, tournamentInfo) && countMatchplayLineageGames(matchplayState) > 0;
-  const currentStage = reservationsMatchCurrentTournament && !hasSavedQualifyingGame && !hasMatchplayActivity
+  const tournamentStartDateTime = getTournamentStartDateTime(tournamentStartDate, tournamentStartTime);
+  const isBeforeTournamentStart = tournamentStartDateTime
+    ? Date.now() < tournamentStartDateTime.getTime()
+    : tournamentStartDate && !isTournamentDayOrLater(tournamentStartDate);
+  const shouldShowPreTournamentStage =
+    !hasSavedQualifyingGame &&
+    !hasMatchplayActivity &&
+    (isBeforeTournamentStart || reservationsMatchCurrentTournament);
+  const currentStage = shouldShowPreTournamentStage
     ? isTournamentRegistrationWindow(tournamentStartDate, tournamentStartTime)
       ? "Registration"
       : "Taking Reservations"
