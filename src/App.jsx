@@ -5079,7 +5079,7 @@ const saveCurrentGame = () => {
                     )}
                     {useHandicapScores && (
   <td className="p-2 text-center font-semibold text-blue-950">
-    {qualifyingHandicapTotal(b, qualifyingGames)}
+    {handicapPerGame(b)}
   </td>
 )}
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
@@ -5178,7 +5178,7 @@ const saveCurrentGame = () => {
           )}
           {useHandicapScores && (
             <td className="border border-black p-1 text-center font-bold">
-              {qualifyingHandicapTotal(b, qualifyingGames)}
+              {handicapPerGame(b)}
             </td>
           )}
           {Array.from({ length: qualifyingGames }, (_, gi) => (
