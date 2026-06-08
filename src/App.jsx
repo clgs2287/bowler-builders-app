@@ -7364,7 +7364,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
           </div>
         </div>
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className={bigScreen ? "w-full min-w-[760px] text-2xl" : "w-full min-w-[460px] text-xs md:min-w-0 md:text-sm"}>
+          <table className={bigScreen ? "w-full min-w-[800px] text-2xl" : "w-full min-w-[560px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">
@@ -7379,9 +7379,14 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                   </button>
                 </th>
                 {useHandicapScores && (
-                  <th className="hidden p-2 text-right md:table-cell md:p-3">
+                  <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">
+                    Hdcp
+                  </th>
+                )}
+                {useHandicapScores && (
+                  <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">
                     <button type="button" className="font-bold" onClick={() => sortLeaderboard("handicap")}>
-                      Hdcp{sortLabel("handicap")}
+                      Total{sortLabel("handicap")}
                     </button>
                   </th>
                 )}
@@ -7392,11 +7397,12 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
             <tbody>
               {displayedRows.slice(0, bigScreen ? 30 : 50).map((b, index) => {
                 const score = useHandicapScores ? b.handicap : b.scratch;
+                const earnedHandicap = useHandicapScores ? Math.max(0, Number(b.handicap || 0) - Number(b.scratch || 0)) : 0;
                 const gamesCompleted = b.isTeam
                   ? (b.members || []).reduce((sum, member) => sum + completedGamesCount(member), 0)
                   : completedGamesCount(b);
                 const diff = gamesCompleted > 0 ? Number(score - gamesCompleted * 200) : null;
-                const colspan = useHandicapScores ? 6 : 5;
+                const colspan = useHandicapScores ? 7 : 5;
                 const bg = stickyBgClass(b);
 
                 return (
@@ -7419,7 +7425,8 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                         </button>
                       </td>
                       <td className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">{b.scratch}</td>
-                      {useHandicapScores && <td className="hidden p-2 text-right font-semibold md:table-cell md:p-3">{b.handicap}</td>}
+                      {useHandicapScores && <td className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">{earnedHandicap}</td>}
+                      {useHandicapScores && <td className="w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm">{b.handicap}</td>}
                       <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className="p-2 text-right md:p-3">{statusBadge(b)}</td>
                     </tr>
@@ -7462,21 +7469,26 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                                       <th key={`${b.seed}-member-head-${gameIndex}`} className="p-2 text-center">G{gameIndex + 1}</th>
                                     ))}
                                     <th className="p-2 text-center">Scratch</th>
-                                    {useHandicapScores && <th className="p-2 text-center">Hdcp Total</th>}
+                                    {useHandicapScores && <th className="p-2 text-center">Hdcp</th>}
+                                    {useHandicapScores && <th className="p-2 text-center">Total</th>}
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {(b.members || []).map((member, memberIndex) => (
-                                    <tr key={`${b.seed}-member-${member.seed || memberIndex}`} className="border-t">
-                                      <td className="p-2 font-semibold text-blue-950">{member.name || "—"}</td>
-                                      {useHandicapScores && <td className="p-2 text-center">{handicapPerGame(member)}</td>}
-                                      {b.games.map((_, gameIndex) => (
-                                        <td key={`${member.seed}-member-game-${gameIndex}`} className="p-2 text-center">{Number(member.games?.[gameIndex] || 0) || "—"}</td>
-                                      ))}
-                                      <td className="p-2 text-center font-semibold">{scratchTotal(member)}</td>
-                                      {useHandicapScores && <td className="p-2 text-center font-semibold">{handicapTotal(member)}</td>}
-                                    </tr>
-                                  ))}
+                                  {(b.members || []).map((member, memberIndex) => {
+                                    const memberEarnedHandicap = handicapPerGame(member) * completedGamesCount(member);
+                                    return (
+                                      <tr key={`${b.seed}-member-${member.seed || memberIndex}`} className="border-t">
+                                        <td className="p-2 font-semibold text-blue-950">{member.name || "—"}</td>
+                                        {useHandicapScores && <td className="p-2 text-center">{handicapPerGame(member)}</td>}
+                                        {b.games.map((_, gameIndex) => (
+                                          <td key={`${member.seed}-member-game-${gameIndex}`} className="p-2 text-center">{Number(member.games?.[gameIndex] || 0) || "—"}</td>
+                                        ))}
+                                        <td className="p-2 text-center font-semibold">{scratchTotal(member)}</td>
+                                        {useHandicapScores && <td className="p-2 text-center font-semibold">{memberEarnedHandicap}</td>}
+                                        {useHandicapScores && <td className="p-2 text-center font-semibold">{handicapTotal(member)}</td>}
+                                      </tr>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
