@@ -5131,8 +5131,8 @@ const saveCurrentGame = () => {
         <th className="border border-black p-1 text-left">#</th>
         <th className="w-28 border border-black p-1 text-left">Bowler</th>
         <th className="border border-black p-1 text-center">Pos</th>
-        {useHandicapScores && <th className="border border-black p-1 text-center">Avg</th>}
-        {useHandicapScores && <th className="border border-black p-1 text-center">Hdcp</th>}
+        {useHandicapScores && <th className="w-10 border border-black p-0.5 text-center">Avg</th>}
+        {useHandicapScores && <th className="w-9 border border-black p-0.5 text-center">Hdcp</th>}
         {Array.from({ length: qualifyingGames }, (_, gi) => (
           <th key={`print-score-game-${gi}`} className="border border-black p-1 text-center">
             <div>G{gi + 1}</div>
@@ -5155,8 +5155,8 @@ const saveCurrentGame = () => {
         ))}
         {useHandicapScores ? (
           <>
-            <th className="border border-black p-1 text-center">Scratch</th>
-            <th className="border border-black p-1 text-center">Hdcp</th>
+            <th className="w-11 border border-black p-0.5 text-center">Scratch</th>
+            <th className="w-10 border border-black p-0.5 text-center">Hdcp</th>
             <th className="border border-black p-1 text-center">Total</th>
           </>
         ) : (
@@ -5172,12 +5172,12 @@ const saveCurrentGame = () => {
           <td className="w-28 border border-black p-1 font-bold">{b.name || ""}</td>
           <td className="border border-black p-1 text-center">{b.lane || ""}</td>
           {useHandicapScores && (
-            <td className="border border-black p-1 text-center font-bold">
+            <td className="w-10 border border-black p-0.5 text-center font-bold">
               {bowlerAverageDisplay(b)}
             </td>
           )}
           {useHandicapScores && (
-            <td className="border border-black p-1 text-center font-bold">
+            <td className="w-9 border border-black p-0.5 text-center font-bold">
               {handicapPerGame(b)}
             </td>
           )}
@@ -5185,7 +5185,7 @@ const saveCurrentGame = () => {
             <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-1" />
           ))}
           <td className="border border-black p-1" />
-          {useHandicapScores && <td className="border border-black p-1 text-center font-bold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
+          {useHandicapScores && <td className="w-10 border border-black p-0.5 text-center font-bold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
           {useHandicapScores && <td className="border border-black p-1" />}
         </tr>
       ))}
