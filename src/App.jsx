@@ -1566,9 +1566,12 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState,
 }
 
 function winnerFromBestOfThreeMatch(left, right, scores = {}, matchId, advanceByes = true) {
-  const leftIsBye = !left || left.name === "BYE";
-  const rightIsBye = !right || right.name === "BYE";
+  const leftMissing = !left;
+  const rightMissing = !right;
+  const leftIsBye = !leftMissing && left.name === "BYE";
+  const rightIsBye = !rightMissing && right.name === "BYE";
 
+  if (leftMissing || rightMissing) return null;
   if (leftIsBye && rightIsBye) return null;
   if (!advanceByes && (leftIsBye || rightIsBye)) return null;
   if (!leftIsBye && rightIsBye) return left;
@@ -1632,9 +1635,12 @@ function averageAdvantageTotal(player, opponent, scratchScore) {
 }
 
 function winnerFromAverageAdvantageMatch(left, right, leftScore, rightScore, advanceByes = true) {
-  const leftIsBye = !left || left.name === "BYE";
-  const rightIsBye = !right || right.name === "BYE";
+  const leftMissing = !left;
+  const rightMissing = !right;
+  const leftIsBye = !leftMissing && left.name === "BYE";
+  const rightIsBye = !rightMissing && right.name === "BYE";
 
+  if (leftMissing || rightMissing) return null;
   if (leftIsBye && rightIsBye) return null;
   if (!advanceByes && (leftIsBye || rightIsBye)) return null;
   if (!leftIsBye && rightIsBye) return left;
@@ -2153,9 +2159,12 @@ function getMatchplayTournamentStage(bowlers = [], matchplayState = {}) {
 }
 
 function winnerFromMatch(left, right, leftScore, rightScore, advanceByes = true) {
-  const leftIsBye = !left || left.name === "BYE";
-  const rightIsBye = !right || right.name === "BYE";
+  const leftMissing = !left;
+  const rightMissing = !right;
+  const leftIsBye = !leftMissing && left.name === "BYE";
+  const rightIsBye = !rightMissing && right.name === "BYE";
 
+  if (leftMissing || rightMissing) return null;
   if (leftIsBye && rightIsBye) return null;
   if (!advanceByes && (leftIsBye || rightIsBye)) return null;
   if (!leftIsBye && rightIsBye) return left;
