@@ -320,6 +320,59 @@ const numberInputStyles = String.raw`
   box-shadow: 0 4px 12px rgba(3, 20, 43, 0.12);
 }
 
+.bb-public-finals-big {
+  position: fixed;
+  inset: 1rem;
+  z-index: 60;
+  overflow: auto;
+  padding: 1rem;
+  border-radius: 1.5rem;
+  background: white;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+}
+
+.bb-public-finals-big h2 {
+  font-size: 2.5rem !important;
+  line-height: 1.1 !important;
+}
+
+.bb-public-finals-big h3 {
+  font-size: 1.75rem !important;
+  line-height: 1.15 !important;
+}
+
+.bb-public-finals-big table,
+.bb-public-finals-big tbody,
+.bb-public-finals-big thead {
+  font-size: 1.35rem !important;
+  line-height: 1.25 !important;
+}
+
+.bb-public-finals-big th,
+.bb-public-finals-big td {
+  padding: 0.85rem !important;
+}
+
+.bb-public-finals-big .text-\[9px\],
+.bb-public-finals-big .text-\[10px\],
+.bb-public-finals-big .text-\[11px\],
+.bb-public-finals-big .text-xs,
+.bb-public-finals-big .text-sm {
+  font-size: 1.15rem !important;
+  line-height: 1.25 !important;
+}
+
+.bb-public-finals-big .text-base,
+.bb-public-finals-big .text-lg,
+.bb-public-finals-big .text-xl {
+  font-size: 1.65rem !important;
+  line-height: 1.2 !important;
+}
+
+.bb-public-finals-big button {
+  font-size: 1.15rem !important;
+}
+
 @media (max-width: 640px) {
   .bb-mobile-table {
     font-size: 10.5px !important;
@@ -8042,6 +8095,8 @@ function PublicViewTab({
  const [publicTab, setPublicTab] = useState(
   publicMode === "finals" ? "finals" : "leaderboard"
 );
+  const [publicFinalsBigScreen, setPublicFinalsBigScreen] = useState(false);
+  const isFinalsPublicMode = publicMode === "finals";
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
   const ranked = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle);
@@ -8056,7 +8111,7 @@ function PublicViewTab({
     : [{ id: "leaderboard", label: "Leaderboard" }];
 
   return (
-    <div className="space-y-3 md:space-y-4">
+    <div className={`${publicFinalsBigScreen && isFinalsPublicMode ? "bb-public-finals-big" : ""} space-y-3 md:space-y-4`}>
       <Card className="overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950 via-blue-800 to-slate-700 text-white shadow-lg border border-blue-300">
         <CardContent className="p-3 md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -8065,6 +8120,7 @@ function PublicViewTab({
               <h2 className="text-2xl font-bold md:text-4xl">{tournamentInfo.name}</h2>
               <p className="mt-1 text-sm text-blue-100 md:mt-2">{tournamentInfo.center} • {tournamentInfo.date} • {tournamentInfo.stage}</p>
             </div>
+<div className="flex flex-wrap gap-2">
 <div className="flex rounded-2xl bg-white/10 p-1 ring-1 ring-white/15">
   {publicTabs.map((tab) => (
     <button
@@ -8080,6 +8136,16 @@ function PublicViewTab({
       {tab.label}
     </button>
   ))}
+</div>
+{isFinalsPublicMode && (
+  <Button
+    variant="outline"
+    className="rounded-2xl border-white/40 bg-white/95 text-blue-950 hover:bg-white"
+    onClick={() => setPublicFinalsBigScreen((current) => !current)}
+  >
+    {publicFinalsBigScreen ? "Exit Big Screen" : "Big Screen"}
+  </Button>
+)}
 </div>
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 md:mt-5 md:gap-3">
