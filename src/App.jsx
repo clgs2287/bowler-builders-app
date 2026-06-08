@@ -5157,7 +5157,7 @@ const saveCurrentGame = () => {
           <>
             <th className="w-11 border border-black p-0.5 text-center">Scratch</th>
             <th className="w-10 border border-black p-0.5 text-center">Hdcp</th>
-            <th className="border border-black p-1 text-center">Total</th>
+            <th className="w-11 border border-black p-0.5 text-center">Total</th>
           </>
         ) : (
           <th className="border border-black p-1 text-center">Total</th>
@@ -5186,7 +5186,7 @@ const saveCurrentGame = () => {
           ))}
           <td className="border border-black p-1" />
           {useHandicapScores && <td className="w-10 border border-black p-0.5 text-center font-bold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
-          {useHandicapScores && <td className="border border-black p-1" />}
+          {useHandicapScores && <td className="w-11 border border-black p-0.5" />}
         </tr>
       ))}
     </tbody>
