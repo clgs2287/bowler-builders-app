@@ -3537,6 +3537,7 @@ function DashboardTab({
   onDeleteTournamentDraft = () => {},
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
+  const announcementFileInputRef = useRef(null);
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
   const applyScheduledTournament = (name) => {
     const scheduledItem = findScheduleItemByName(scheduleItems, name);
@@ -3798,6 +3799,7 @@ function DashboardTab({
   </Label>
 
   <input
+    ref={announcementFileInputRef}
     type="file"
     accept="image/*"
     multiple
@@ -3805,8 +3807,17 @@ function DashboardTab({
       uploadAnnouncementImages(event.target.files);
       event.target.value = "";
     }}
-    className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+    className="hidden"
   />
+
+  <Button
+    type="button"
+    variant="outline"
+    className="w-full rounded-xl border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
+    onClick={() => announcementFileInputRef.current?.click()}
+  >
+    Choose Images
+  </Button>
 
   <p className="text-xs font-semibold text-blue-700">
     Upload flyers, lane pattern graphics, or tournament announcement images.
