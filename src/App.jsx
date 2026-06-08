@@ -449,12 +449,57 @@ const numberInputStyles = String.raw`
   }
 
   .bb-public-bracket-col {
-    min-width: 13.5rem !important;
+    min-width: 11.25rem !important;
   }
 
   .bb-public-match-card {
     border-radius: 0.75rem !important;
-    padding: 0.4rem !important;
+    min-height: auto !important;
+    padding: 0.35rem !important;
+    font-size: 0.68rem !important;
+  }
+
+  .bb-public-match-card .text-xs,
+  .bb-public-match-card .text-\[11px\],
+  .bb-public-match-card .text-\[10px\],
+  .bb-public-match-card .text-\[9px\] {
+    font-size: 0.65rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .bb-public-match-card span {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+
+  .bb-public-side-table {
+    min-width: 22rem !important;
+  }
+
+  .bb-public-side-detail-table {
+    min-width: 24rem !important;
+  }
+
+  .bb-public-side-detail-table th,
+  .bb-public-side-detail-table td,
+  .bb-public-side-payout-table th,
+  .bb-public-side-payout-table td {
+    padding: 0.28rem !important;
+    font-size: 0.68rem !important;
+  }
+
+  .bb-public-side-highgame-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    min-width: 0 !important;
+  }
+
+  .bb-public-side-payout-table {
+    min-width: 22rem !important;
+  }
+
+  .bb-public-side-details-col {
+    display: none !important;
   }
 }
 
@@ -7729,8 +7774,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       <div
         className={
           winner?.name && winner.name !== "TIE"
-            ? "bb-public-match-card relative min-h-[230px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-            : "bb-public-match-card relative min-h-[230px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+            ? "bb-public-match-card relative min-h-[198px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+            : "bb-public-match-card relative min-h-[198px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
         }
       >
         {laneLabel && (
@@ -7788,8 +7833,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     <div
       className={
         winner?.name && winner.name !== "TIE"
-          ? "bb-public-match-card relative min-h-[92px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-          : "bb-public-match-card relative min-h-[92px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+          ? "bb-public-match-card relative min-h-[82px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+          : "bb-public-match-card relative min-h-[82px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
       }
     >
       {laneLabel && (
@@ -7822,9 +7867,9 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
 };
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0, matchNumberOffset = 0 }) => {
-    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 252 : matchScoring === "avgAdvantage" && !useHandicapScores ? 172 : 126;
-    const matchHeight = matchScoring === "bestOf3" ? 252 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 172 : 126;
-    const firstRoundGap = matchScoring === "bestOf3" ? 70 : 54;
+    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && !useHandicapScores ? 150 : 106;
+    const matchHeight = matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 150 : 106;
+    const firstRoundGap = matchScoring === "bestOf3" ? 48 : 38;
     const step = firstRoundMatchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
@@ -7950,10 +7995,10 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
   };
 
   const MatchplayRoundColumn = ({ round, roundIndex, matchNumberOffset }) => {
-    const matchHeight = round.type === "opening" ? 148 : 86;
-    const firstRoundHeight = 148;
-    const firstRoundGap = 42;
-    const step = firstRoundHeight + firstRoundGap + 18;
+    const matchHeight = round.type === "opening" ? 126 : 76;
+    const firstRoundHeight = 126;
+    const firstRoundGap = 30;
+    const step = firstRoundHeight + firstRoundGap + 12;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
       const feederStart = matchIndex * (2 ** roundIndex);
@@ -14718,13 +14763,13 @@ row.matches.push({
           <CardContent className="p-3 md:p-5">
             <h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Status</h2>
             <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-              <table className="w-full min-w-[560px] text-xs md:text-sm">
+              <table className="bb-public-side-table w-full min-w-[560px] text-xs md:text-sm">
                 <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Alive</th></tr></thead>
                 <tbody>
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-2 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full min-w-[520px] text-xs md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="max-w-[92px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
@@ -14737,7 +14782,7 @@ row.matches.push({
   )}
 </td>
 
-<td className="p-2 font-semibold">{match.opponent}</td>
+<td className="max-w-[80px] truncate p-2 font-semibold">{match.opponent}</td>
 
 <td className="p-2 text-right font-bold">
   {match.playerBreakdown ? (
@@ -14780,7 +14825,7 @@ row.matches.push({
                   </div>
                 </div>
                 <div className="overflow-x-auto rounded-2xl border border-blue-200 bg-white p-2">
-                  <div className="grid min-w-[900px] gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, section.results.length)}, minmax(210px, 1fr))` }}>
+                  <div className="bb-public-side-highgame-grid grid min-w-[900px] gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(1, section.results.length)}, minmax(210px, 1fr))` }}>
                     {section.results.map((game) => (
                       <div key={`${section.title}-${game.gameIndex}`} className="rounded-xl border border-blue-100 bg-blue-50 p-2">
                         <div className="mb-2 flex items-center justify-between gap-2">
@@ -14815,9 +14860,9 @@ row.matches.push({
           <CardContent className="p-3 md:p-5">
             <h2 className="mb-4 text-xl font-semibold text-blue-900">Side Action Payouts</h2>
             <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-              <table className="w-full min-w-[640px] text-xs md:text-sm">
-                <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Brackets</th><th className="p-2 text-right md:p-3">High Game</th><th className="p-2 text-right md:p-3">Total</th><th className="p-2 text-left md:p-3">Details</th></tr></thead>
-                <tbody>{payoutRows.map((row) => <tr key={`public-side-payout-${row.seed}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.name}</td><td className="p-2 text-right md:p-3">{currency(row.bracket)}</td><td className="p-2 text-right md:p-3">{currency(row.highGame)}</td><td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td><td className="p-2 text-xs text-blue-800 md:p-3">{row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" • ")}</td></tr>)}{payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={5}>No side-action payouts calculated yet.</td></tr>}</tbody>
+              <table className="bb-public-side-payout-table w-full min-w-[640px] text-xs md:text-sm">
+                <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Brackets</th><th className="p-2 text-right md:p-3">High Game</th><th className="p-2 text-right md:p-3">Total</th><th className="bb-public-side-details-col p-2 text-left md:p-3">Details</th></tr></thead>
+                <tbody>{payoutRows.map((row) => <tr key={`public-side-payout-${row.seed}`} className="border-t"><td className="max-w-[96px] truncate p-2 font-semibold md:p-3">{row.name}</td><td className="p-2 text-right md:p-3">{currency(row.bracket)}</td><td className="p-2 text-right md:p-3">{currency(row.highGame)}</td><td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td><td className="bb-public-side-details-col p-2 text-xs text-blue-800 md:p-3">{row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" • ")}</td></tr>)}{payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={5}>No side-action payouts calculated yet.</td></tr>}</tbody>
               </table>
             </div>
           </CardContent>
