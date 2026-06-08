@@ -476,6 +476,7 @@ function makeBowler(seed, gameCount = 4) {
     name: "",
     lane: "",
     games: Array.from({ length: gameCount }, () => 0),
+    average: "",
     handicapPerGame: 0,
     paid: false,
     phone: "",
@@ -708,6 +709,13 @@ function completedGamesCount(bowler) {
 
 function handicapPerGame(bowler) {
   return Number(bowler.registrationHandicap ?? bowler.handicap ?? bowler.handicapPerGame ?? 0);
+}
+
+function bowlerAverageDisplay(bowler) {
+  const average = bowler?.average ?? bowler?.archivedAverage ?? "";
+  if (average === undefined || average === null || average === "") return "";
+  const numericAverage = Number(average);
+  return Number.isFinite(numericAverage) ? numericAverage.toFixed(2).replace(/\.00$/, "") : String(average);
 }
 
 function handicapTotal(bowler) {
@@ -4165,8 +4173,8 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
   )?.average;
 
 const averageToUse =
-  archivedAverage ??
   bowler.average ??
+  archivedAverage ??
   bowler.archivedAverage;
 
 if (
@@ -4266,6 +4274,19 @@ const updateBowler = (index, field, value) => {
         ...b,
         [field]: field === "name" ? getCanonicalBowlerName(value, bowlerIdentities) || value : value,
       };
+
+      if (field === "average") {
+        if (value === undefined || value === null || value === "") {
+          updatedBowler.handicap = "";
+          updatedBowler.handicapPerGame = "";
+          updatedBowler.averageSource = "Average required manually";
+        } else {
+          const handicap = calculateRegistrationHandicap(value);
+          updatedBowler.handicap = handicap;
+          updatedBowler.handicapPerGame = handicap;
+          updatedBowler.averageSource = "Manual average";
+        }
+      }
 
       if (
         field === "name" &&
@@ -4520,7 +4541,7 @@ averageSource: archivedData?.eligible
   };
   const registrationSortLabel = (key) =>
     "";
-  const rosterCsv = [["#", "Name", "Hdcp", "Lane", "Paid", "Scratch Brackets", "Hdcp Brackets", "HG Scratch", "HG Hdcp", "Phone", "Email"], ...bowlers.map((b, i) => [b.registrationNumber || i + 1, b.name, handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", Number(bracketSets.early?.[b.seed] || 0), Number(bracketSets.handicapEarly?.[b.seed] || 0), b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
+  const rosterCsv = [["#", "Name", "Average", "Hdcp", "Lane", "Paid", "Scratch Brackets", "Hdcp Brackets", "HG Scratch", "HG Hdcp", "Phone", "Email"], ...bowlers.map((b, i) => [b.registrationNumber || i + 1, b.name, bowlerAverageDisplay(b), handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", Number(bracketSets.early?.[b.seed] || 0), Number(bracketSets.handicapEarly?.[b.seed] || 0), b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
 
   return (
     <AppCard>
@@ -4708,7 +4729,7 @@ averageSource: archivedData?.eligible
         </div>
 
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className="w-full min-w-[1120px]md:min-w-[1320px] md:text-xs lg:text-sm">
+          <table className="w-full min-w-[1180px] md:min-w-[1380px] md:text-xs lg:text-sm">
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className="p-2 text-left md:p-2.5">
@@ -4721,6 +4742,7 @@ averageSource: archivedData?.eligible
                     Name{registrationSortLabel("name")}
                   </button>
                 </th>
+                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Avg</th>}
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp</th>}
                 <th className="p-2 text-center md:p-2.5">
                   <button type="button" className="font-bold" onClick={() => toggleRegistrationSort("lane")}>
@@ -4743,6 +4765,9 @@ averageSource: archivedData?.eligible
               {sortedRegistrationRows.map(({ bowler: b, index }, displayIndex) => {
                 let registrationNavCol = 0;
                 const nameNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const averageNavProps = useHandicapScores
+                  ? registrationNavProps(displayIndex, registrationNavCol++)
+                  : null;
                 const handicapNavProps = useHandicapScores
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
@@ -4764,7 +4789,7 @@ averageSource: archivedData?.eligible
                 <React.Fragment key={`${b.seed}-${index}`}>
                 {teamSize > 1 && index % teamSize === 0 && (
                   <tr className="bb-team-header-row border-t bg-blue-950 text-white">
-                    <td colSpan={useHandicapScores ? 15 : 12} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
+                    <td colSpan={useHandicapScores ? 16 : 12} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           {getTeamLabel(index, teamSize)}
@@ -4788,6 +4813,18 @@ averageSource: archivedData?.eligible
                 <tr className="border-t">
                   <td className="p-2 font-semibold">{b.registrationNumber || index + 1}</td>
                   <td className="p-1.5"><LockedBowlerNameAutocomplete value={b.name} names={previousBowlerNames} onChange={(name) => updateBowler(index, "name", name)} onSelectBowler={(item) => applyPreviousBowler(index, item)} inputProps={nameNavProps} /></td>
+                  {useHandicapScores && (
+                    <td className="p-1.5 text-center">
+                      <LockedCellInput
+                        type="number"
+                        className="w-14 text-center md:w-16"
+                        value={b.average ?? ""}
+                        displayValue={bowlerAverageDisplay(b) || "—"}
+                        onChange={(value) => updateBowler(index, "average", value)}
+                        inputProps={averageNavProps}
+                      />
+                    </td>
+                  )}
                   {useHandicapScores && (
   <td className="p-1.5 text-center">
 <LockedCellNumberInput
@@ -4945,7 +4982,7 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
       if (laneDiff !== 0) return laneDiff;
       return a.index - b.index;
     });
-  const exportRows = [["Rank", "Name", ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", "Handicap Total"], ...sorted.map((b) => [b.rank, b.name, ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, b.handicap])];
+  const exportRows = [["Rank", "Name", ...(useHandicapScores ? ["Average", "Per Game Handicap"] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", ...(useHandicapScores ? ["Handicap", "Total"] : [])], ...sorted.map((b) => [b.rank, b.name, ...(useHandicapScores ? [bowlerAverageDisplay(b), handicapPerGame(b)] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, ...(useHandicapScores ? [Math.max(0, Number(b.handicap || 0) - Number(b.scratch || 0)), b.handicap] : [])])];
   const activeGameIsSaved = activeScoreGameIndex !== null && Boolean(savedScoreGames[activeScoreGameIndex]);
   const printableScoreEntryGroups = scoreEntryRows.reduce((groups, row) => {
     const lane = lanePositionParts(row.bowler.lane).lane || "Unassigned";
@@ -4990,6 +5027,9 @@ const saveCurrentGame = () => {
                 <th className="p-2 text-left md:p-2.5">Rank</th>
                 <th className="p-2 text-left md:p-2.5">Name</th>
                 {useHandicapScores && (
+                  <th className="p-2 text-center md:p-2.5">Avg</th>
+                )}
+                {useHandicapScores && (
                   <th className="p-2 text-center md:p-2.5">Hdcp</th>
 )}
                 {Array.from({ length: qualifyingGames }, (_, gi) => (
@@ -5005,7 +5045,8 @@ const saveCurrentGame = () => {
                   </th>
                 ))}
                 <th className="p-2 text-center md:p-2.5">Scratch</th>
-                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp Total</th>}
+                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp</th>}
+                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Total</th>}
               </tr>
             </thead>
             <tbody>
@@ -5016,7 +5057,7 @@ const saveCurrentGame = () => {
                   <React.Fragment key={`${b.seed}-${index}`}>
                   {teamSize > 1 && displayIndex % teamSize === 0 && (
                     <tr className="bb-team-header-row border-t bg-blue-950 text-white">
-                      <td colSpan={useHandicapScores ? qualifyingGames + 5 : qualifyingGames + 4} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
+                      <td colSpan={useHandicapScores ? qualifyingGames + 7 : qualifyingGames + 4} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
                         {getTeamLabel(displayIndex, teamSize)}
                         <span className="ml-2 font-semibold normal-case tracking-normal text-blue-100">
                           Score each bowler individually; leaderboard combines the team.
@@ -5027,6 +5068,11 @@ const saveCurrentGame = () => {
                   <tr className="border-t">
                     <td className="p-2 text-center font-semibold">{ranked?.rank ?? index + 1}</td>
                     <td className="p-2 font-semibold text-blue-950">{b.name || "—"}</td>
+                    {useHandicapScores && (
+                      <td className="p-2 text-center font-semibold text-blue-950">
+                        {bowlerAverageDisplay(b) || "—"}
+                      </td>
+                    )}
                     {useHandicapScores && (
   <td className="p-2 text-center font-semibold text-blue-950">
     {handicapPerGame(b)}
@@ -5059,6 +5105,7 @@ const saveCurrentGame = () => {
 </td>
                     ))}
                     <td className="p-2 text-center font-semibold">{ranked?.scratch ?? 0}</td>
+                    {useHandicapScores && <td className="p-2 text-center font-semibold">{Math.max(0, Number(ranked?.handicap || 0) - Number(ranked?.scratch || 0))}</td>}
                     {useHandicapScores && <td className="p-2 text-center font-semibold">{ranked?.handicap ?? 0}</td>}
                   </tr>
                   </React.Fragment>
@@ -5080,6 +5127,7 @@ const saveCurrentGame = () => {
         <th className="border border-black p-1 text-left">#</th>
         <th className="w-28 border border-black p-1 text-left">Bowler</th>
         <th className="border border-black p-1 text-center">Pos</th>
+        {useHandicapScores && <th className="border border-black p-1 text-center">Avg</th>}
         {useHandicapScores && <th className="border border-black p-1 text-center">Hdcp</th>}
         {Array.from({ length: qualifyingGames }, (_, gi) => (
           <th key={`print-score-game-${gi}`} className="border border-black p-1 text-center">
@@ -5111,6 +5159,11 @@ const saveCurrentGame = () => {
           <td className="border border-black p-1 font-bold">{displayIndex + 1}</td>
           <td className="w-28 border border-black p-1 font-bold">{b.name || ""}</td>
           <td className="border border-black p-1 text-center">{b.lane || ""}</td>
+          {useHandicapScores && (
+            <td className="border border-black p-1 text-center font-bold">
+              {bowlerAverageDisplay(b)}
+            </td>
+          )}
           {useHandicapScores && (
             <td className="border border-black p-1 text-center font-bold">
               {handicapPerGame(b)}
@@ -6760,7 +6813,7 @@ const printableSheets =
   };
 
   const scoreHeaders = Array.from({ length: gamesCount }, (_, i) => `G${i + 1}`);
-  const csvRows = [["Lane Pair", "Lane", "Team", "Position", "Bowler", "Handicap", ...scoreHeaders, "Series Total"], ...sortedPairs.flatMap((pair) => {
+  const csvRows = [["Lane Pair", "Lane", "Team", "Position", "Bowler", "Average", "Handicap", ...scoreHeaders, "Series Total"], ...sortedPairs.flatMap((pair) => {
     const pairBowlers = lanePairs[pair].sort((a, b) => Number(a.lane || 999) - Number(b.lane || 999));
     const byLane = pairBowlers.reduce((groups, bowler) => {
       const laneKey = bowler.laneNumber || bowler.lane || "";
@@ -6773,9 +6826,9 @@ const printableSheets =
         const rows = team.bowlers.map((bowler) => {
           const position = bowler ? `${lane}${getLaneLetter(lane, positionIndex)}` : "";
           positionIndex += 1;
-          return [pair, lane, team.label, position, bowler?.name || "", bowler && useHandicapScores ? handicapPerGame(bowler) : "", ...Array.from({ length: gamesCount }, () => ""), ""];
+          return [pair, lane, team.label, position, bowler?.name || "", bowler && useHandicapScores ? bowlerAverageDisplay(bowler) : "", bowler && useHandicapScores ? handicapPerGame(bowler) : "", ...Array.from({ length: gamesCount }, () => ""), ""];
         });
-        return isTeamEvent ? [...rows, [pair, lane, team.label, "", "Team Total", "", ...Array.from({ length: gamesCount }, () => ""), ""]] : rows;
+        return isTeamEvent ? [...rows, [pair, lane, team.label, "", "Team Total", "", "", ...Array.from({ length: gamesCount }, () => ""), ""]] : rows;
       });
     });
   })];
@@ -6826,7 +6879,8 @@ const byLane = lanes.reduce(
                   <thead>
                     <tr className="bg-slate-900 text-white print:bg-white print:text-black">
                       <th className="w-12 border border-slate-900 p-1 text-left print:border-black">Pos</th>
-                      <th className="w-56 border border-slate-900 p-1 text-left print:border-black">Bowler</th>
+                      <th className="w-52 border border-slate-900 p-1 text-left print:border-black">Bowler</th>
+                      {useHandicapScores && <th className="border border-slate-900 p-2 text-center print:border-black">Avg</th>}
                       {useHandicapScores && <th className="border border-slate-900 p-2 text-center print:border-black">Hdcp</th>}
 {scoreHeaders.map((header, gi) => (
   <th
@@ -6860,9 +6914,10 @@ Lane {lanePairForGame(
                         return (
                           <tr key={`${pair}-${lane}-${teamIndex}-${index}`}>
                             <td className="h-10 w-12 border border-slate-900 p-1 text-base font-black print:border-black">{position}</td>
-                            <td className="w-56 border border-slate-900 p-1 text-base font-bold print:border-black">
+                            <td className="w-52 border border-slate-900 p-1 text-base font-bold print:border-black">
                               {bowler?.name || ""}
                             </td>
+                            {useHandicapScores && <td className="border border-slate-900 p-2 text-center text-base font-bold print:border-black">{bowler?.name ? bowlerAverageDisplay(bowler) : ""}</td>}
                             {useHandicapScores && <td className="border border-slate-900 p-2 text-center text-lg font-bold print:border-black">{bowler?.name ? handicapPerGame(bowler) : ""}</td>}
                             {scoreHeaders.map((header) => <td key={`${pair}-${lane}-${teamIndex}-${index}-${header}`} className="border border-slate-900 p-2 print:border-black" />)}
                             <td className="border border-slate-900 p-2 print:border-black" />
@@ -6879,6 +6934,7 @@ Lane {lanePairForGame(
                           <td className="border border-slate-900 p-1 text-right text-sm uppercase print:border-black">
                             {team.label} Game Totals
                           </td>
+                          {useHandicapScores && <td className="border border-slate-900 p-2 text-center print:border-black" />}
                           {useHandicapScores && <td className="border border-slate-900 p-2 text-center print:border-black">Team</td>}
                           {scoreHeaders.map((header) => <td key={`${pair}-${lane}-${teamIndex}-total-${header}`} className="h-10 border border-slate-900 p-2 print:border-black" />)}
                           <td className="h-10 border border-slate-900 p-2 print:border-black" />
