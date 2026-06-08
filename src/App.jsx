@@ -7370,7 +7370,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
       direction: current.key === key && current.direction === "desc" ? "asc" : "desc",
     }));
   const sortLabel = (key) =>
-    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ?" : " ?") : "";
+    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ↑" : " ↓") : "";
   const displayedRows = [...filtered].sort((a, b) => {
     const direction = leaderboardSort.direction === "asc" ? 1 : -1;
     if (leaderboardSort.key === "scratch") {
