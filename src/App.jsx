@@ -7348,11 +7348,14 @@ function getBracketByeRanks(qualifiers) {
   return Array.from({ length: byes }, (_, index) => index + 1);
 }
 
-function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat, tournamentStyle = "singles" }) {
+function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat, tournamentStyle = "singles", allowBigScreen = false }) {
   const [search, setSearch] = useState("");
   const [bigScreen, setBigScreen] = useState(false);
   const [expandedSeed, setExpandedSeed] = useState(null);
   const [leaderboardSort, setLeaderboardSort] = useState({ key: "rank", direction: "asc" });
+  useEffect(() => {
+    if (!allowBigScreen && bigScreen) setBigScreen(false);
+  }, [allowBigScreen, bigScreen]);
   const teamSize = getTournamentTeamSize(tournamentStyle);
   const isTeamEvent = teamSize > 1;
   const entryLabel = isTeamEvent ? "Team" : "Bowler";
@@ -7432,7 +7435,9 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Input className={bigScreen ? "w-full text-lg md:w-80" : "w-full md:w-64"} placeholder={`Search ${entryLabel.toLowerCase()}...`} value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button variant="outline" className={`rounded-2xl ${bigButtonClass}`} onClick={() => setBigScreen((current) => !current)}>{bigScreen ? "Exit Big Screen" : "Big Screen"}</Button>
+            {allowBigScreen && (
+              <Button variant="outline" className={`rounded-2xl ${bigButtonClass}`} onClick={() => setBigScreen((current) => !current)}>{bigScreen ? "Exit Big Screen" : "Big Screen"}</Button>
+            )}
           </div>
         </div>
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
@@ -8112,6 +8117,7 @@ function PublicViewTab({
   eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE,
   scheduleItems = [],
   publicMode = "leaderboard",
+  allowLeaderboardBigScreen = false,
 }) {
  const [publicTab, setPublicTab] = useState(
   publicMode === "finals" ? "finals" : "leaderboard"
@@ -8177,7 +8183,7 @@ function PublicViewTab({
         </CardContent>
       </Card>
 
-      {publicTab === "leaderboard" && !publicIsEliminatorTournament && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} />}
+      {publicTab === "leaderboard" && !publicIsEliminatorTournament && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} allowBigScreen={allowLeaderboardBigScreen} />}
       {publicMode === "finals" && publicIsMatchplay && <PublicMatchplayBracketView bowlers={bowlers} matchplayState={matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={tournamentInfo} />}
       {publicMode === "finals" && publicIsEliminatorTournament && <EliminatorTournamentTab bowlers={bowlers} eliminatorTournamentState={eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={tournamentInfo} readOnly />}
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} />}
@@ -16264,7 +16270,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   matchplayState={matchplayState}
 />
 )}
-        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} /></AppErrorBoundary>}
+        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} allowLeaderboardBigScreen={isAdminMode} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} /></AppErrorBoundary>}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
