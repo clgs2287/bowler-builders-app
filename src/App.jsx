@@ -7327,7 +7327,6 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   const rowClass = (b) => {
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return "border-t bb-highlight-bye";
     if (tournamentFormat === "eliminator" && b.rank <= 4) return "border-t bb-highlight-top";
-    if (b.rank === bubbleRank) return "border-t bb-highlight-bubble";
     if (b.rank <= displayCashers) return "border-t bb-highlight-cash";
     return "border-t bg-white";
   };
@@ -7335,7 +7334,6 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   const stickyBgClass = (b) => {
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return "bg-purple-100";
     if (tournamentFormat === "eliminator" && b.rank <= 4) return "bg-yellow-50";
-    if (b.rank === bubbleRank) return "bg-amber-100";
     if (b.rank <= displayCashers) return "bg-blue-50";
     return "bg-white";
   };
@@ -7348,7 +7346,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     if (b.rank <= displayCashers) return <span className={`${base} bg-green-100 text-green-800`}>CASH</span>;
     if (!cutScore || score <= 0) return <span className="text-blue-400">—</span>;
     const pinsBack = Math.max(0, cutScore - score);
-    return <span className="whitespace-nowrap text-[10px] font-bold text-red-600 md:text-xs">{pinsBack} back</span>;
+    return <span className="whitespace-nowrap text-sm font-black text-red-600 md:text-base">{pinsBack}</span>;
   };
 
   return (
@@ -7391,7 +7389,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                   </th>
                 )}
                 <th className="p-2 text-right md:p-3">+/-</th>
-                <th className="p-2 text-right md:p-3">Status</th>
+                <th className="p-2 text-right md:p-3">Status / From Cut</th>
               </tr>
             </thead>
             <tbody>
