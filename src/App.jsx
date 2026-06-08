@@ -7337,16 +7337,24 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     if (b.rank <= displayCashers) return "bg-blue-50";
     return "bg-white";
   };
+  const bigHeaderClass = bigScreen ? "px-5 py-4 text-2xl" : "";
+  const bigCellClass = bigScreen ? "px-5 py-4 text-2xl" : "";
+  const bigRankClass = bigScreen ? "w-20 px-5 py-4 text-3xl" : "";
+  const bigNameClass = bigScreen ? "left-20 min-w-[320px] max-w-none px-5 py-4 text-3xl" : "";
+  const normalNameLeftClass = bigScreen ? "left-20" : "left-10";
+  const bigButtonClass = bigScreen ? "text-lg px-5 py-3" : "";
 
   const statusBadge = (b) => {
-    const base = "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold md:px-3 md:py-1 md:text-xs";
+    const base = bigScreen
+      ? "inline-flex whitespace-nowrap rounded-full px-5 py-2 text-xl font-bold"
+      : "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold md:px-3 md:py-1 md:text-xs";
     const score = useHandicapScores ? b.handicap : b.scratch;
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return <span className={`${base} bg-purple-200 text-purple-900`}>BYE</span>;
     if (tournamentFormat === "eliminator" && b.rank <= 4) return <span className={`${base} bg-yellow-200 text-yellow-900`}>TOP 4</span>;
     if (b.rank <= displayCashers) return <span className={`${base} bg-green-100 text-green-800`}>CASH</span>;
     if (!cutScore || score <= 0) return <span className="text-blue-400">—</span>;
     const pinsBack = Math.max(0, cutScore - score);
-    return <span className="whitespace-nowrap text-sm font-black text-red-600 md:text-base">{pinsBack}</span>;
+    return <span className={bigScreen ? "whitespace-nowrap text-3xl font-black text-red-600" : "whitespace-nowrap text-sm font-black text-red-600 md:text-base"}>{pinsBack}</span>;
   };
 
   return (
@@ -7357,39 +7365,39 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
             <h2 className={bigScreen ? "text-4xl font-black text-blue-950" : "text-xl font-semibold text-blue-900"}>Leaderboard</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Input className="w-full md:w-64" placeholder={`Search ${entryLabel.toLowerCase()}...`} value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button variant="outline" className="rounded-2xl" onClick={() => setBigScreen((current) => !current)}>{bigScreen ? "Exit Big Screen" : "Big Screen"}</Button>
+            <Input className={bigScreen ? "w-full text-lg md:w-80" : "w-full md:w-64"} placeholder={`Search ${entryLabel.toLowerCase()}...`} value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Button variant="outline" className={`rounded-2xl ${bigButtonClass}`} onClick={() => setBigScreen((current) => !current)}>{bigScreen ? "Exit Big Screen" : "Big Screen"}</Button>
           </div>
         </div>
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className={bigScreen ? "w-full min-w-[800px] text-2xl" : "w-full min-w-[560px] text-xs md:min-w-0 md:text-sm"}>
+          <table className={bigScreen ? "w-full min-w-[1120px] text-2xl" : "w-full min-w-[560px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
-                <th className="sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3">
+                <th className={`sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3 ${bigHeaderClass} ${bigScreen ? "w-20" : ""}`}>
                   <button type="button" className="font-bold" onClick={() => sortLeaderboard("rank")}>
                     #{sortLabel("rank")}
                   </button>
                 </th>
-                <th className="sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3">{entryLabel}</th>
-                <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">
+                <th className={`sticky z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3 ${normalNameLeftClass} ${bigHeaderClass} ${bigScreen ? "min-w-[320px]" : ""}`}>{entryLabel}</th>
+                <th className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigHeaderClass}`}>
                   <button type="button" className="font-bold" onClick={() => sortLeaderboard("scratch")}>
                     Scratch{sortLabel("scratch")}
                   </button>
                 </th>
                 {useHandicapScores && (
-                  <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">
+                  <th className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigHeaderClass}`}>
                     Hdcp
                   </th>
                 )}
                 {useHandicapScores && (
-                  <th className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">
+                  <th className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigHeaderClass}`}>
                     <button type="button" className="font-bold" onClick={() => sortLeaderboard("handicap")}>
                       Total{sortLabel("handicap")}
                     </button>
                   </th>
                 )}
-                <th className="p-2 text-right md:p-3">+/-</th>
-                <th className="p-2 text-right md:p-3">Status / From Cut</th>
+                <th className={`p-2 text-right md:p-3 ${bigHeaderClass}`}>+/-</th>
+                <th className={`p-2 text-right md:p-3 ${bigHeaderClass}`}>Status / From Cut</th>
               </tr>
             </thead>
             <tbody>
@@ -7411,22 +7419,22 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                       </tr>
                     )}
                     <tr className={rowClass(b)}>
-                      <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${bg}`}>{b.rank}</td>
-                      <td className={`sticky left-10 z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm ${bg}`}>
+                      <td className={`sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3 ${bg} ${bigRankClass}`}>{b.rank}</td>
+                      <td className={`sticky z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm ${bg} ${normalNameLeftClass} ${bigNameClass}`}>
                         <button
                           type="button"
-                          className="block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"
+                          className={bigScreen ? "block max-w-none truncate text-left underline-offset-2 hover:underline" : "block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"}
                           onClick={() => setExpandedSeed((current) => current === b.seed ? null : b.seed)}
                           title="Click to show game scores"
                         >
                           {b.name}
                         </button>
                       </td>
-                      <td className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">{b.scratch}</td>
-                      {useHandicapScores && <td className="w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm">{earnedHandicap}</td>}
-                      {useHandicapScores && <td className="w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm">{b.handicap}</td>}
-                      <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
-                      <td className="p-2 text-right md:p-3">{statusBadge(b)}</td>
+                      <td className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigCellClass}`}>{b.scratch}</td>
+                      {useHandicapScores && <td className={`w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm ${bigCellClass}`}>{earnedHandicap}</td>}
+                      {useHandicapScores && <td className={`w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm ${bigCellClass}`}>{b.handicap}</td>}
+                      <td className={`p-2 text-right text-sm font-black md:p-3 md:text-base ${bigCellClass} ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
+                      <td className={`p-2 text-right md:p-3 ${bigCellClass}`}>{statusBadge(b)}</td>
                     </tr>
                     {expandedSeed === b.seed && (
                       <tr className="border-t bg-white">
