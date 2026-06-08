@@ -4153,6 +4153,7 @@ function RosterSizeInput({ entries, onSave }) {
 
 function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, bowlerIdentities = [], setReservationState = null }) {
   const [registrationSort, setRegistrationSort] = useState({ key: "entry", direction: "asc" });
+  const [showRegistrationEmails, setShowRegistrationEmails] = useState(true);
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
   const teamSize = styleConfig.teamSize;
@@ -4560,6 +4561,10 @@ averageSource: archivedData?.eligible
               <Label>Handicap</Label>
               <Switch compact checked={useHandicapScores} onCheckedChange={setUseHandicapScores} />
             </div>
+            <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+              <Label>Email</Label>
+              <Switch compact checked={showRegistrationEmails} onCheckedChange={setShowRegistrationEmails} />
+            </div>
             <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("registration-roster.csv", rosterCsv)}>Export Roster CSV</Button>
           </div>
         </div>
@@ -4761,7 +4766,7 @@ averageSource: archivedData?.eligible
                 <th className="p-2 text-center md:p-2.5">Scratch HG</th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp HG</th>}
                 <th className="p-2 text-left md:p-2.5">Phone</th>
-                <th className="p-2 text-left md:p-2.5">Email</th>
+                {showRegistrationEmails && <th className="p-2 text-left md:p-2.5">Email</th>}
                 <th className="p-2 text-right md:p-2.5">Delete</th>
               </tr>
             </thead>
@@ -4787,13 +4792,13 @@ averageSource: archivedData?.eligible
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
                 const phoneNavProps = registrationNavProps(displayIndex, registrationNavCol++);
-                const emailNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const emailNavProps = showRegistrationEmails ? registrationNavProps(displayIndex, registrationNavCol++) : {};
 
                 return (
                 <React.Fragment key={`${b.seed}-${index}`}>
                 {teamSize > 1 && index % teamSize === 0 && (
                   <tr className="bb-team-header-row border-t bg-blue-950 text-white">
-                    <td colSpan={useHandicapScores ? 16 : 12} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
+                    <td colSpan={(useHandicapScores ? 16 : 12) - (showRegistrationEmails ? 0 : 1)} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           {getTeamLabel(index, teamSize)}
@@ -4861,7 +4866,7 @@ averageSource: archivedData?.eligible
                   <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.scratchHighGame)} onCheckedChange={(v) => updateSidePot(index, "scratchHighGame", v)} /></td>
                   {useHandicapScores && <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.handicapHighGame)} onCheckedChange={(v) => updateSidePot(index, "handicapHighGame", v)} /></td>}
                   <td className="p-1.5"><LockedCellInput className="min-w-[85px] md:min-w-[100px]" value={b.phone || ""} onChange={(value) => updateBowler(index, "phone", formatPhoneNumber(value))} inputProps={phoneNavProps} /></td>
-                  <td className="p-1.5"><LockedCellInput className="min-w-[100px] md:min-w-[130px]" value={b.email || ""} onChange={(value) => updateBowler(index, "email", value)} inputProps={emailNavProps} /></td>
+                  {showRegistrationEmails && <td className="p-1.5"><LockedCellInput className="min-w-[100px] md:min-w-[130px]" value={b.email || ""} onChange={(value) => updateBowler(index, "email", value)} inputProps={emailNavProps} /></td>}
                   <td className="p-2 text-right">
   <div className="flex justify-end pr-2">
   <Button
