@@ -722,6 +722,10 @@ function handicapTotal(bowler) {
   return scratchTotal(bowler) + handicapPerGame(bowler) * completedGamesCount(bowler);
 }
 
+function qualifyingHandicapTotal(bowler, qualifyingGames = 4) {
+  return handicapPerGame(bowler) * Math.max(1, Number(qualifyingGames || 4));
+}
+
 function getTournamentStyleConfig(style) {
   return TOURNAMENT_STYLES[style] || TOURNAMENT_STYLES.singles;
 }
@@ -4982,7 +4986,7 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
       if (laneDiff !== 0) return laneDiff;
       return a.index - b.index;
     });
-  const exportRows = [["Rank", "Name", ...(useHandicapScores ? ["Average", "Per Game Handicap"] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", ...(useHandicapScores ? ["Handicap", "Total"] : [])], ...sorted.map((b) => [b.rank, b.name, ...(useHandicapScores ? [bowlerAverageDisplay(b), handicapPerGame(b)] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, ...(useHandicapScores ? [Math.max(0, Number(b.handicap || 0) - Number(b.scratch || 0)), b.handicap] : [])])];
+  const exportRows = [["Rank", "Name", ...(useHandicapScores ? ["Average", "Qualifying Handicap"] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", ...(useHandicapScores ? ["Handicap", "Total"] : [])], ...sorted.map((b) => [b.rank, b.name, ...(useHandicapScores ? [bowlerAverageDisplay(b), qualifyingHandicapTotal(b, qualifyingGames)] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, ...(useHandicapScores ? [qualifyingHandicapTotal(b, qualifyingGames), b.handicap] : [])])];
   const activeGameIsSaved = activeScoreGameIndex !== null && Boolean(savedScoreGames[activeScoreGameIndex]);
   const printableScoreEntryGroups = scoreEntryRows.reduce((groups, row) => {
     const lane = lanePositionParts(row.bowler.lane).lane || "Unassigned";
@@ -5075,7 +5079,7 @@ const saveCurrentGame = () => {
                     )}
                     {useHandicapScores && (
   <td className="p-2 text-center font-semibold text-blue-950">
-    {handicapPerGame(b)}
+    {qualifyingHandicapTotal(b, qualifyingGames)}
   </td>
 )}
                     {Array.from({ length: qualifyingGames }, (_, gi) => (
@@ -5105,7 +5109,7 @@ const saveCurrentGame = () => {
 </td>
                     ))}
                     <td className="p-2 text-center font-semibold">{ranked?.scratch ?? 0}</td>
-                    {useHandicapScores && <td className="p-2 text-center font-semibold">{Math.max(0, Number(ranked?.handicap || 0) - Number(ranked?.scratch || 0))}</td>}
+                    {useHandicapScores && <td className="p-2 text-center font-semibold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
                     {useHandicapScores && <td className="p-2 text-center font-semibold">{ranked?.handicap ?? 0}</td>}
                   </tr>
                   </React.Fragment>
@@ -5149,7 +5153,15 @@ const saveCurrentGame = () => {
             </div>
           </th>
         ))}
-        <th className="border border-black p-1 text-center">Total</th>
+        {useHandicapScores ? (
+          <>
+            <th className="border border-black p-1 text-center">Scratch</th>
+            <th className="border border-black p-1 text-center">Hdcp</th>
+            <th className="border border-black p-1 text-center">Total</th>
+          </>
+        ) : (
+          <th className="border border-black p-1 text-center">Total</th>
+        )}
       </tr>
     </thead>
 
@@ -5166,13 +5178,15 @@ const saveCurrentGame = () => {
           )}
           {useHandicapScores && (
             <td className="border border-black p-1 text-center font-bold">
-              {handicapPerGame(b)}
+              {qualifyingHandicapTotal(b, qualifyingGames)}
             </td>
           )}
           {Array.from({ length: qualifyingGames }, (_, gi) => (
             <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-1" />
           ))}
           <td className="border border-black p-1" />
+          {useHandicapScores && <td className="border border-black p-1 text-center font-bold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
+          {useHandicapScores && <td className="border border-black p-1" />}
         </tr>
       ))}
     </tbody>
