@@ -374,6 +374,10 @@ const numberInputStyles = String.raw`
 }
 
 @media (max-width: 640px) {
+  .bb-stage {
+    overflow-x: hidden;
+  }
+
   .bb-mobile-table {
     font-size: 10.5px !important;
     line-height: 1.2 !important;
@@ -398,6 +402,59 @@ const numberInputStyles = String.raw`
 
   .bb-mobile-hide {
     display: none !important;
+  }
+
+  .bb-public-leaderboard-table {
+    min-width: 25rem !important;
+  }
+
+  .bb-public-leaderboard-table th,
+  .bb-public-leaderboard-table td {
+    padding: 0.3rem !important;
+  }
+
+  .bb-public-rank-col {
+    left: 0 !important;
+    width: 2.25rem !important;
+    min-width: 2.25rem !important;
+  }
+
+  .bb-public-name-col {
+    left: 2.25rem !important;
+    min-width: 5.75rem !important;
+    max-width: 5.75rem !important;
+    width: 5.75rem !important;
+  }
+
+  .bb-public-name-text {
+    max-width: 5rem !important;
+  }
+
+  .bb-public-score-col {
+    width: 2.65rem !important;
+    min-width: 2.65rem !important;
+    font-size: 0.68rem !important;
+  }
+
+  .bb-public-status-col {
+    min-width: 3.1rem !important;
+  }
+
+  .bb-public-finals-wrap {
+    padding: 0.5rem !important;
+  }
+
+  .bb-public-finals-track {
+    gap: 0.75rem !important;
+  }
+
+  .bb-public-bracket-col {
+    min-width: 13.5rem !important;
+  }
+
+  .bb-public-match-card {
+    border-radius: 0.75rem !important;
+    padding: 0.4rem !important;
   }
 }
 
@@ -7402,15 +7459,15 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     if (b.rank <= displayCashers) return "bg-blue-50";
     return "bg-white";
   };
-  const rankHeaderClass = bigScreen ? "sticky left-0 z-20 w-20 bg-blue-800 px-5 py-4 text-left text-3xl" : "sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3";
-  const nameHeaderClass = bigScreen ? "sticky left-20 z-20 min-w-[360px] bg-blue-800 px-5 py-4 text-left text-3xl" : "sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3";
-  const scoreHeaderClass = bigScreen ? "px-5 py-4 text-right text-3xl" : "w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm";
-  const rankCellClass = bigScreen ? "sticky left-0 z-10 w-20 px-5 py-4 text-4xl font-black" : "sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3";
-  const nameCellClass = bigScreen ? "sticky left-20 z-10 min-w-[360px] max-w-none px-5 py-4 text-4xl font-semibold" : "sticky left-10 z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm";
-  const scoreCellClass = bigScreen ? "px-5 py-4 text-right text-4xl" : "w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm";
-  const totalCellClass = bigScreen ? "px-5 py-4 text-right text-4xl font-semibold" : "w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm";
+  const rankHeaderClass = bigScreen ? "sticky left-0 z-20 w-20 bg-blue-800 px-5 py-4 text-left text-3xl" : "bb-public-rank-col sticky left-0 z-20 w-10 bg-blue-800 p-2 text-left md:w-12 md:p-3";
+  const nameHeaderClass = bigScreen ? "sticky left-20 z-20 min-w-[360px] bg-blue-800 px-5 py-4 text-left text-3xl" : "bb-public-name-col sticky left-10 z-20 min-w-[100px] bg-blue-800 p-2 text-left md:min-w-[220px] md:p-3";
+  const scoreHeaderClass = bigScreen ? "px-5 py-4 text-right text-3xl" : "bb-public-score-col w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm";
+  const rankCellClass = bigScreen ? "sticky left-0 z-10 w-20 px-5 py-4 text-4xl font-black" : "bb-public-rank-col sticky left-0 z-10 w-10 p-2 text-sm font-black md:w-12 md:p-3";
+  const nameCellClass = bigScreen ? "sticky left-20 z-10 min-w-[360px] max-w-none px-5 py-4 text-4xl font-semibold" : "bb-public-name-col sticky left-10 z-10 max-w-[100px] p-2 text-[10px] font-semibold md:max-w-none md:p-3 md:text-sm";
+  const scoreCellClass = bigScreen ? "px-5 py-4 text-right text-4xl" : "bb-public-score-col w-14 p-2 text-right text-[10px] md:w-auto md:p-3 md:text-sm";
+  const totalCellClass = bigScreen ? "px-5 py-4 text-right text-4xl font-semibold" : "bb-public-score-col w-14 p-2 text-right text-[10px] font-semibold md:w-auto md:p-3 md:text-sm";
   const diffCellClass = bigScreen ? "px-5 py-4 text-right text-4xl font-black" : "p-2 text-right text-sm font-black md:p-3 md:text-base";
-  const statusCellClass = bigScreen ? "px-5 py-4 text-right" : "p-2 text-right md:p-3";
+  const statusCellClass = bigScreen ? "px-5 py-4 text-right" : "bb-public-status-col p-2 text-right md:p-3";
   const bigButtonClass = bigScreen ? "text-lg px-5 py-3" : "";
 
   const statusBadge = (b) => {
@@ -7441,7 +7498,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
           </div>
         </div>
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className={bigScreen ? "w-full min-w-[1120px] text-2xl" : "w-full min-w-[560px] text-xs md:min-w-0 md:text-sm"}>
+          <table className={bigScreen ? "w-full min-w-[1120px] text-2xl" : "bb-public-leaderboard-table w-full min-w-[560px] text-xs md:min-w-0 md:text-sm"}>
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className={rankHeaderClass}>
@@ -7494,7 +7551,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                       <td className={`${nameCellClass} ${bg}`}>
                         <button
                           type="button"
-                          className={bigScreen ? "block max-w-none truncate text-left underline-offset-2 hover:underline" : "block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"}
+                          className={bigScreen ? "block max-w-none truncate text-left underline-offset-2 hover:underline" : "bb-public-name-text block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"}
                           onClick={() => setExpandedSeed((current) => current === b.seed ? null : b.seed)}
                           title="Click to show game scores"
                         >
@@ -7672,8 +7729,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       <div
         className={
           winner?.name && winner.name !== "TIE"
-            ? "relative min-h-[230px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-            : "relative min-h-[230px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+            ? "bb-public-match-card relative min-h-[230px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+            : "bb-public-match-card relative min-h-[230px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
         }
       >
         {laneLabel && (
@@ -7731,8 +7788,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     <div
       className={
         winner?.name && winner.name !== "TIE"
-          ? "relative min-h-[92px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
-          : "relative min-h-[92px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
+          ? "bb-public-match-card relative min-h-[92px] rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm"
+          : "bb-public-match-card relative min-h-[92px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
       }
     >
       {laneLabel && (
@@ -7779,7 +7836,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     const columnHeight =
       Math.max(1, bracketRounds[0]?.matches?.length || matches.length) * step;
     return (
-      <div className="min-w-[280px] flex-1">
+      <div className="bb-public-bracket-col min-w-[280px] flex-1">
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
         <div
   className="relative pb-8"
@@ -7805,8 +7862,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
           </div>
           <div className="rounded-2xl bg-white px-4 py-2 text-sm shadow-sm border border-blue-100">Winner: <span className="font-bold">{champion?.name || "TBD"}</span></div>
         </div>
-        <div className="overflow-x-auto rounded-2xl border bg-blue-50 p-4">
-          <div className="flex min-w-max items-start gap-8">
+        <div className="bb-public-finals-wrap overflow-x-auto rounded-2xl border bg-blue-50 p-4">
+          <div className="bb-public-finals-track flex min-w-max items-start gap-8">
             {bracketRounds.map((round, roundIndex) => {
               const matchNumberOffset = bracketRounds
                 .slice(0, roundIndex)
@@ -7851,7 +7908,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
     const renderGames = (games = []) => games.map((score) => Number(score || 0) || "-").join(" / ");
 
     return (
-      <div className={match.winner ? "rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm" : "rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+      <div className={match.winner ? "bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm" : "bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">Match {matchNumber}</span>
           <span className="text-[10px] font-black uppercase tracking-wide text-blue-700">{match.title}</span>
@@ -7880,7 +7937,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
     const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
 
     return (
-      <div className={match.winner ? "rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm" : "rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+      <div className={match.winner ? "bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm" : "bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
         <div className="mb-2 rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">Match {matchNumber}</div>
         <div className="grid grid-cols-[1fr_auto] gap-1 text-xs">
           <span className={playerClass(leftWon)}>{playerName(match.left)}</span>
@@ -7909,7 +7966,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
       : Math.max(1, openingMatches.length) * step;
 
     return (
-      <div className="min-w-[280px] flex-1">
+      <div className="bb-public-bracket-col min-w-[280px] flex-1">
         <h3 className="mb-3 text-center font-semibold text-blue-900">{round.title}</h3>
         <div className="relative pb-8" style={{ height: columnHeight + 32 }}>
           {round.matches.map((match, matchIndex) => (
@@ -7937,8 +7994,8 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
           </div>
         </div>
         {rounds.length ? (
-          <div className="overflow-x-auto rounded-2xl border bg-blue-50 p-4">
-            <div className="flex min-w-max items-start gap-8">
+          <div className="bb-public-finals-wrap overflow-x-auto rounded-2xl border bg-blue-50 p-4">
+            <div className="bb-public-finals-track flex min-w-max items-start gap-8">
               {rounds.map((round, roundIndex) => {
                 const matchNumberOffset = rounds.slice(0, roundIndex).reduce((sum, previousRound) => sum + previousRound.matches.length, 0);
                 return <MatchplayRoundColumn key={`public-matchplay-round-${round.title}`} round={round} roundIndex={roundIndex} matchNumberOffset={matchNumberOffset} />;
@@ -8065,11 +8122,11 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
           <h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 1</h2>
           <p className="mb-4 text-sm text-blue-700">Average + Game 1. Top half advances.</p>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm">
+            <table className="bb-mobile-table bb-mobile-medium w-full min-w-[560px] text-xs md:min-w-[820px] md:text-sm">
               <thead className="bg-blue-800 text-white">
                 <tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr>
               </thead>
-              <tbody>{game1Ranked.map((row) => <tr key={`public-elim-g1-${row.seed}`} className={row.rank <= game1AdvancersCount ? "border-t bg-blue-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-3 text-center font-semibold">{finalsScoreDisplay(row, game1Scores[row.seed], useHandicapScores)}</td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody>
+              <tbody>{game1Ranked.map((row) => <tr key={`public-elim-g1-${row.seed}`} className={row.rank <= game1AdvancersCount ? "border-t bg-blue-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="max-w-[120px] truncate p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-3 text-center font-semibold">{finalsScoreDisplay(row, game1Scores[row.seed], useHandicapScores)}</td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody>
             </table>
           </div>
         </CardContent>
@@ -8080,11 +8137,11 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
           <h2 className="mb-3 text-xl font-semibold text-blue-900">Eliminator Game 2</h2>
           <p className="mb-4 text-sm text-blue-700">Game 1 total + Game 2. Top 4 advance to stepladder.</p>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm">
+            <table className="bb-mobile-table bb-mobile-medium w-full min-w-[560px] text-xs md:min-w-[780px] md:text-sm">
               <thead className="bg-blue-800 text-white">
                 <tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr>
               </thead>
-              <tbody>{game2Ranked.map((row) => <tr key={`public-elim-g2-${row.seed}`} className={row.rank <= 4 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-center font-semibold">{finalsScoreDisplay(row, game2Scores[row.seed], useHandicapScores)}</td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody>
+              <tbody>{game2Ranked.map((row) => <tr key={`public-elim-g2-${row.seed}`} className={row.rank <= 4 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-semibold">{row.rank}</td><td className="max-w-[120px] truncate p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "-"}</td><td className="p-3 text-center font-semibold">{finalsScoreDisplay(row, game2Scores[row.seed], useHandicapScores)}</td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "-"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody>
             </table>
           </div>
         </CardContent>
