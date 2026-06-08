@@ -4154,6 +4154,7 @@ function RosterSizeInput({ entries, onSave }) {
 function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, bowlerIdentities = [], setReservationState = null }) {
   const [registrationSort, setRegistrationSort] = useState({ key: "entry", direction: "asc" });
   const [showRegistrationEmails, setShowRegistrationEmails] = useState(true);
+  const [showRegistrationPhones, setShowRegistrationPhones] = useState(true);
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
   const teamSize = styleConfig.teamSize;
@@ -4546,6 +4547,29 @@ averageSource: archivedData?.eligible
   };
   const registrationSortLabel = (key) =>
     "";
+  const registrationColumnCount =
+    1 +
+    1 +
+    (useHandicapScores ? 2 : 0) +
+    1 +
+    1 +
+    1 +
+    (useHandicapScores ? 1 : 0) +
+    (enabledBracketSets.middle ? 1 : 0) +
+    (enabledBracketSets.late ? 1 : 0) +
+    1 +
+    (useHandicapScores ? 1 : 0) +
+    (showRegistrationPhones ? 1 : 0) +
+    (showRegistrationEmails ? 1 : 0) +
+    1;
+  const contactColumnCount =
+    (showRegistrationPhones ? 1 : 0) + (showRegistrationEmails ? 1 : 0);
+  const registrationTableMinWidth =
+    contactColumnCount === 2
+      ? "min-w-[1180px] md:min-w-[1380px]"
+      : contactColumnCount === 1
+        ? "min-w-[1060px] md:min-w-[1240px]"
+        : "min-w-[940px] md:min-w-[1100px]";
   const rosterCsv = [["#", "Name", "Average", "Hdcp", "Lane", "Paid", "Scratch Brackets", "Hdcp Brackets", "HG Scratch", "HG Hdcp", "Phone", "Email"], ...bowlers.map((b, i) => [b.registrationNumber || i + 1, b.name, bowlerAverageDisplay(b), handicapPerGame(b), b.lane || "", b.paid ? "Yes" : "No", Number(bracketSets.early?.[b.seed] || 0), Number(bracketSets.handicapEarly?.[b.seed] || 0), b.sidePots?.scratchHighGame ? "Yes" : "No", b.sidePots?.handicapHighGame ? "Yes" : "No", b.phone || "", b.email || ""] )];
 
   return (
@@ -4564,6 +4588,10 @@ averageSource: archivedData?.eligible
             <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
               <Label>Email</Label>
               <Switch compact checked={showRegistrationEmails} onCheckedChange={setShowRegistrationEmails} />
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+              <Label>Phone</Label>
+              <Switch compact checked={showRegistrationPhones} onCheckedChange={setShowRegistrationPhones} />
             </div>
             <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("registration-roster.csv", rosterCsv)}>Export Roster CSV</Button>
           </div>
@@ -4738,7 +4766,7 @@ averageSource: archivedData?.eligible
         </div>
 
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className="w-full min-w-[1180px] md:min-w-[1380px] md:text-xs lg:text-sm">
+          <table className={`w-full ${registrationTableMinWidth} md:text-xs lg:text-sm`}>
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className="p-2 text-left md:p-2.5">
@@ -4765,9 +4793,9 @@ averageSource: archivedData?.eligible
                 {enabledBracketSets.late && <th className="p-2 text-center md:p-2.5">4-6</th>}
                 <th className="p-2 text-center md:p-2.5">Scratch HG</th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp HG</th>}
-                <th className="p-2 text-left md:p-2.5">Phone</th>
+                {showRegistrationPhones && <th className="p-2 text-left md:p-2.5">Phone</th>}
                 {showRegistrationEmails && <th className="p-2 text-left md:p-2.5">Email</th>}
-                <th className="p-2 text-right md:p-2.5">Delete</th>
+                <th className="sticky right-0 z-10 border-l border-blue-700 bg-blue-800 p-2 text-right md:p-2.5">Delete</th>
               </tr>
             </thead>
             <tbody>
@@ -4791,14 +4819,14 @@ averageSource: archivedData?.eligible
                 const lateBracketNavProps = enabledBracketSets.late
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
-                const phoneNavProps = registrationNavProps(displayIndex, registrationNavCol++);
+                const phoneNavProps = showRegistrationPhones ? registrationNavProps(displayIndex, registrationNavCol++) : {};
                 const emailNavProps = showRegistrationEmails ? registrationNavProps(displayIndex, registrationNavCol++) : {};
 
                 return (
                 <React.Fragment key={`${b.seed}-${index}`}>
                 {teamSize > 1 && index % teamSize === 0 && (
                   <tr className="bb-team-header-row border-t bg-blue-950 text-white">
-                    <td colSpan={(useHandicapScores ? 16 : 12) - (showRegistrationEmails ? 0 : 1)} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
+                    <td colSpan={registrationColumnCount} className="px-3 py-2 text-xs font-black uppercase tracking-wide">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           {getTeamLabel(index, teamSize)}
@@ -4865,9 +4893,9 @@ averageSource: archivedData?.eligible
                   {enabledBracketSets.late && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.late?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "late", value)} width="w-10 md:w-12" inputProps={lateBracketNavProps} /></td>}
                   <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.scratchHighGame)} onCheckedChange={(v) => updateSidePot(index, "scratchHighGame", v)} /></td>
                   {useHandicapScores && <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.handicapHighGame)} onCheckedChange={(v) => updateSidePot(index, "handicapHighGame", v)} /></td>}
-                  <td className="p-1.5"><LockedCellInput className="min-w-[85px] md:min-w-[100px]" value={b.phone || ""} onChange={(value) => updateBowler(index, "phone", formatPhoneNumber(value))} inputProps={phoneNavProps} /></td>
+                  {showRegistrationPhones && <td className="p-1.5"><LockedCellInput className="min-w-[85px] md:min-w-[100px]" value={b.phone || ""} onChange={(value) => updateBowler(index, "phone", formatPhoneNumber(value))} inputProps={phoneNavProps} /></td>}
                   {showRegistrationEmails && <td className="p-1.5"><LockedCellInput className="min-w-[100px] md:min-w-[130px]" value={b.email || ""} onChange={(value) => updateBowler(index, "email", value)} inputProps={emailNavProps} /></td>}
-                  <td className="p-2 text-right">
+                  <td className="sticky right-0 border-l border-blue-100 bg-white p-2 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.8)]">
   <div className="flex justify-end pr-2">
   <Button
     variant="outline"
