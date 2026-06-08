@@ -6377,19 +6377,18 @@ function ReservationsTab({
           </p>
         </div>
         <div className="mt-6 overflow-auto rounded-2xl border border-blue-200 bg-white">
-  <table className="w-full min-w-[900px] text-sm">
+  <table className="w-full min-w-[760px] text-xs md:text-sm">
     <thead className="bg-blue-800 text-white">
 <tr>
-  <th className="p-3 text-left">Status</th>
-  <th className="p-3 text-left">#</th>
-  <th className="p-3 text-left">Name</th>
-  <th className="p-3 text-left">Nickname</th>
-  <th className="p-3 text-left">Phone</th>
-  <th className="p-3 text-left">Email</th>
-  <th className="p-3 text-left">Tournament</th>
-  <th className="p-3 text-left">Note</th>
-  <th className="p-3 text-left">Submitted</th>
-  <th className="p-3 text-right">Actions</th>
+  <th className="p-2 text-left md:p-3">Status</th>
+  <th className="p-2 text-left md:p-3">#</th>
+  <th className="p-2 text-left md:p-3">Name</th>
+  <th className="p-2 text-left md:p-3">Nickname</th>
+  <th className="p-2 text-left md:p-3">Phone</th>
+  <th className="p-2 text-left md:p-3">Email</th>
+  <th className="p-2 text-left md:p-3">Note</th>
+  <th className="p-2 text-left md:p-3">Submitted</th>
+  <th className="sticky right-0 z-10 border-l border-blue-700 bg-blue-800 p-2 text-right md:p-3">Actions</th>
 </tr>
     </thead>
 
@@ -6409,9 +6408,9 @@ function ReservationsTab({
             key={reservation.id}
             className="border-t"
           >
-            <td className="p-3">
+            <td className="p-2 md:p-3">
               <span
-                className={`rounded-full px-3 py-1 text-xs font-bold ${
+                className={`rounded-full px-2 py-1 text-[10px] font-bold md:px-3 md:text-xs ${
                   reservation.status === "Registered"
                     ? "bg-green-100 text-green-800"
                     : "bg-yellow-100 text-yellow-800"
@@ -6421,11 +6420,11 @@ function ReservationsTab({
               </span>
             </td>
 
-            <td className="p-3 font-black text-blue-950">
+            <td className="p-2 font-black text-blue-950 md:p-3">
               {getReservationRegistrationNumber(reservation, "—")}
             </td>
 
-            <td className="p-3 font-semibold">
+            <td className="p-2 font-semibold md:p-3">
               {isEditing ? (
                 <Input
                   value={editingReservation?.name || ""}
@@ -6435,7 +6434,7 @@ function ReservationsTab({
               ) : reservation.name}
             </td>
 
-            <td className="p-3">
+            <td className="p-2 md:p-3">
               {isEditing ? (
                 <Input
                   value={editingReservation?.nickname || ""}
@@ -6445,7 +6444,7 @@ function ReservationsTab({
               ) : reservation.nickname || "—"}
             </td>
 
-            <td className="p-3">
+            <td className="p-2 md:p-3">
               {isEditing ? (
                 <Input
                   value={editingReservation?.phone || ""}
@@ -6455,7 +6454,7 @@ function ReservationsTab({
               ) : reservation.phone || "—"}
             </td>
 
-            <td className="p-3">
+            <td className="p-2 md:p-3">
               {isEditing ? (
                 <Input
                   value={editingReservation?.email || ""}
@@ -6465,11 +6464,7 @@ function ReservationsTab({
               ) : reservation.email || "—"}
             </td>
 
-            <td className="p-3">
-              {reservation.tournament}
-            </td>
-
-            <td className="max-w-[220px] p-3">
+            <td className="max-w-[180px] p-2 md:max-w-[220px] md:p-3">
               {isEditing ? (
                 <textarea
                   className="min-h-[80px] w-full rounded-xl border border-blue-200 p-2 text-sm"
@@ -6480,7 +6475,7 @@ function ReservationsTab({
               ) : reservation.note || "—"}
             </td>
 
-<td className="p-3 text-xs text-slate-500">
+<td className="p-2 text-[10px] text-slate-500 md:p-3 md:text-xs">
   {reservation.createdAt
     ? new Date(
         reservation.createdAt
@@ -6488,20 +6483,20 @@ function ReservationsTab({
     : "—"}
 </td>
 
-<td className="p-3 text-right">
-  <div className="flex justify-end gap-2">
+<td className="sticky right-0 border-l border-blue-100 bg-white p-2 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.8)] md:p-3">
+  <div className="flex flex-col items-end gap-1.5 md:flex-row md:justify-end md:gap-2">
   {isEditing ? (
     <>
       <Button
         variant="outline"
-        className="rounded-xl border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+        className="rounded-xl border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:bg-green-100 md:px-3 md:py-2"
         onClick={saveEditReservation}
       >
         Save
       </Button>
       <Button
         variant="outline"
-        className="rounded-xl border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+        className="rounded-xl border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100 md:px-3 md:py-2"
         onClick={cancelEditReservation}
       >
         Cancel
@@ -6511,7 +6506,7 @@ function ReservationsTab({
   <>
   <Button
     variant="outline"
-    className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+    className="rounded-xl border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800 hover:bg-blue-100 md:px-3 md:py-2"
     onClick={() => startEditReservation(reservation)}
   >
     Edit
@@ -6519,26 +6514,26 @@ function ReservationsTab({
   {hasNameMappingCandidate && !hasExistingNameMapping && (
     <Button
       variant="outline"
-      className="rounded-xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+      className="rounded-xl border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800 hover:bg-blue-100 md:px-3 md:py-2"
       onClick={() => saveReservationNameMapping(reservation)}
     >
-      Save Name Mapping
+      Save Mapping
     </Button>
   )}
   <Button
     variant="outline"
     className={rosterAdded
-      ? "rounded-xl border-slate-300 bg-slate-100 text-slate-600"
-      : "rounded-xl border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+      ? "rounded-xl border-slate-300 bg-slate-100 px-2 py-1 text-xs text-slate-600 md:px-3 md:py-2"
+      : "rounded-xl border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:bg-green-100 md:px-3 md:py-2"
     }
     disabled={rosterAdded}
     onClick={() => addReservationToRoster(reservation)}
   >
-    {rosterAdded ? "Added to Roster" : "Add to Roster"}
+    {rosterAdded ? "Added" : "Add"}
   </Button>
   <Button
     variant="outline"
-    className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+    className="rounded-xl border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700 hover:bg-red-100 md:px-3 md:py-2"
     disabled={deletingReservationId === reservation.id}
     onClick={() => deleteReservation(reservation)}
   >
@@ -6556,7 +6551,7 @@ function ReservationsTab({
       {reservationState.reservations?.length === 0 && (
         <tr>
           <td
-            colSpan={10}
+            colSpan={9}
             className="p-5 text-center text-blue-700"
           >
             No reservations submitted yet.
