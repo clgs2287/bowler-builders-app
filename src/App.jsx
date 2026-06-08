@@ -7582,6 +7582,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
 function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
   const { scores, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
+  const matchLanes = bracketState.matchLanes || {};
   const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
 
   if (size === "Over 64") {
@@ -7591,6 +7592,7 @@ function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, 
 const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
+  const laneLabel = String(matchLanes[match.id] || "").trim();
   const leftScore = scores[leftKey] ?? "";
   const rightScore = scores[rightKey] ?? "";
   const leftScratchScore = scratchScores[leftKey] ?? "";
@@ -7669,6 +7671,11 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
             : "relative min-h-[230px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
         }
       >
+        {laneLabel && (
+          <div className="mb-2 rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center text-[10px] font-black uppercase tracking-wide text-blue-900">
+            Lanes {laneLabel}
+          </div>
+        )}
         <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
           Match {matchNumber}
         </div>
@@ -7723,6 +7730,11 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
           : "relative min-h-[92px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"
       }
     >
+      {laneLabel && (
+        <div className="mb-2 rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center text-[10px] font-black uppercase tracking-wide text-blue-900">
+          Lanes {laneLabel}
+        </div>
+      )}
       <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
         Match {matchNumber}
       </div>
@@ -7748,8 +7760,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
 };
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0, matchNumberOffset = 0 }) => {
-    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && !useHandicapScores ? 150 : 104;
-    const matchHeight = matchScoring === "bestOf3" ? 230 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 150 : 104;
+    const firstRoundMatchHeight = matchScoring === "bestOf3" ? 252 : matchScoring === "avgAdvantage" && !useHandicapScores ? 172 : 126;
+    const matchHeight = matchScoring === "bestOf3" ? 252 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 172 : 126;
     const firstRoundGap = matchScoring === "bestOf3" ? 70 : 54;
     const step = firstRoundMatchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
@@ -9850,7 +9862,7 @@ function TeamFinalsScoreInput({
   );
 }
 
-function BracketMatchEditor({ match, matchNumber, scores, scratchScores, memberScores, onScoreChange, onMemberScoreChange, useHandicapScores, finalsScoreMode = "baker", matchScoring = "total", roundIndex = 0 }) {
+function BracketMatchEditor({ match, matchNumber, matchLane = "", onMatchLaneChange = () => {}, scores, scratchScores, memberScores, onScoreChange, onMemberScoreChange, useHandicapScores, finalsScoreMode = "baker", matchScoring = "total", roundIndex = 0 }) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
   const usesAverageAdvantage = matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores;
@@ -9879,6 +9891,15 @@ const renderPlayerName = (player) => {
   if (matchScoring === "bestOf3") {
     return (
       <div className={winner?.name && winner.name !== "TIE" ? "relative min-h-[270px] rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative min-h-[270px] rounded-2xl border border-blue-200 bg-white p-3 shadow-sm"}>
+        <div className="mb-2 flex items-center gap-2">
+          <Label className="text-xs font-bold text-blue-900">Lanes</Label>
+          <Input
+            className="h-8 w-24 rounded-lg px-2 py-1 text-xs font-bold"
+            value={matchLane}
+            onChange={(event) => onMatchLaneChange(match.id, event.target.value)}
+            placeholder="1-2"
+          />
+        </div>
         <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
           Match {matchNumber}
         </div>
@@ -9942,6 +9963,15 @@ const renderPlayerName = (player) => {
 
   return (
     <div className={winner?.name && winner.name !== "TIE" ? "relative min-h-[104px] rounded-2xl border border-green-300 bg-green-50 p-3 shadow-sm" : "relative min-h-[104px] rounded-2xl border border-blue-200 bg-white p-2 shadow-sm"}>
+      <div className="mb-2 flex items-center gap-2">
+        <Label className="text-xs font-bold text-blue-900">Lanes</Label>
+        <Input
+          className="h-8 w-24 rounded-lg px-2 py-1 text-xs font-bold"
+          value={matchLane}
+          onChange={(event) => onMatchLaneChange(match.id, event.target.value)}
+          placeholder="1-2"
+        />
+      </div>
       <div className="mb-2 inline-flex rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
         Match {matchNumber}
       </div>
@@ -9994,10 +10024,12 @@ function BracketRoundColumn({
   matchScoring = "total",
   roundIndex = 0,
   matchNumberOffset = 0,
+  matchLanes = {},
+  onMatchLaneChange = () => {},
   setSavedFinalsRounds,
 }) {
-  const firstRoundMatchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && !useHandicapScores ? 158 : 112;
-  const matchHeight = matchScoring === "bestOf3" ? 270 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 158 : 112;
+  const firstRoundMatchHeight = matchScoring === "bestOf3" ? 302 : matchScoring === "avgAdvantage" && !useHandicapScores ? 190 : 144;
+  const matchHeight = matchScoring === "bestOf3" ? 302 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 190 : 144;
   const firstRoundGap = matchScoring === "bestOf3" ? 70 : 54;
   const step = firstRoundMatchHeight + firstRoundGap;
 
@@ -10039,6 +10071,8 @@ function BracketRoundColumn({
             <BracketMatchEditor
   match={match}
   matchNumber={matchNumberOffset + matchIndex + 1}
+  matchLane={matchLanes[match.id] || ""}
+  onMatchLaneChange={onMatchLaneChange}
   scores={scores}
   scratchScores={scratchScores}
   memberScores={memberScores}
@@ -10065,6 +10099,15 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   const { manualQualifiers, scores, suggested, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
   const memberScores = bracketState.memberScores || {};
+  const matchLanes = bracketState.matchLanes || {};
+  const handleMatchLaneChange = (matchId, value) =>
+    setBracketState((current) => ({
+      ...current,
+      matchLanes: {
+        ...(current.matchLanes || {}),
+        [matchId]: value,
+      },
+    }));
   const handleScoreChange = (
   scoreKey,
   value,
@@ -10181,6 +10224,8 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
           finalsScoreMode={finalsScoreMode}
           matchScoring={matchScoring}
           matchNumberOffset={matchNumberOffset}
+          matchLanes={matchLanes}
+          onMatchLaneChange={handleMatchLaneChange}
         />
         );
       })}
@@ -14937,7 +14982,7 @@ export default function BowlingPayoutApp() {
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
   const [payoutState, setPayoutState] = useState(DEFAULT_PAYOUT_STATE);
-  const [bracketState, setBracketState] = useState({ manualQualifiers: "", scores: {} });
+  const [bracketState, setBracketState] = useState({ manualQualifiers: "", scores: {}, matchLanes: {} });
   const [eliminatorState, setEliminatorState] = useState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
   const [laneEliminatorState, setLaneEliminatorState] = useState(DEFAULT_LANE_ELIMINATOR_STATE);
   const [matchplayState, setMatchplayState] = useState(DEFAULT_MATCHPLAY_STATE);
@@ -15808,7 +15853,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setSavedScoreGames({});
     setSavedFinalsRounds({});
     setPayoutState(DEFAULT_PAYOUT_STATE);
-    setBracketState({ manualQualifiers: "", scores: {} });
+    setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {} });
     setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
     setLaneEliminatorState(DEFAULT_LANE_ELIMINATOR_STATE);
     setMatchplayState(DEFAULT_MATCHPLAY_STATE);
