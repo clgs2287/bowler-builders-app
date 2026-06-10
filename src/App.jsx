@@ -40,6 +40,7 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 
 const HISTORICAL_TITLE_SERIES_OPTIONS = ["M.I.S.T.", "KWT", "F.B.E.T.", "FDDS", "Handicap/Non-FKM"];
 const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
+const PUBLIC_APP_URL = "https://tournaments.bowlerbuildersproshop.com";
 const TOURNAMENT_SERIES_LABELS = {
   "M.I.S.T.": "Maine Invitational Scratch Tournament",
   "F.B.E.T.": "Frankie's Bowling Emporium Tournament",
@@ -47,6 +48,15 @@ const TOURNAMENT_SERIES_LABELS = {
   FDDS: "Frankie and Ding Dong Series",
   "Handicap/Non-FKM": "Handicap / Non-FKM",
 };
+
+function getSupabaseAuthRedirectUrl() {
+  if (typeof window === "undefined") return PUBLIC_APP_URL;
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "") {
+    return PUBLIC_APP_URL;
+  }
+  return window.location.origin;
+}
 const DEFAULT_LANE_ELIMINATOR_STATE = {
   manualQualifiers: "",
   groupSize: 4,
@@ -15384,7 +15394,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       email,
       password,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getSupabaseAuthRedirectUrl(),
       },
     });
     if (error) return { error: error.message };
