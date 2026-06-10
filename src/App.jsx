@@ -3254,15 +3254,17 @@ function SupabaseMigrationCard({
   );
 }
 
-function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSignOut }) {
+function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onCreateAccount, onSignOut }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [expanded, setExpanded] = useState(false);
 
   const submit = async () => {
     setError("");
+    setMessage("");
     setSubmitting(true);
     const result = await onSignIn(email.trim(), password);
     setSubmitting(false);
@@ -3271,6 +3273,20 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
       setPassword("");
       setExpanded(false);
     }
+  };
+
+  const createAccount = async () => {
+    setError("");
+    setMessage("");
+    setSubmitting(true);
+    const result = await onCreateAccount(email.trim(), password);
+    setSubmitting(false);
+    if (result?.error) {
+      setError(result.error);
+      return;
+    }
+    setPassword("");
+    setMessage(result?.message || "Account created. Cory still needs to approve admin access.");
   };
 
   if (!hasSupabaseConfig) {
@@ -3330,9 +3346,13 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
       <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={submit} disabled={submitting}>
         {submitting ? "Signing In..." : "Admin Sign In"}
       </Button>
-      <Button variant="outline" className="rounded-2xl bg-white/80 text-blue-950 hover:bg-blue-50" onClick={() => { setExpanded(false); setError(""); }}>
+      <Button variant="outline" className="rounded-2xl bg-blue-100 text-blue-950 hover:bg-blue-50" onClick={createAccount} disabled={submitting}>
+        Create Account
+      </Button>
+      <Button variant="outline" className="rounded-2xl bg-white/80 text-blue-950 hover:bg-blue-50" onClick={() => { setExpanded(false); setError(""); setMessage(""); }}>
         Cancel
       </Button>
+      {message && <span className="max-w-[260px] text-xs font-bold text-blue-100">{message}</span>}
       {error && <span className="text-xs font-bold text-yellow-200">{error}</span>}
     </div>
   );
@@ -15355,6 +15375,35 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return { ok: true };
   };
 
+  const createSupabaseAccount = async (email, password) => {
+    if (!supabase) return { error: "Supabase is not configured." };
+    if (!email || !password) return { error: "Enter email and password." };
+    if (password.length < 6) return { error: "Password must be at least 6 characters." };
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    if (error) return { error: error.message };
+
+    const profile = await loadSupabaseAdminProfile(data?.session || null);
+    if (profile) {
+      setIsAdminMode(true);
+      setActiveTab("dashboard");
+      return { ok: true, message: "Account created and admin access is active." };
+    }
+
+    return {
+      ok: true,
+      message: data?.session
+        ? "Account created. Cory still needs to approve admin access."
+        : "Account created. Check your email if Supabase asks you to confirm it, then Cory can approve admin access.",
+    };
+  };
+
   const signOutSupabaseAdmin = async () => {
     setSupabaseSession(null);
     setSupabaseAdminProfile(null);
@@ -16221,6 +16270,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                       adminProfile={supabaseAdminProfile}
                       authLoading={supabaseAuthLoading}
                       onSignIn={signInSupabaseAdmin}
+                      onCreateAccount={createSupabaseAccount}
                       onSignOut={signOutSupabaseAdmin}
                     />
                   </div>
