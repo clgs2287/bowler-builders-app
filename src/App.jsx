@@ -3313,7 +3313,7 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onCr
         <span className="text-xs font-bold text-blue-100">
           {adminProfile
             ? `Signed in: ${session.user.email || adminProfile.email || "admin"}`
-            : `Signed in, not admin: ${session.user.email || "unknown email"} (${session.user.id || "no user id"})`}
+            : `Signed in, not admin: ${session.user.email || "unknown email"}`}
         </span>
         <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSignOut}>
           Clear Login
@@ -16258,7 +16258,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                       <span className="self-center text-xs font-bold text-blue-100">
                         {supabaseAdminProfile
                           ? `Signed in: ${supabaseSession.user.email || supabaseAdminProfile.email || "admin"}`
-                          : `Signed in, not admin: ${supabaseSession.user.email || "unknown email"} (${supabaseSession.user.id || "no user id"})`}
+                          : `Signed in, not admin: ${supabaseSession.user.email || "unknown email"}`}
                       </span>
                     )}
                     <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={exportFullBackup}>
