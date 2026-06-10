@@ -855,6 +855,23 @@ async function sendReservationConfirmationEmail({ reservation, reservationState 
   return result;
 }
 
+async function sendAdminAccountRequestEmail(email) {
+  const response = await fetch("/api/send-admin-request-email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      createdAt: new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error || "Admin request email could not be sent.");
+  }
+  return result;
+}
+
 function getTournamentStartDateTime(date, startTime) {
   if (!date || !startTime) return null;
   const parsed = new Date(`${date}T${startTime}`);
@@ -15328,6 +15345,25 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return null;
   };
 
+  const clearNonAdminSupabaseSession = async (status = "Sign in as admin to save to Supabase") => {
+    setSupabaseSession(null);
+    setSupabaseAdminProfile(null);
+    setIsAdminMode(false);
+    setSupabaseAuthLoading(false);
+    setSupabaseSaveStatus(status);
+
+    if (supabase) {
+      try {
+        await Promise.race([
+          supabase.auth.signOut({ scope: "global" }),
+          new Promise((resolve) => window.setTimeout(resolve, 1500)),
+        ]);
+      } catch (error) {
+        console.warn("Could not clear non-admin Supabase session", error);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!supabase) {
       setSupabaseAuthLoading(false);
@@ -15345,7 +15381,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       const session = data?.session || null;
       setSupabaseSession(session);
       window.clearTimeout(authTimeoutId);
-      await loadSupabaseAdminProfile(session);
+      const profile = await loadSupabaseAdminProfile(session);
+      if (session && !profile) {
+        await clearNonAdminSupabaseSession("Account is waiting for admin approval.");
+        return;
+      }
       setSupabaseAuthLoading(false);
     }).catch((error) => {
       console.warn("Could not check Supabase session", error);
@@ -15359,7 +15399,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSupabaseSession(session || null);
       window.clearTimeout(authTimeoutId);
-      await loadSupabaseAdminProfile(session || null);
+      const profile = await loadSupabaseAdminProfile(session || null);
+      if (session && !profile) {
+        await clearNonAdminSupabaseSession("Account is waiting for admin approval.");
+        return;
+      }
       setSupabaseAuthLoading(false);
     });
 
@@ -15378,7 +15422,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (error) return { error: error.message };
 
     const profile = await loadSupabaseAdminProfile(data?.session || null);
-    if (!profile) return { error: "Signed in, but this user is not listed as an admin yet." };
+    if (!profile) {
+      await clearNonAdminSupabaseSession("Account is waiting for admin approval.");
+      return { error: "This account is waiting for Cory to approve admin access." };
+    }
 
     setIsAdminMode(true);
     setActiveTab("dashboard");
@@ -15406,11 +15453,26 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return { ok: true, message: "Account created and admin access is active." };
     }
 
+    let requestNotice = "Approval request created.";
+    try {
+      const emailResult = await sendAdminAccountRequestEmail(email);
+      requestNotice = emailResult?.skipped
+        ? "Approval request created. Cory still needs to approve this email."
+        : "Approval request sent to Cory.";
+    } catch (requestError) {
+      console.warn("Admin account request email could not be sent", requestError);
+      requestNotice = "Approval request created, but the email notice could not be sent.";
+    }
+
+    if (data?.session) {
+      await clearNonAdminSupabaseSession("Account is waiting for admin approval.");
+    }
+
     return {
       ok: true,
       message: data?.session
-        ? "Account created. Cory still needs to approve admin access."
-        : "Account created. Check your email if Supabase asks you to confirm it, then Cory can approve admin access.",
+        ? `${requestNotice} You will not be able to sign in until approval is complete.`
+        : `${requestNotice} Check your email if Supabase asks you to confirm it. You will not be able to sign in until approval is complete.`,
     };
   };
 
