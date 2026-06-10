@@ -41,6 +41,7 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 const HISTORICAL_TITLE_SERIES_OPTIONS = ["M.I.S.T.", "KWT", "F.B.E.T.", "FDDS", "Handicap/Non-FKM"];
 const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
 const PUBLIC_APP_URL = "https://tournaments.bowlerbuildersproshop.com";
+const OWNER_ADMIN_EMAILS = ["cory.lagner@gmail.com"];
 const TOURNAMENT_SERIES_LABELS = {
   "M.I.S.T.": "Maine Invitational Scratch Tournament",
   "F.B.E.T.": "Frankie's Bowling Emporium Tournament",
@@ -56,6 +57,10 @@ function getSupabaseAuthRedirectUrl() {
     return PUBLIC_APP_URL;
   }
   return window.location.origin;
+}
+
+function isOwnerAdminEmail(email = "") {
+  return OWNER_ADMIN_EMAILS.includes(String(email || "").trim().toLowerCase());
 }
 const DEFAULT_LANE_ELIMINATOR_STATE = {
   manualQualifiers: "",
@@ -3595,6 +3600,7 @@ function DashboardTab({
   supabaseLoadStatus = "Not loaded",
   supabaseSaveStatus = "Not saved",
   onSyncSupabaseNow = () => {},
+  isOwnerAdmin = false,
   savedTournamentDrafts = [],
   onSaveTournamentDraft = () => {},
   onLoadTournamentDraft = () => {},
@@ -3669,17 +3675,21 @@ function DashboardTab({
 
   return (
     <div className="space-y-3 md:space-y-4">
-      <SupabaseConnectionCard />
-      <SupabaseAdminStatusCard session={supabaseSession} adminProfile={supabaseAdminProfile} />
-      <SupabaseMigrationCard
-        scheduleItems={scheduleItems}
-        scheduleLocked={scheduleLocked}
-        manualTitles={manualTitles}
-        bowlerIdentities={bowlerIdentities}
-        supabaseLoadStatus={supabaseLoadStatus}
-        supabaseSaveStatus={supabaseSaveStatus}
-        onSyncSupabaseNow={onSyncSupabaseNow}
-      />
+      {isOwnerAdmin && (
+        <>
+          <SupabaseConnectionCard />
+          <SupabaseAdminStatusCard session={supabaseSession} adminProfile={supabaseAdminProfile} />
+          <SupabaseMigrationCard
+            scheduleItems={scheduleItems}
+            scheduleLocked={scheduleLocked}
+            manualTitles={manualTitles}
+            bowlerIdentities={bowlerIdentities}
+            supabaseLoadStatus={supabaseLoadStatus}
+            supabaseSaveStatus={supabaseSaveStatus}
+            onSyncSupabaseNow={onSyncSupabaseNow}
+          />
+        </>
+      )}
       <div className="grid gap-4 lg:grid-cols-12">
         <AppCard className="lg:col-span-7">
           <CardContent className="p-3 md:p-5">
@@ -16180,6 +16190,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const headerEventLabel = isTournamentDayOrLater(tournamentInfo.date || reservationState.tournamentDate)
     ? "Active Event"
     : "Upcoming Event";
+  const isOwnerAdmin = Boolean(
+    isAdminMode &&
+    isOwnerAdminEmail(supabaseSession?.user?.email || supabaseAdminProfile?.email || "")
+  );
   const publicRoutingDataReady = hasLoadedSavedData && hasLoadedHistory && (!supabase || supabaseLoadReady);
   const lockAdmin = () => {
     setIsAdminMode(false);
@@ -16323,9 +16337,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                           : `Signed in, not admin: ${supabaseSession.user.email || "unknown email"}`}
                       </span>
                     )}
-                    <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={exportFullBackup}>
-                      Export Full Backup
-                    </Button>
+                    {isOwnerAdmin && (
+                      <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={exportFullBackup}>
+                        Export Full Backup
+                      </Button>
+                    )}
                     {supabaseSession?.user && (
                       <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={signOutSupabaseAdmin}>
                         Sign Out
@@ -16382,6 +16398,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       supabaseAdminProfile={supabaseAdminProfile}
       supabaseLoadStatus={supabaseLoadStatus}
       supabaseSaveStatus={supabaseSaveStatus}
+      isOwnerAdmin={isOwnerAdmin}
       onSyncSupabaseNow={() => {
         syncSupabaseCoreData().catch((error) => {
           setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save to Supabase."}`);
