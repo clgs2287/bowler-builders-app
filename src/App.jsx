@@ -2509,7 +2509,7 @@ function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminat
   );
 }
 
-function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, publicResultsUnlocked = true }) {
+function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, isOwnerAdmin = false, publicResultsUnlocked = true }) {
   const activeSection = getSectionForTab(activeTab, isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo);
   const visibleSections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo);
   const visibleActiveTabs = activeSection.tabs.filter((tab) => !(tab.hideForSweeper && tournamentFormat === "sweeper"));
@@ -2541,7 +2541,7 @@ function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournament
             </TabButton>
           ))}
         </div>
-        {isAdminMode && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>}
+        {isAdminMode && isOwnerAdmin && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>}
       </div>
     </div>
   );
@@ -12339,7 +12339,7 @@ current.results.push(result);
   );
 }
 
-function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, payoutRows, financials, tournamentFormat, tournamentHistory, setTournamentHistory, restoreTournament, qualifyingGames, savedScoreGames = {}, savedFinalsRounds = {}, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState = DEFAULT_MATCHPLAY_STATE, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, sidePotState, tournamentRecap = {} }) {
+function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, payoutRows, financials, tournamentFormat, tournamentHistory, setTournamentHistory, restoreTournament, qualifyingGames, savedScoreGames = {}, savedFinalsRounds = {}, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState = DEFAULT_MATCHPLAY_STATE, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, sidePotState, tournamentRecap = {}, isOwnerAdmin = false }) {
   const [seasonFilter, setSeasonFilter] = useState("All");
   const [selectedArchivedTournamentId, setSelectedArchivedTournamentId] = useState(null);
   const [archivedDetailSection, setArchivedDetailSection] = useState("results");
@@ -12604,6 +12604,10 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   };
 
   const deleteTournament = (id) => {
+    if (!isOwnerAdmin) {
+      window.alert("Only the owner account can delete archived tournaments.");
+      return;
+    }
     const confirmed = window.confirm("Remove this tournament from stats history?");
     if (!confirmed) return;
     if (selectedArchivedTournamentId === id) setSelectedArchivedTournamentId(null);
@@ -12661,7 +12665,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                     <td className="p-2 text-right font-semibold md:p-3">{t.entries}</td>
                     <td className="bb-mobile-hide p-2 text-right font-semibold md:p-3">{t.cashers}</td>
                     <td className="p-2 font-semibold text-green-700 md:p-3">{getArchivedWinnerName(t) || "—"}</td>
-                    <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button></div></td>
+                    <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button>{isOwnerAdmin && <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button>}</div></td>
                   </tr>
                 ))}
                 {filteredHistory.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No tournaments archived for this season filter yet.</td></tr>}
@@ -12909,7 +12913,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   );
 }
 
-function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIdentities = [], setBowlerIdentities = () => {} }) {
+function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIdentities = [], setBowlerIdentities = () => {}, isOwnerAdmin = false }) {
   const [newTitle, setNewTitle] = useState({ bowler: "", tournament: "", date: "", season: new Date().getFullYear().toString(), source: "M.I.S.T.", major: false });
   const [newHistoricalTotal, setNewHistoricalTotal] = useState({ bowler: "", titleCount: "", source: "M.I.S.T.", season: "Pre-2018", eligible: true, major: false, notes: "" });
   const [newHof, setNewHof] = useState({ bowler: "", year: new Date().getFullYear().toString() });
@@ -13126,6 +13130,10 @@ else current.nonFkmTitles += titleCount;
   };
 
   const deleteBowlerIdentity = (nickname) => {
+    if (!isOwnerAdmin) {
+      window.alert("Only the owner account can delete bowler name mappings.");
+      return;
+    }
     const confirmed = window.confirm(`Delete real name mapping for ${nickname}?`);
     if (!confirmed) return;
     setBowlerIdentities((current) => (current || []).filter((identity) => getIdentityKey(identity.nickname) !== getIdentityKey(nickname)));
@@ -13155,6 +13163,10 @@ else current.nonFkmTitles += titleCount;
   });
 
   const deleteManualTitle = (id) => {
+    if (!isOwnerAdmin) {
+      window.alert("Only the owner account can delete title records.");
+      return;
+    }
     const confirmed = window.confirm("Delete this manually entered title?");
     if (!confirmed) return;
     setManualTitles((current) => current.filter((title) => title.id !== id));
@@ -13355,7 +13367,7 @@ else current.nonFkmTitles += titleCount;
                       Aliases{identitySortLabel("aliases")}
                     </button>
                   </th>
-                  <th className="p-2 text-right md:p-3">Actions</th>
+                  {isOwnerAdmin && <th className="p-2 text-right md:p-3">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -13364,12 +13376,14 @@ else current.nonFkmTitles += titleCount;
                     <td className="p-2 font-semibold md:p-3">{identity.nickname}</td>
                     <td className="p-2 text-blue-900 md:p-3">{identity.realName}</td>
                     <td className="p-2 text-blue-900 md:p-3">{(identity.aliases || []).join(", ") || "—"}</td>
-                    <td className="p-2 text-right md:p-3">
-                      <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteBowlerIdentity(identity.nickname)}>Delete</Button>
-                    </td>
+                    {isOwnerAdmin && (
+                      <td className="p-2 text-right md:p-3">
+                        <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteBowlerIdentity(identity.nickname)}>Delete</Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
-                {(bowlerIdentities || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>No bowler name mappings yet.</td></tr>}
+                {(bowlerIdentities || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={isOwnerAdmin ? 4 : 3}>No bowler name mappings yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -13427,7 +13441,7 @@ else current.nonFkmTitles += titleCount;
           <div className="mt-4 overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[520px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
-                <tr><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Induction Year</th><th className="p-2 text-right md:p-3">Actions</th></tr>
+                <tr><th className="p-2 text-left md:p-3">Name</th><th className="p-2 text-left md:p-3">Nickname</th><th className="p-2 text-left md:p-3">Induction Year</th>{isOwnerAdmin && <th className="p-2 text-right md:p-3">Actions</th>}</tr>
               </thead>
               <tbody>
                 {hofTitles.map((title) => (
@@ -13435,12 +13449,14 @@ else current.nonFkmTitles += titleCount;
                     <td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td>
                     <td className="p-2 font-semibold text-blue-900 md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td>
                     <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
-                    <td className="p-2 text-right md:p-3">
-                      <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>
-                    </td>
+                    {isOwnerAdmin && (
+                      <td className="p-2 text-right md:p-3">
+                        <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
-                {hofTitles.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>No Hall of Fame inductees entered yet.</td></tr>}
+                {hofTitles.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={isOwnerAdmin ? 4 : 3}>No Hall of Fame inductees entered yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -13791,7 +13807,7 @@ else current.nonFkmTitles += titleCount;
                 }
 
                 return (
-                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-800 md:text-xs" onClick={() => startEditManualTitle(title)}>Edit</Button><Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button></div> : <span className="text-blue-400">—</span>}</td></tr>
+                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-800 md:text-xs" onClick={() => startEditManualTitle(title)}>Edit</Button>{isOwnerAdmin && <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>}</div> : <span className="text-blue-400">—</span>}</td></tr>
                 );
               })}{titleDetailRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No title history yet.</td></tr>}</tbody>
             </table>
@@ -16155,6 +16171,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   };
 
   const resetSavedTournament = () => {
+    if (!isOwnerAdmin) {
+      window.alert("Only the owner account can reset the active tournament.");
+      return;
+    }
     const confirmed = window.confirm("Reset this tournament and clear saved data? This cannot be undone.");
     if (!confirmed) return;
     window.localStorage.removeItem(STORAGE_KEY);
@@ -16365,7 +16385,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                 )}
               </div>
               <MobileTabSelect activeTab={activeTab} setActiveTab={setActiveTab} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} publicResultsUnlocked={publicResultsUnlocked} />
-              <DesktopTabs activeTab={activeTab} setActiveTab={setActiveTab} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} publicResultsUnlocked={publicResultsUnlocked} />
+              <DesktopTabs activeTab={activeTab} setActiveTab={setActiveTab} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} isOwnerAdmin={isOwnerAdmin} publicResultsUnlocked={publicResultsUnlocked} />
             </div>
           </div>
         </div>
@@ -16526,8 +16546,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   />
 )}
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
-        {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} /></AppErrorBoundary>}
-        {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} /></AppErrorBoundary>}
+        {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
+        {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
 <TournamentInfoTab
   tournamentInfo={tournamentInfo}
