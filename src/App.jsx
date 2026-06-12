@@ -7169,7 +7169,7 @@ const printableSheets =
 
   const scoreHeaders = Array.from({ length: gamesCount }, (_, i) => `G${i + 1}`);
   const csvRows = [["Lane Pair", "Lane", "Team", "Position", "Bowler", "Average", "Handicap", ...scoreHeaders, "Series Total"], ...sortedPairs.flatMap((pair) => {
-    const pairBowlers = lanePairs[pair].sort((a, b) => Number(a.lane || 999) - Number(b.lane || 999));
+    const pairBowlers = [...lanePairs[pair]].sort((a, b) => laneAssignmentSortValue(a.lanePosition || a.lane) - laneAssignmentSortValue(b.lanePosition || b.lane));
     const byLane = pairBowlers.reduce((groups, bowler) => {
       const laneKey = bowler.laneNumber || bowler.lane || "";
       groups[laneKey] = [...(groups[laneKey] || []), bowler];
@@ -7195,8 +7195,8 @@ const pairBowlers = isSingleLaneSheet
   ? Object.values(lanePairs)
       .flat()
       .filter((b) => String(b.laneNumber || b.lane || "") === String(pair))
-      .sort((a, b) => Number(a.lane || 999) - Number(b.lane || 999))
-  : (lanePairs[pair] || []).sort((a, b) => Number(a.lane || 999) - Number(b.lane || 999));
+      .sort((a, b) => laneAssignmentSortValue(a.lanePosition || a.lane) - laneAssignmentSortValue(b.lanePosition || b.lane))
+  : [...(lanePairs[pair] || [])].sort((a, b) => laneAssignmentSortValue(a.lanePosition || a.lane) - laneAssignmentSortValue(b.lanePosition || b.lane));
 
 const lanes = pair === "Unassigned" ? ["Unassigned"] : isSingleLaneSheet ? [pair] : pair.split("-");
 
