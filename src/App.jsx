@@ -4250,13 +4250,16 @@ function BowlerNameAutocomplete({ value, onChange, names, onSelectBowler, onDone
   return (
     <div className="relative">
       <Input
+        autoFocus
         className="min-w-[120px] md:min-w-[150px]"
         value={value}
         onFocus={() => setFocused(true)}
         onBlur={() => setTimeout(() => { setFocused(false); onDone?.(); }, 120)}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          inputKeyDown?.(e);
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            inputKeyDown?.(e);
+          }
           if (e.defaultPrevented) return;
           if (e.key === "Tab" && singleMatch && singleMatch.name !== value) {
             chooseBowler(singleMatch);
