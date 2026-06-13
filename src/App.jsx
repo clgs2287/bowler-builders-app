@@ -2641,6 +2641,9 @@ function TournamentInfoTab({
   const announcementImages = Array.isArray(tournamentInfo.announcementImages)
     ? tournamentInfo.announcementImages.filter((image) => image?.src)
     : [];
+  const lanePatternImages = Array.isArray(tournamentInfo.lanePatternImages)
+    ? tournamentInfo.lanePatternImages.filter((image) => image?.src)
+    : [];
   const videoLinks = String(tournamentInfo.videoLinks || "")
     .split(/\n|,/)
     .map((item) => item.trim())
@@ -2793,7 +2796,7 @@ const infoRows = [
           </div>
         </div>
 
-        {(sponsorList.length > 0 || logoLinks.length > 0 || announcementImages.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
+        {(sponsorList.length > 0 || logoLinks.length > 0 || announcementImages.length > 0 || lanePatternImages.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
           <div className="mt-3 grid gap-3 md:mt-5 md:gap-4 lg:grid-cols-2">
             {sponsorList.length > 0 && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 md:p-4">
@@ -2834,6 +2837,10 @@ const infoRows = [
               </div>
             )}
 
+            {lanePatternImages.length > 0 && (
+              <LanePatternImagesView images={lanePatternImages} />
+            )}
+
             {watchLinks.length > 0 && (
               <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4">
                 <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Watch & Follow</h3>
@@ -2857,6 +2864,31 @@ const infoRows = [
         )}
       </CardContent>
     </AppCard>
+  );
+}
+
+function LanePatternImagesView({ images = [], emptyMessage = "No lane pattern was saved for this tournament." }) {
+  const visibleImages = (Array.isArray(images) ? images : []).filter((image) => image?.src);
+
+  if (!visibleImages.length) {
+    return (
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800">
+        {emptyMessage}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4 lg:col-span-2">
+      <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Lane Pattern</h3>
+      <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+        {visibleImages.map((image) => (
+          <figure key={image.id || image.src} className="overflow-hidden rounded-2xl border border-blue-100 bg-slate-50">
+            <img src={image.src} alt={image.name || "Lane pattern"} className="max-h-[360px] w-full object-contain md:max-h-[620px]" />
+          </figure>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -3608,6 +3640,7 @@ function DashboardTab({
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const announcementFileInputRef = useRef(null);
+  const lanePatternFileInputRef = useRef(null);
   const update = (key, value) => setTournamentInfo((current) => ({ ...current, [key]: value }));
   const applyScheduledTournament = (name) => {
     const scheduledItem = findScheduleItemByName(scheduleItems, name);
@@ -3646,6 +3679,26 @@ function DashboardTab({
     setTournamentInfo((current) => ({
       ...current,
       announcementImages: (Array.isArray(current.announcementImages) ? current.announcementImages : []).filter((image) => image.id !== imageId),
+    }));
+  };
+  const uploadLanePatternImages = async (fileList) => {
+    const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) return;
+
+    try {
+      const images = await Promise.all(files.map((file) => compressTournamentImage(file)));
+      setTournamentInfo((current) => ({
+        ...current,
+        lanePatternImages: [...(Array.isArray(current.lanePatternImages) ? current.lanePatternImages : []), ...images],
+      }));
+    } catch (error) {
+      window.alert("That lane pattern image could not be imported. Try saving it as a JPG or PNG and uploading again.");
+    }
+  };
+  const deleteLanePatternImage = (imageId) => {
+    setTournamentInfo((current) => ({
+      ...current,
+      lanePatternImages: (Array.isArray(current.lanePatternImages) ? current.lanePatternImages : []).filter((image) => image.id !== imageId),
     }));
   };
   const selectedCenterIsPreset = BOWLING_CENTERS.some((center) => center.name === tournamentInfo.center);
@@ -3894,7 +3947,7 @@ function DashboardTab({
   </Button>
 
   <p className="text-xs font-semibold text-blue-700">
-    Upload flyers, lane pattern graphics, or tournament announcement images.
+    Upload flyers or tournament announcement images.
   </p>
 
   {Array.isArray(tournamentInfo.announcementImages) && tournamentInfo.announcementImages.length > 0 && (
@@ -3906,6 +3959,56 @@ function DashboardTab({
             <button
               type="button"
               onClick={() => deleteAnnouncementImage(image.id)}
+              className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
+<div className="space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+  <Label className="text-sm font-bold text-blue-900">
+    Lane Pattern
+  </Label>
+
+  <input
+    ref={lanePatternFileInputRef}
+    type="file"
+    accept="image/*"
+    multiple
+    onChange={(event) => {
+      uploadLanePatternImages(event.target.files);
+      event.target.value = "";
+    }}
+    className="hidden"
+  />
+
+  <Button
+    type="button"
+    variant="outline"
+    className="w-full rounded-xl border-blue-200 bg-white text-blue-900 hover:bg-blue-50"
+    onClick={() => lanePatternFileInputRef.current?.click()}
+  >
+    Choose Lane Pattern
+  </Button>
+
+  <p className="text-xs font-semibold text-blue-700">
+    Upload the oil pattern or lane graph when it is announced.
+  </p>
+
+  {Array.isArray(tournamentInfo.lanePatternImages) && tournamentInfo.lanePatternImages.length > 0 && (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {tournamentInfo.lanePatternImages.map((image) => (
+        <div key={image.id || image.src} className="rounded-xl border border-blue-200 bg-white p-2">
+          <img src={image.src} alt={image.name || "Lane pattern"} className="h-24 w-full rounded-lg object-contain" />
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={() => deleteLanePatternImage(image.id)}
               className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700 hover:bg-red-100"
             >
               Delete
@@ -8595,6 +8698,14 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
       );
     }
 
+    if (selectedArchiveSection === "lanePattern") {
+      return (
+        <LanePatternImagesView
+          images={snapshot?.tournamentInfo?.lanePatternImages || archive?.lanePatternImages || []}
+        />
+      );
+    }
+
     return null;
   };
 
@@ -8640,6 +8751,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
               { id: "leaderboard", label: "Leaderboard" },
               { id: "finals", label: "Finals" },
               { id: "sideaction", label: "Side Pots" },
+              { id: "lanePattern", label: "Lane Pattern" },
             ].map((section) => (
               <button
                 key={section.id}
@@ -8867,6 +8979,7 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
   const selectedPublicArchiveIsMatchplay = selectedPublicArchiveSnapshot && isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {});
   const selectedPublicArchiveIsEliminatorTournament = selectedPublicArchiveSnapshot && isEliminatorTournamentStyle(selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles");
   const selectedPublicArchiveRecap = selectedPublicArchive?.tournamentRecap || selectedPublicArchiveSnapshot?.tournamentRecap || {};
+  const selectedPublicArchiveLanePatternImages = selectedPublicArchiveSnapshot?.tournamentInfo?.lanePatternImages || selectedPublicArchive?.lanePatternImages || [];
   const archiveTitles = (tournamentHistory || []).flatMap((tournament) =>
   (tournament.results || [])
     .filter((result) => result.tournamentWinner)
@@ -9738,6 +9851,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
           { id: "qualifying", label: "Qualifying Scores" },
           { id: "finals", label: "Finals" },
           { id: "sideaction", label: "Side Action" },
+          { id: "lanePattern", label: "Lane Pattern" },
           { id: "recap", label: "Recap" },
         ]
           .filter((section) => !((selectedPublicArchiveIsMatchplay || selectedPublicArchiveIsEliminatorTournament) && section.id === "qualifying"))
@@ -9809,6 +9923,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       {publicArchiveSection === "finals" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with full scoring snapshots.</p>}
       {publicArchiveSection === "sideaction" && selectedPublicArchiveSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} sidePotState={selectedPublicArchiveSnapshot.sidePotState} qualifyingGames={selectedPublicArchiveSnapshot.qualifyingGames || 4} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
       {publicArchiveSection === "sideaction" && !selectedPublicArchiveSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
+      {publicArchiveSection === "lanePattern" && <LanePatternImagesView images={selectedPublicArchiveLanePatternImages} />}
       {publicArchiveSection === "recap" && (selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedPublicArchiveRecap} />}
       {publicArchiveSection === "recap" && !(selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
     </div>
@@ -12356,6 +12471,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   const selectedArchiveIsMatchplay = selectedSnapshot && isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {});
   const selectedArchiveIsEliminatorTournament = selectedSnapshot && isEliminatorTournamentStyle(selectedSnapshot.tournamentInfo?.tournamentStyle || "singles");
   const selectedArchivedRecap = selectedArchivedTournament?.tournamentRecap || selectedSnapshot?.tournamentRecap || {};
+  const selectedArchiveLanePatternImages = selectedSnapshot?.tournamentInfo?.lanePatternImages || selectedArchivedTournament?.lanePatternImages || [];
   const payoutAssignments = [];
   const [archiveSort, setArchiveSort] = useState({ column: "place", direction: "asc" });
 
@@ -12694,6 +12810,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                 { id: "qualifying", label: "Qualifying Scores" },
                 { id: "finals", label: "Finals" },
                 { id: "sideaction", label: "Side Action" },
+                { id: "lanePattern", label: "Lane Pattern" },
                 { id: "recap", label: "Recap" },
               ]
                 .filter((section) => !((selectedArchiveIsMatchplay || selectedArchiveIsEliminatorTournament) && section.id === "qualifying"))
@@ -12907,6 +13024,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             {archivedDetailSection === "finals" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "sideaction" && selectedSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} sidePotState={selectedSnapshot.sidePotState} qualifyingGames={selectedSnapshot.qualifyingGames || 4} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "sideaction" && !selectedSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
+            {archivedDetailSection === "lanePattern" && <LanePatternImagesView images={selectedArchiveLanePatternImages} />}
             {archivedDetailSection === "recap" && (selectedArchivedRecap.winner || selectedArchivedRecap.runnerUp || selectedArchivedRecap.highGame || selectedArchivedRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedArchivedRecap} />}
             {archivedDetailSection === "recap" && !(selectedArchivedRecap.winner || selectedArchivedRecap.runnerUp || selectedArchivedRecap.highGame || selectedArchivedRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
           </CardContent>
@@ -15237,7 +15355,7 @@ export default function BowlingPayoutApp() {
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState("bracket");
-  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
+  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], lanePatternImages: [] });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
   const [payoutState, setPayoutState] = useState(DEFAULT_PAYOUT_STATE);
@@ -15949,7 +16067,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers.map((bowler) => normalizeBowlerGames(bowler, Number(snapshot.qualifyingGames || qualifyingGames || 4))) : buildInitialBowlers(0, Number(snapshot.qualifyingGames || 4)));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
     setTournamentFormat(snapshot.tournamentFormat || "eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], ...(snapshot.tournamentInfo || {}) });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], lanePatternImages: [], ...(snapshot.tournamentInfo || {}) });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || {}) });
     setSavedScoreGames(snapshot.savedScoreGames || {});
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
@@ -16185,7 +16303,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(buildInitialBowlers(0, 4));
     setUseHandicapScores(false);
     setTournamentFormat("bracket");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [] });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], lanePatternImages: [] });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
     setSavedFinalsRounds({});
