@@ -7908,8 +7908,8 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
       ? winnerFromAverageAdvantageMatch(match.left, match.right, leftScore, rightScore)
       : winnerFromMatch(match.left, match.right, leftScore, rightScore);
   const seriesRecord = getBestOfThreeRecord(scores, match.id);
-  const bestOfThreeCardHeight = bigScreen ? "min-h-[340px]" : "min-h-[198px]";
-  const standardCardHeight = bigScreen ? "min-h-[168px]" : "min-h-[82px]";
+  const bestOfThreeCardHeight = bigScreen ? "min-h-[352px]" : "min-h-[218px]";
+  const standardCardHeight = bigScreen ? "min-h-[186px]" : "min-h-[132px]";
 
   const leftWon = winner?.seed !== undefined && winner.seed === match.left?.seed && winner.name !== "TIE";
   const rightWon = winner?.seed !== undefined && winner.seed === match.right?.seed && winner.name !== "TIE";
@@ -8067,12 +8067,12 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
 
   const PublicBracketRoundColumn = ({ title, matches, roundIndex = 0, matchNumberOffset = 0 }) => {
     const firstRoundMatchHeight = bigScreen
-      ? matchScoring === "bestOf3" ? 380 : matchScoring === "avgAdvantage" && !useHandicapScores ? 248 : 204
-      : matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && !useHandicapScores ? 150 : 106;
+      ? matchScoring === "bestOf3" ? 392 : matchScoring === "avgAdvantage" && !useHandicapScores ? 288 : 222
+      : matchScoring === "bestOf3" ? 238 : matchScoring === "avgAdvantage" && !useHandicapScores ? 196 : 148;
     const matchHeight = bigScreen
-      ? matchScoring === "bestOf3" ? 380 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 248 : 204
-      : matchScoring === "bestOf3" ? 218 : matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores ? 150 : 106;
-    const firstRoundGap = bigScreen ? (matchScoring === "bestOf3" ? 96 : 76) : (matchScoring === "bestOf3" ? 48 : 38);
+      ? matchScoring === "bestOf3" ? 392 : matchScoring === "avgAdvantage" && !useHandicapScores ? 288 : 222
+      : matchScoring === "bestOf3" ? 238 : matchScoring === "avgAdvantage" && !useHandicapScores ? 196 : 148;
+    const firstRoundGap = bigScreen ? (matchScoring === "bestOf3" ? 104 : 84) : (matchScoring === "bestOf3" ? 54 : 46);
     const step = firstRoundMatchHeight + firstRoundGap;
     const getTop = (matchIndex) => {
       if (roundIndex === 0) return matchIndex * step;
@@ -8084,7 +8084,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     const columnHeight =
       Math.max(1, bracketRounds[0]?.matches?.length || matches.length) * step;
     return (
-      <div className={bigScreen ? "bb-public-bracket-col flex-1" : "bb-public-bracket-col min-w-[280px] flex-1"}>
+      <div className={bigScreen ? "bb-public-bracket-col flex-1" : "bb-public-bracket-col min-w-[300px] flex-1"}>
         <h3 className="mb-3 text-center font-semibold text-blue-900">{title}</h3>
         <div
   className="relative pb-8"
