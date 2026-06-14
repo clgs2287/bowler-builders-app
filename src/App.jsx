@@ -5544,13 +5544,13 @@ const saveCurrentGame = () => {
           </table>
                 </div>
 
-<div className="hidden px-2 pt-2 print:block">
+<div className="mx-auto hidden w-[92%] pt-3 print:block">
   <h1 className="mb-1 text-xl font-black text-black">  {tournamentInfo.name || "Tournament"}
 </h1>
 
   {printableScoreEntryLaneKeys.map((laneKey) => (
   <div key={`print-score-entry-lane-${laneKey}`} className="mb-2 break-inside-avoid pt-1">
-  <table className="w-full border-collapse text-[11px] text-black">
+  <table className="w-full border-collapse text-[10px] text-black">
     <thead>
       <tr>
         <th className="w-28 border border-black p-1 text-left">Bowler</th>
@@ -5558,7 +5558,7 @@ const saveCurrentGame = () => {
         {useHandicapScores && <th className="w-10 border border-black p-0.5 text-center">Avg</th>}
         {useHandicapScores && <th className="w-9 border border-black p-0.5 text-center">Hdcp</th>}
         {Array.from({ length: qualifyingGames }, (_, gi) => (
-          <th key={`print-score-game-${gi}`} className="border border-black p-1 text-center">
+          <th key={`print-score-game-${gi}`} className="border border-black p-0.5 text-center">
             <div>G{gi + 1}</div>
             <div className="text-[9px] font-bold leading-tight text-black">
               {laneKey !== "Unassigned"
@@ -5605,7 +5605,7 @@ const saveCurrentGame = () => {
             </td>
           )}
           {Array.from({ length: qualifyingGames }, (_, gi) => (
-            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-1" />
+            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-0.5" />
           ))}
           <td className="border border-black p-1" />
           {useHandicapScores && <td className="w-10 border border-black p-0.5 text-center font-bold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
