@@ -5544,16 +5544,15 @@ const saveCurrentGame = () => {
           </table>
                 </div>
 
-<div className="hidden print:block">
+<div className="hidden px-2 pt-2 print:block">
   <h1 className="mb-1 text-xl font-black text-black">  {tournamentInfo.name || "Tournament"}
 </h1>
 
   {printableScoreEntryLaneKeys.map((laneKey) => (
-  <div key={`print-score-entry-lane-${laneKey}`} className="mb-2 break-inside-avoid">
+  <div key={`print-score-entry-lane-${laneKey}`} className="mb-2 break-inside-avoid pt-1">
   <table className="w-full border-collapse text-[11px] text-black">
     <thead>
       <tr>
-        <th className="border border-black p-1 text-left">#</th>
         <th className="w-28 border border-black p-1 text-left">Bowler</th>
         <th className="border border-black p-1 text-center">Pos</th>
         {useHandicapScores && <th className="w-10 border border-black p-0.5 text-center">Avg</th>}
@@ -5593,7 +5592,6 @@ const saveCurrentGame = () => {
     <tbody>
       {printableScoreEntryGroups[laneKey].map(({ bowler: b, index }, displayIndex) => (
         <tr key={`print-score-row-${b.seed}-${index}`}>
-          <td className="border border-black p-1 font-bold">{displayIndex + 1}</td>
           <td className="w-28 border border-black p-1 font-bold">{b.name || ""}</td>
           <td className="border border-black p-1 text-center">{b.lane || ""}</td>
           {useHandicapScores && (
