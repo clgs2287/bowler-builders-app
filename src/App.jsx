@@ -7101,7 +7101,7 @@ const registrationStatus =
           onChange={(e) =>
             updateField("note", e.target.value)
           }
-          placeholder="Optional note..."
+          placeholder="Optional note: If you would like to cross with another bowler, please list their name here. We will do our best to accommodate requests, but they are not guaranteed."
         />
 
 <Button
