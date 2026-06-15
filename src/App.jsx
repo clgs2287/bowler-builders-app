@@ -9195,7 +9195,11 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
   const sortStatsRows = (statsRows) => {
     const direction = statsSort.direction === "asc" ? 1 : -1;
-    if (statsSort.key === "default") return [...statsRows].sort((a, b) => b.titles - a.titles || b.cashes - a.cashes || b.average - a.average);
+    if (statsSort.key === "default") {
+      return statsMode === "handicap"
+        ? [...statsRows].sort((a, b) => b.cashes - a.cashes || b.average - a.average)
+        : [...statsRows].sort((a, b) => b.titles - a.titles || b.cashes - a.cashes || b.average - a.average);
+    }
     return [...statsRows].sort((a, b) => {
       const aValue = a[statsSort.key];
       const bValue = b[statsSort.key];
@@ -9205,7 +9209,12 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   };
 
   const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
-  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " â–²" : " â–¼") : "";
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ↑" : " ↓") : "";
+  useEffect(() => {
+    if (statsMode === "handicap" && statsSort.key === "titles") {
+      setStatsSort({ key: "default", direction: "desc" });
+    }
+  }, [statsMode, statsSort.key]);
   const playerRows = sortStatsRows(Object.values(playerStats)
     .map((p) => ({
       ...p,
@@ -9345,7 +9354,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               </>
             )}
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold">High Game{sortLabel("highGame")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>
+            {statsMode === "scratch" && <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>}
             <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
             <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
           </tr>
@@ -9353,7 +9362,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         <tbody>
           {playerRows.map((p) => {
             const expanded = expandedPublicBowler === p.name;
-            const publicStatsColSpan = statsMode === "scratch" ? 11 : 8;
+            const publicStatsColSpan = statsMode === "scratch" ? 11 : 7;
             const sortedDetails = [...(p.details || [])].sort(
               (a, b) => String(b.date || "").localeCompare(String(a.date || ""))
             );
@@ -9384,7 +9393,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                     </>
                   )}
                   <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
-                  <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>
+                  {statsMode === "scratch" && <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>}
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{p.cashes}</td>
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
                 </tr>
@@ -9410,7 +9419,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                               )}
                               <th className="p-2 text-right md:p-3">High</th>
                               <th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
-                              <th className="bb-mobile-hide p-2 text-right md:p-3">Title</th>
+                              {statsMode === "scratch" && <th className="bb-mobile-hide p-2 text-right md:p-3">Title</th>}
                             </tr>
                           </thead>
                           <tbody>
@@ -9431,7 +9440,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                                 )}
                                 <td className="p-2 text-right md:p-3">{detail.highGame || "-"}</td>
                                 <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.cashed ? "Yes" : "No"}</td>
-                                <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.title ? "Yes" : "No"}</td>
+                                {statsMode === "scratch" && <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.title ? "Yes" : "No"}</td>}
                               </tr>
                             ))}
                           </tbody>
@@ -12254,7 +12263,11 @@ current.results.push(result);
 
   const sortStatsRows = (rows) => {
     const direction = statsSort.direction === "asc" ? 1 : -1;
-    if (statsSort.key === "default") return [...rows].sort((a, b) => b.titles - a.titles || b.earnings - a.earnings || b.average - a.average);
+    if (statsSort.key === "default") {
+      return statsMode === "handicap"
+        ? [...rows].sort((a, b) => b.earnings - a.earnings || b.average - a.average)
+        : [...rows].sort((a, b) => b.titles - a.titles || b.earnings - a.earnings || b.average - a.average);
+    }
     return [...rows].sort((a, b) => {
       const aValue = a[statsSort.key];
       const bValue = b[statsSort.key];
@@ -12264,7 +12277,12 @@ current.results.push(result);
   };
 
   const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
-  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ?" : " ?") : "";
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ↑" : " ↓") : "";
+  useEffect(() => {
+    if (statsMode === "handicap" && statsSort.key === "titles") {
+      setStatsSort({ key: "default", direction: "desc" });
+    }
+  }, [statsMode, statsSort.key]);
 
   const playerRows = sortStatsRows(Object.values(playerStats)
     .map((p) => ({
@@ -12430,7 +12448,7 @@ current.results.push(result);
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    {statsMode === "scratch" && <th className="p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("titles")}
@@ -12438,7 +12456,7 @@ current.results.push(result);
       >
         Titles{sortLabel("titles")}
       </button>
-    </th>
+    </th>}
 
     <th className="p-2 text-right md:p-3">
       <button
@@ -12512,9 +12530,9 @@ current.results.push(result);
     {p.highGame || "—"}
   </td>
 
-  <td className="p-2 text-right font-bold text-yellow-700 md:p-3">
+  {statsMode === "scratch" && <td className="p-2 text-right font-bold text-yellow-700 md:p-3">
     {p.titles}
-  </td>
+  </td>}
 
   <td className="p-2 text-right md:p-3">
     {p.cashes}
@@ -12529,7 +12547,7 @@ current.results.push(result);
   </td>
 </tr>
                 ))}
-                {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={12}>No archived tournament stats for this filter yet.</td></tr>}
+                {playerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={statsMode === "scratch" ? 12 : 8}>No archived tournament stats for this filter yet.</td></tr>}
               </tbody>
             </table>
           </div>
