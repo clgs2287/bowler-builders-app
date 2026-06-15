@@ -40,6 +40,7 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 
 const HISTORICAL_TITLE_SERIES_OPTIONS = ["M.I.S.T.", "KWT", "F.B.E.T.", "FDDS", "Handicap/Non-FKM"];
 const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
+const ARCHIVED_AVERAGE_MIN_GAMES = 30;
 const PUBLIC_APP_URL = "https://tournaments.bowlerbuildersproshop.com";
 const OWNER_ADMIN_EMAILS = ["cory.lagner@gmail.com"];
 const TOURNAMENT_SERIES_LABELS = {
@@ -920,7 +921,7 @@ function getArchivedAverageForName(tournamentHistory = [], name, bowlerIdentitie
   const totalPins = numericScores.reduce((sum, score) => sum + score, 0);
   const average = numericScores.length > 0 ? Number((totalPins / numericScores.length).toFixed(2)) : 0;
 
-  return { eligible: totalGames >= 12, totalGames, average };
+  return { eligible: totalGames >= ARCHIVED_AVERAGE_MIN_GAMES, totalGames, average };
 }
 
 function currency(value) {
@@ -4619,7 +4620,7 @@ if (
     0
   );
 
-  if (totalGames < 12) {
+  if (totalGames < ARCHIVED_AVERAGE_MIN_GAMES) {
     return { eligible: false, totalGames };
   }
 
@@ -4650,7 +4651,7 @@ const calculatedAverage =
     : 0;
 
 return {
-  eligible: totalGames >= 12,
+  eligible: totalGames >= ARCHIVED_AVERAGE_MIN_GAMES,
   totalGames,
   average: calculatedAverage,
 };
