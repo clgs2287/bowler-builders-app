@@ -9932,7 +9932,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
       {publicArchiveSection === "results" && (
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className="bb-mobile-table bb-mobile-medium w-full min-w-[760px] text-xs md:text-sm">
+          <table className="bb-mobile-table bb-mobile-medium w-full min-w-[820px] text-xs md:text-sm">
             <thead className="bg-blue-800 text-white">
               <tr>
                 <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "place", direction: current.column === "place" && current.direction === "asc" ? "desc" : "asc" }))}>Place</th>
@@ -9942,6 +9942,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                 {selectedPublicArchiveSnapshot?.useHandicapScores && <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "handicap", direction: current.column === "handicap" && current.direction === "asc" ? "desc" : "asc" }))}>Hdcp</th>}
                 <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "average", direction: current.column === "average" && current.direction === "asc" ? "desc" : "asc" }))}>Average</th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
+                <th className="p-2 text-left md:p-3">Note</th>
               </tr>
             </thead>
             <tbody>
@@ -9967,6 +9968,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                   {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0)}</td>}
                   <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
+                  <td className="p-2 text-sm text-blue-800 md:p-3">{result.adjustmentNote || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -12646,6 +12648,27 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     );
   };
 
+  const updateSelectedArchivedResult = (targetResult, updates) => {
+    if (!selectedArchivedTournamentId || !targetResult) return;
+    const targetKey = String(targetResult.bowlerId || targetResult.name || "");
+    setTournamentHistory((current) =>
+      (current || []).map((tournament) => {
+        if (tournament.id !== selectedArchivedTournamentId) return tournament;
+        return {
+          ...tournament,
+          results: (tournament.results || []).map((result) => {
+            const resultKey = String(result.bowlerId || result.name || "");
+            if (resultKey !== targetKey) return result;
+            return {
+              ...result,
+              ...updates,
+            };
+          }),
+        };
+      })
+    );
+  };
+
   payoutRows.forEach((row) => {
     for (let i = 0; i < row.players; i += 1) payoutAssignments.push(row.finalPerPlayer);
   });
@@ -12904,7 +12927,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     setTournamentHistory((current) => current.filter((t) => t.id !== id));
   };
 
-  const historyCsv = [["Season", "Tournament", "Date", "Bowler", "Place", "Games", "Scratch Total", "Average", "Cut Made", "Payout", "FKM Title"], ...filteredHistory.flatMap((t) => (t.results || []).map((r) => [t.season || "Unassigned", t.name, t.date, r.name, r.place, (r.games || []).join("-"), r.scratchTotal, Number(r.average || 0).toFixed(2), r.cashed ? "Yes" : "No", r.payout, r.title ? "Yes" : "No"]))];
+  const historyCsv = [["Season", "Tournament", "Date", "Bowler", "Place", "Games", "Scratch Total", "Average", "Cut Made", "Payout", "FKM Title", "Adjustment Note"], ...filteredHistory.flatMap((t) => (t.results || []).map((r) => [t.season || "Unassigned", t.name, t.date, r.name, r.place, (r.games || []).join("-"), r.scratchTotal, Number(r.average || 0).toFixed(2), r.cashed ? "Yes" : "No", r.payout, r.title ? "Yes" : "No", r.adjustmentNote || ""]))];
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -12990,7 +13013,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             </div>
             {archivedDetailSection === "results" && (
               <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                <table className="bb-mobile-table bb-mobile-medium w-full min-w-[760px] text-xs md:text-sm">
+                <table className="bb-mobile-table bb-mobile-medium w-full min-w-[1040px] text-xs md:text-sm">
                   <thead className="bg-blue-800 text-white"><tr><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
@@ -13084,6 +13107,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 >
   Payout
 </th>
+<th className="p-2 text-left md:p-3">Adjustment Note</th>
 </tr>
 </thead>
 
@@ -13119,7 +13143,9 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 
     return (Number(a.place || 0) - Number(b.place || 0)) * dir;
   })
-  .map((result) => (
+  .map((result) => {
+    const resultPayout = result.payout ?? "";
+    return (
       <tr
         key={`${selectedArchivedTournament.id}-${result.bowlerId}`}
         className={
@@ -13131,7 +13157,13 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
         }
       >
         <td className="p-2 font-bold md:p-3">
-          #{result.place}
+          <Input
+            className="h-8 w-16 rounded-lg px-2 py-1 text-center text-xs font-bold"
+            type="number"
+            min="1"
+            value={result.place || ""}
+            onChange={(event) => updateSelectedArchivedResult(result, { place: Number(event.target.value || 0) || "" })}
+          />
         </td>
 
 <td className="p-2 font-semibold md:p-3">
@@ -13171,14 +13203,37 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
         </td>
 
         <td className="bb-mobile-hide p-2 text-right md:p-3">
-          {result.cashed ? "Yes" : "No"}
+          <select
+            value={result.cashed ? "yes" : "no"}
+            onChange={(event) => updateSelectedArchivedResult(result, { cashed: event.target.value === "yes" })}
+            className="h-8 rounded-lg border border-blue-200 bg-white px-2 text-xs font-semibold text-blue-950 outline-none"
+          >
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
         </td>
 
         <td className="p-2 text-right font-bold text-green-700 md:p-3">
-          {currency(result.payout || 0)}
+          <Input
+            className="h-8 w-20 rounded-lg px-2 py-1 text-right text-xs font-bold text-green-700"
+            type="number"
+            min="0"
+            value={resultPayout}
+            onChange={(event) => updateSelectedArchivedResult(result, { payout: Number(event.target.value || 0) })}
+          />
+        </td>
+
+        <td className="p-2 md:p-3">
+          <Input
+            className="h-8 min-w-[220px] rounded-lg px-2 py-1 text-xs"
+            value={result.adjustmentNote || ""}
+            onChange={(event) => updateSelectedArchivedResult(result, { adjustmentNote: event.target.value })}
+            placeholder="Optional roll-off note"
+          />
         </td>
       </tr>
-    ))}
+    );
+  })}
 </tbody>
 
                 </table>
