@@ -16388,8 +16388,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           setTournamentInfo({
             tournamentStyle: "singles",
             series: DEFAULT_TOURNAMENT_SERIES,
-            director: !savedDirector || savedDirector === "Cory Lagner" ? DEFAULT_TOURNAMENT_DIRECTOR : savedDirector,
-            directorEmail: parsed.tournamentInfo.directorEmail || DEFAULT_TOURNAMENT_DIRECTOR_EMAIL,
             ...parsed.tournamentInfo,
             director: !savedDirector || savedDirector === "Cory Lagner" ? DEFAULT_TOURNAMENT_DIRECTOR : savedDirector,
             directorEmail: parsed.tournamentInfo.directorEmail || DEFAULT_TOURNAMENT_DIRECTOR_EMAIL,
