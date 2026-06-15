@@ -5355,8 +5355,9 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false, 
   );
 }
 
-function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, setEliminatorTournamentState, }) {
+function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,savedScoreGames = {}, setSavedScoreGames, tournamentInfo = {}, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, setEliminatorTournamentState, qualifyingAdjustments = {}, setQualifyingAdjustments = () => {}, }) {
   const [activeScoreGameIndex, setActiveScoreGameIndex] = useState(null);
+  const [adjustmentDraft, setAdjustmentDraft] = useState({ bowlerKey: "", cashed: "no", note: "" });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const laneDrawMatchplay = isLaneDrawMatchplayStyle(tournamentStyle);
   const eliminatorTournamentStyle = isEliminatorTournamentStyle(tournamentStyle);
@@ -5413,6 +5414,7 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
   }, [activeScoreGameIndex, qualifyingGames]);
 
   const sorted = getRankedBowlers(bowlers, useHandicapScores);
+  const qualifyingAdjustmentRows = Object.values(qualifyingAdjustments || {});
   const scoreEntryRows = bowlers
     .map((bowler, index) => ({ bowler, index }))
     .sort((a, b) => {
@@ -5441,6 +5443,31 @@ const saveCurrentGame = () => {
     [activeScoreGameIndex]: true,
   }));
   setActiveScoreGameIndex(null);
+};
+
+const saveQualifyingAdjustment = () => {
+  const selected = sorted.find((row) => String(row.bowlerId || row.seed || row.name) === String(adjustmentDraft.bowlerKey));
+  if (!selected) return;
+  const key = String(selected.bowlerId || selected.name || selected.seed || "").trim().toLowerCase();
+  setQualifyingAdjustments((current) => ({
+    ...(current || {}),
+    [key]: {
+      bowlerId: key,
+      seed: selected.seed,
+      name: selected.name,
+      cashed: adjustmentDraft.cashed === "yes",
+      adjustmentNote: adjustmentDraft.note || "",
+    },
+  }));
+  setAdjustmentDraft({ bowlerKey: "", cashed: "no", note: "" });
+};
+
+const removeQualifyingAdjustment = (bowlerId) => {
+  setQualifyingAdjustments((current) => {
+    const next = { ...(current || {}) };
+    delete next[bowlerId];
+    return next;
+  });
 };
 
   return (
@@ -5552,6 +5579,80 @@ const saveCurrentGame = () => {
             </tbody>
           </table>
                 </div>
+
+        <div className="mt-4 rounded-2xl border border-blue-200 bg-white p-3 shadow-sm print:hidden md:p-4">
+          <div className="mb-3">
+            <h3 className="text-lg font-black text-blue-950">Qualifying Adjustments</h3>
+            <p className="text-sm font-semibold text-blue-700">Use this for roll-offs or director decisions that change who actually cashed after qualifying.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1.4fr_auto_2fr_auto] md:items-end">
+            <div className="space-y-1">
+              <Label>Bowler</Label>
+              <select
+                value={adjustmentDraft.bowlerKey}
+                onChange={(event) => setAdjustmentDraft((current) => ({ ...current, bowlerKey: event.target.value }))}
+                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950 outline-none"
+              >
+                <option value="">Select bowler</option>
+                {sorted.map((row) => (
+                  <option key={`qual-adj-${row.seed}`} value={String(row.bowlerId || row.seed || row.name)}>
+                    #{row.rank} {row.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <select
+                value={adjustmentDraft.cashed}
+                onChange={(event) => setAdjustmentDraft((current) => ({ ...current, cashed: event.target.value }))}
+                className="h-10 rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950 outline-none"
+              >
+                <option value="yes">Cashed</option>
+                <option value="no">Not Cashed</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label>Note</Label>
+              <Input
+                value={adjustmentDraft.note}
+                onChange={(event) => setAdjustmentDraft((current) => ({ ...current, note: event.target.value }))}
+                placeholder="Example: Lost roll-off for final cash spot"
+              />
+            </div>
+            <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" disabled={!adjustmentDraft.bowlerKey} onClick={saveQualifyingAdjustment}>
+              Save Adjustment
+            </Button>
+          </div>
+          {qualifyingAdjustmentRows.length > 0 && (
+            <div className="mt-4 overflow-auto rounded-xl border border-blue-100">
+              <table className="w-full min-w-[620px] text-xs md:text-sm">
+                <thead className="bg-blue-800 text-white">
+                  <tr>
+                    <th className="p-2 text-left">Bowler</th>
+                    <th className="p-2 text-left">Status</th>
+                    <th className="p-2 text-left">Note</th>
+                    <th className="p-2 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {qualifyingAdjustmentRows.map((adjustment) => (
+                    <tr key={`qual-adjustment-${adjustment.bowlerId}`} className="border-t">
+                      <td className="p-2 font-bold text-blue-950">{adjustment.name}</td>
+                      <td className={adjustment.cashed ? "p-2 font-bold text-green-700" : "p-2 font-bold text-red-700"}>{adjustment.cashed ? "Cashed" : "Not Cashed"}</td>
+                      <td className="p-2 text-blue-900">{adjustment.adjustmentNote || "-"}</td>
+                      <td className="p-2 text-right">
+                        <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => removeQualifyingAdjustment(adjustment.bowlerId)}>
+                          Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
 <div className="mx-auto hidden w-[92%] pt-3 print:block">
   <h1 className="mb-1 text-xl font-black text-black">  {tournamentInfo.name || "Tournament"}
@@ -8467,6 +8568,7 @@ function PublicViewTab({
   scheduleItems = [],
   publicMode = "leaderboard",
   allowLeaderboardBigScreen = false,
+  qualifyingAdjustments = {},
 }) {
  const [publicTab, setPublicTab] = useState(
   publicMode === "finals" ? "finals" : "leaderboard"
@@ -8476,6 +8578,7 @@ function PublicViewTab({
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const styleConfig = getTournamentStyleConfig(tournamentStyle);
   const ranked = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle);
+  const qualifyingAdjustmentResults = Object.values(qualifyingAdjustments || {});
   const publicIsMatchplay = isMatchplayTournament(tournamentFormat, tournamentInfo);
   const publicIsEliminatorTournament = isEliminatorTournamentStyle(tournamentStyle);
   const displayCashers = Number(financials.cashers || 0);
@@ -8532,7 +8635,7 @@ function PublicViewTab({
         </CardContent>
       </Card>
 
-      {publicTab === "leaderboard" && !publicIsEliminatorTournament && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} allowBigScreen={allowLeaderboardBigScreen} />}
+      {publicTab === "leaderboard" && !publicIsEliminatorTournament && <StandingsPublic ranked={ranked} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} allowBigScreen={allowLeaderboardBigScreen} archiveResults={qualifyingAdjustmentResults} />}
       {publicMode === "finals" && publicIsMatchplay && <PublicMatchplayBracketView bowlers={bowlers} matchplayState={matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={tournamentInfo} bigScreen={publicFinalsBigScreen} />}
       {publicMode === "finals" && publicIsEliminatorTournament && <EliminatorTournamentTab bowlers={bowlers} eliminatorTournamentState={eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={tournamentInfo} readOnly />}
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} bigScreen={publicFinalsBigScreen} />}
@@ -8674,6 +8777,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
           useHandicapScores={Boolean(snapshot.useHandicapScores)}
           tournamentFormat={snapshot.tournamentFormat || "eliminator"}
           tournamentStyle={tournamentStyle}
+          archiveResults={archive.results || []}
         />
       );
     }
@@ -12648,7 +12752,7 @@ current.results.push(result);
   );
 }
 
-function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, payoutRows, financials, tournamentFormat, tournamentHistory, setTournamentHistory, restoreTournament, qualifyingGames, savedScoreGames = {}, savedFinalsRounds = {}, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState = DEFAULT_MATCHPLAY_STATE, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, sidePotState, tournamentRecap = {}, isOwnerAdmin = false }) {
+function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, payoutRows, financials, tournamentFormat, tournamentHistory, setTournamentHistory, restoreTournament, qualifyingGames, savedScoreGames = {}, savedFinalsRounds = {}, qualifyingAdjustments = {}, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState = DEFAULT_MATCHPLAY_STATE, eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE, sidePotState, tournamentRecap = {}, isOwnerAdmin = false }) {
   const [seasonFilter, setSeasonFilter] = useState("All");
   const [selectedArchivedTournamentId, setSelectedArchivedTournamentId] = useState(null);
   const [archivedDetailSection, setArchivedDetailSection] = useState("results");
@@ -12887,6 +12991,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     );
 
 
+    const adjustmentMap = qualifyingAdjustments || {};
     const archivedResults = ranked.flatMap((b, index) => {
       const place = b.finalPlace || b.rank;
       const isWinner = place === 1;
@@ -12905,6 +13010,10 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
         const displayScratchTotal = isEliminatorTournamentArchive
           ? overallScores.reduce((sum, game) => sum + Number(game || 0), 0)
           : scratch;
+
+        const adjustmentKey = String(member.name || "").trim().toLowerCase();
+        const adjustment = adjustmentMap[adjustmentKey] || null;
+        const adjustedCashed = adjustment ? Boolean(adjustment.cashed) : cashed;
 
         return {
           bowlerId: member.name.trim().toLowerCase(),
@@ -12928,8 +13037,9 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
           average: overallScores.length
             ? overallScores.reduce((sum, game) => sum + game, 0) / overallScores.length
             : 0,
-          cashed,
-          payout: b.isTeam && members.length ? teamPayout / members.length : teamPayout,
+          cashed: adjustedCashed,
+          payout: adjustedCashed ? (b.isTeam && members.length ? teamPayout / members.length : teamPayout) : 0,
+          adjustmentNote: adjustment?.adjustmentNote || "",
           title: isWinner && Boolean(tournamentInfo.titleEligible ?? true),
           tournamentWinner: isWinner,
         };
@@ -12952,7 +13062,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       cashers: financials.cashers,
       prizeFund: financials.prizeFund,
       tournamentRecap: { ...(tournamentRecap || {}) },
-      activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, savedScoreGames, savedFinalsRounds, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState, eliminatorTournamentState, sidePotState, tournamentRecap: { ...(tournamentRecap || {}) } },
+      activeSnapshot: { tournamentInfo, bowlers, useHandicapScores, tournamentFormat, qualifyingGames, savedScoreGames, savedFinalsRounds, qualifyingAdjustments, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState, eliminatorTournamentState, sidePotState, tournamentRecap: { ...(tournamentRecap || {}) } },
       results: archivedResults,
     };
 
@@ -15646,6 +15756,7 @@ export default function BowlingPayoutApp() {
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [savedScoreGames, setSavedScoreGames] = useState({});
   const [savedFinalsRounds, setSavedFinalsRounds] = useState({});
+  const [qualifyingAdjustments, setQualifyingAdjustments] = useState({});
   const hasSavedPublicScoreGame = Object.values(savedScoreGames || {}).some(Boolean);
   const requestedPublicResultsTab = initialPublicTabRequestRef.current;
   const publicResultsUnlocked = Boolean(requestedPublicResultsTab) || hasSavedPublicScoreGame || (bowlers.length > 0 && bowlers.every((bowler) => Boolean(bowler.paid)));
@@ -16241,6 +16352,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     qualifyingGames,
     savedScoreGames,
     savedFinalsRounds,
+    qualifyingAdjustments,
     bowlers,
     useHandicapScores,
     tournamentFormat,
@@ -16293,6 +16405,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         if (parsed.eliminatorTournamentState) setEliminatorTournamentState({ ...DEFAULT_ELIMINATOR_TOURNAMENT_STATE, ...parsed.eliminatorTournamentState });
         if (parsed.savedScoreGames) setSavedScoreGames(parsed.savedScoreGames);
         if (parsed.savedFinalsRounds) setSavedFinalsRounds(parsed.savedFinalsRounds);
+        if (parsed.qualifyingAdjustments) setQualifyingAdjustments(parsed.qualifyingAdjustments);
         if (Array.isArray(parsed.scheduleItems)) setScheduleItems(parsed.scheduleItems);
         if (typeof parsed.scheduleLocked === "boolean") setScheduleLocked(parsed.scheduleLocked);
         if (parsed.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...parsed.eliminatorState });
@@ -16308,16 +16421,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   useEffect(() => {
     if (!hasLoadedSavedData) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ qualifyingGames, savedScoreGames, savedFinalsRounds, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, reservationState, multiDayEvent, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState, eliminatorTournamentState, sidePotState, paidPayouts, paidSideActionPayouts, scheduleItems, scheduleLocked }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ qualifyingGames, savedScoreGames, savedFinalsRounds, qualifyingAdjustments, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, reservationState, multiDayEvent, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState, eliminatorTournamentState, sidePotState, paidPayouts, paidSideActionPayouts, scheduleItems, scheduleLocked }));
     } catch (error) {
       console.warn("Could not auto-save tournament data", error);
     }
-  }, [qualifyingGames, savedScoreGames, savedFinalsRounds, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, reservationState, multiDayEvent, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState, eliminatorTournamentState, sidePotState, paidPayouts, paidSideActionPayouts, scheduleItems, scheduleLocked, hasLoadedSavedData]);
+  }, [qualifyingGames, savedScoreGames, savedFinalsRounds, qualifyingAdjustments, bowlers, useHandicapScores, tournamentFormat, tournamentInfo, tournamentRecap, reservationState, multiDayEvent, payoutState, bracketState, eliminatorState, laneEliminatorState, matchplayState, eliminatorTournamentState, sidePotState, paidPayouts, paidSideActionPayouts, scheduleItems, scheduleLocked, hasLoadedSavedData]);
 
   const buildActiveTournamentSnapshot = () => ({
     qualifyingGames,
     savedScoreGames,
     savedFinalsRounds,
+    qualifyingAdjustments,
     bowlers,
     useHandicapScores,
     tournamentFormat,
@@ -16344,6 +16458,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || {}) });
     setSavedScoreGames(snapshot.savedScoreGames || {});
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
+    setQualifyingAdjustments(snapshot.qualifyingAdjustments || {});
     if (snapshot.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...snapshot.payoutState, overrides: { ...defaultOverrides, ...(snapshot.payoutState.overrides || {}) } });
     else setPayoutState(DEFAULT_PAYOUT_STATE);
     setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, ...(snapshot.bracketState || {}) });
@@ -16555,6 +16670,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (Number(snapshot.qualifyingGames)) setQualifyingGames(Number(snapshot.qualifyingGames));
     setSavedScoreGames(snapshot.savedScoreGames || {});
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
+    setQualifyingAdjustments(snapshot.qualifyingAdjustments || {});
     if (snapshot.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...snapshot.payoutState, overrides: { ...defaultOverrides, ...(snapshot.payoutState.overrides || {}) } });
     if (snapshot.bracketState) setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, ...snapshot.bracketState });
     if (snapshot.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...snapshot.eliminatorState });
@@ -16580,6 +16696,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
     setSavedFinalsRounds({});
+    setQualifyingAdjustments({});
     setPayoutState(DEFAULT_PAYOUT_STATE);
     setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {} });
     setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
@@ -16828,7 +16945,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   </AppErrorBoundary>
 )}
         {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} bowlerIdentities={bowlerIdentities} setReservationState={setReservationState} />}
-        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo} eliminatorTournamentState={eliminatorTournamentState} setEliminatorTournamentState={setEliminatorTournamentState}   />}
+        {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo} eliminatorTournamentState={eliminatorTournamentState} setEliminatorTournamentState={setEliminatorTournamentState} qualifyingAdjustments={qualifyingAdjustments} setQualifyingAdjustments={setQualifyingAdjustments}   />}
         {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
         {activeTab === "finance" && <FinanceTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} matchplayLineageGames={matchplayLineageGames} />}
@@ -16940,7 +17057,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   />
 )}
         {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
-        {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
+        {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} qualifyingAdjustments={qualifyingAdjustments} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
 <TournamentInfoTab
@@ -16959,7 +17076,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   matchplayState={matchplayState}
 />
 )}
-        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} allowLeaderboardBigScreen={isAdminMode} /></AppErrorBoundary>}
+        {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} allowLeaderboardBigScreen={isAdminMode} qualifyingAdjustments={qualifyingAdjustments} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} /></AppErrorBoundary>}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
