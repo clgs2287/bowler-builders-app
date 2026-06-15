@@ -16144,7 +16144,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   });
   activeTournamentSnapshotRef.current = buildActiveTournamentSnapshot();
 
-  const applyActiveTournamentSnapshot = (snapshot = {}) => {
+  const applyActiveTournamentSnapshot = (snapshot = {}, { navigateToDashboard = false } = {}) => {
     if (Number(snapshot.qualifyingGames)) setQualifyingGames(Number(snapshot.qualifyingGames));
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers.map((bowler) => normalizeBowlerGames(bowler, Number(snapshot.qualifyingGames || qualifyingGames || 4))) : buildInitialBowlers(0, Number(snapshot.qualifyingGames || 4)));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
@@ -16164,7 +16164,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setSidePotState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: DEFAULT_BRACKET_PRICE, teamBracketPrice: DEFAULT_BRACKET_PRICE, highGamePrice: 10, handicapHighGamePrice: 10, teamHighGamePrice: 10, teamBracketEntries: {}, teamHighGameEntries: {}, entries: {}, bracketSets: { early: {}, handicapEarly: {}, middle: {}, late: {}, team: {} }, brackets: [], bracketGroups: { early: [], handicapEarly: [], middle: [], late: [], team: [] }, leftovers: 0, leftoversBySet: { early: 0, handicapEarly: 0, middle: 0, late: 0, team: 0 }, refunds: [], refundsBySet: { early: [], handicapEarly: [], middle: [], late: [], team: [] }, selectedPlanIds: { early: "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only", team: "full-only" }, ...(snapshot.sidePotState || {}) });
     setPaidPayouts(snapshot.paidPayouts || {});
     setPaidSideActionPayouts(snapshot.paidSideActionPayouts || {});
-    setActiveTab("dashboard");
+    if (navigateToDashboard) setActiveTab("dashboard");
   };
 
   const saveTournamentDraft = () => {
@@ -16193,7 +16193,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (!draft) return;
     const confirmed = window.confirm(`Open ${draft.name}? This will replace the current active tournament.`);
     if (!confirmed) return;
-    applyActiveTournamentSnapshot(draft.snapshot || {});
+    applyActiveTournamentSnapshot(draft.snapshot || {}, { navigateToDashboard: true });
   };
 
   const deleteTournamentDraft = (draftId) => {
