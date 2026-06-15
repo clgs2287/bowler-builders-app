@@ -8951,6 +8951,52 @@ function PublicTournamentRecap({
   );
 }
 
+function ArchivedTournamentRecapEditor({ tournamentRecap = {}, onChange = () => {} }) {
+  const updateRecap = (field, value) => {
+    onChange({
+      winner: tournamentRecap.winner || "",
+      runnerUp: tournamentRecap.runnerUp || "",
+      highGame: tournamentRecap.highGame || "",
+      recapNotes: tournamentRecap.recapNotes || "",
+      [field]: value,
+    });
+  };
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-blue-200 bg-white p-3 shadow-sm md:p-5">
+      <div>
+        <h3 className="text-lg font-black text-blue-950">Edit Archived Recap</h3>
+        <p className="text-sm font-semibold text-blue-700">Changes here update the archived tournament recap. Public pages remain view-only.</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Input
+          value={tournamentRecap.winner || ""}
+          onChange={(event) => updateRecap("winner", event.target.value)}
+          placeholder="Winner"
+        />
+        <Input
+          value={tournamentRecap.runnerUp || ""}
+          onChange={(event) => updateRecap("runnerUp", event.target.value)}
+          placeholder="Runner Up"
+        />
+        <Input
+          value={tournamentRecap.highGame || ""}
+          onChange={(event) => updateRecap("highGame", event.target.value)}
+          placeholder="Ball Raffle Winner"
+        />
+      </div>
+
+      <textarea
+        className="min-h-[180px] w-full rounded-2xl border border-blue-200 bg-white p-4 text-sm text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        value={tournamentRecap.recapNotes || ""}
+        onChange={(event) => updateRecap("recapNotes", event.target.value)}
+        placeholder="Tournament recap notes..."
+      />
+    </div>
+  );
+}
+
 function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = [] }) {
   const [search, setSearch] = useState("");
   const [publicStatsTab, setPublicStatsTab] = useState("bowlers");
@@ -12575,6 +12621,31 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   const payoutAssignments = [];
   const [archiveSort, setArchiveSort] = useState({ column: "place", direction: "asc" });
 
+  const updateSelectedArchivedRecap = (nextRecap) => {
+    if (!selectedArchivedTournamentId) return;
+    const cleanRecap = {
+      winner: nextRecap.winner || "",
+      runnerUp: nextRecap.runnerUp || "",
+      highGame: nextRecap.highGame || "",
+      recapNotes: nextRecap.recapNotes || "",
+    };
+    setTournamentHistory((current) =>
+      (current || []).map((tournament) => {
+        if (tournament.id !== selectedArchivedTournamentId) return tournament;
+        return {
+          ...tournament,
+          tournamentRecap: cleanRecap,
+          activeSnapshot: tournament.activeSnapshot
+            ? {
+                ...tournament.activeSnapshot,
+                tournamentRecap: cleanRecap,
+              }
+            : tournament.activeSnapshot,
+        };
+      })
+    );
+  };
+
   payoutRows.forEach((row) => {
     for (let i = 0; i < row.players; i += 1) payoutAssignments.push(row.finalPerPlayer);
   });
@@ -13125,8 +13196,12 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             {archivedDetailSection === "sideaction" && selectedSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} sidePotState={selectedSnapshot.sidePotState} qualifyingGames={selectedSnapshot.qualifyingGames || 4} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "sideaction" && !selectedSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
             {archivedDetailSection === "lanePattern" && <LanePatternImagesView images={selectedArchiveLanePatternImages} />}
-            {archivedDetailSection === "recap" && (selectedArchivedRecap.winner || selectedArchivedRecap.runnerUp || selectedArchivedRecap.highGame || selectedArchivedRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedArchivedRecap} />}
-            {archivedDetailSection === "recap" && !(selectedArchivedRecap.winner || selectedArchivedRecap.runnerUp || selectedArchivedRecap.highGame || selectedArchivedRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
+            {archivedDetailSection === "recap" && (
+              <ArchivedTournamentRecapEditor
+                tournamentRecap={selectedArchivedRecap}
+                onChange={updateSelectedArchivedRecap}
+              />
+            )}
           </CardContent>
         </AppCard>
       )}
