@@ -7648,7 +7648,7 @@ function getBracketByeRanks(qualifiers) {
   return Array.from({ length: byes }, (_, index) => index + 1);
 }
 
-function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat, tournamentStyle = "singles", allowBigScreen = false }) {
+function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat, tournamentStyle = "singles", allowBigScreen = false, archiveResults = [] }) {
   const [search, setSearch] = useState("");
   const [bigScreen, setBigScreen] = useState(false);
   const [expandedSeed, setExpandedSeed] = useState(null);
@@ -7688,8 +7688,33 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   const byeRanks = getBracketByeRanks(displayCashers);
   const cutBowler = ranked[Math.max(displayCashers - 1, 0)];
   const cutScore = cutBowler ? (useHandicapScores ? cutBowler.handicap : cutBowler.scratch) : 0;
+  const archiveResultMap = new Map(
+    (archiveResults || []).map((result) => [
+      String(result.bowlerId || result.name || "").trim().toLowerCase(),
+      result,
+    ])
+  );
+  const archiveResultForRow = (row) =>
+    archiveResultMap.get(String(row.bowlerId || row.name || "").trim().toLowerCase()) ||
+    archiveResultMap.get(String(row.name || "").trim().toLowerCase()) ||
+    null;
+  const adjustedCashStatus = (row) => {
+    const archiveResult = archiveResultForRow(row);
+    if (!archiveResult) return null;
+    const qualifyingCashed = row.rank <= displayCashers;
+    const actualCashed = Boolean(archiveResult.cashed);
+    if (actualCashed === qualifyingCashed && !archiveResult.adjustmentNote) return null;
+    return {
+      actualCashed,
+      qualifyingCashed,
+      note: archiveResult.adjustmentNote || "",
+    };
+  };
 
   const rowClass = (b) => {
+    const adjustment = adjustedCashStatus(b);
+    if (adjustment && adjustment.actualCashed) return "border-t bb-highlight-cash";
+    if (adjustment && !adjustment.actualCashed && b.rank <= displayCashers) return "border-t bg-red-50";
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return "border-t bb-highlight-bye";
     if (tournamentFormat === "eliminator" && b.rank <= 4) return "border-t bb-highlight-top";
     if (b.rank <= displayCashers) return "border-t bb-highlight-cash";
@@ -7697,6 +7722,9 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
   };
 
   const stickyBgClass = (b) => {
+    const adjustment = adjustedCashStatus(b);
+    if (adjustment && adjustment.actualCashed) return "bg-blue-50";
+    if (adjustment && !adjustment.actualCashed && b.rank <= displayCashers) return "bg-red-50";
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return "bg-purple-100";
     if (tournamentFormat === "eliminator" && b.rank <= 4) return "bg-yellow-50";
     if (b.rank <= displayCashers) return "bg-blue-50";
@@ -7718,6 +7746,21 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
       ? "inline-flex whitespace-nowrap rounded-full px-5 py-2 text-xl font-bold"
       : "inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-bold md:px-3 md:py-1 md:text-xs";
     const score = useHandicapScores ? b.handicap : b.scratch;
+    const adjustment = adjustedCashStatus(b);
+    if (adjustment) {
+      return (
+        <span className="inline-flex max-w-[12rem] flex-col items-end gap-1">
+          <span className={`${base} ${adjustment.actualCashed ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+            {adjustment.actualCashed ? "CASH" : "NOT CASHED"}
+          </span>
+          {adjustment.note && (
+            <span className={bigScreen ? "text-right text-base font-semibold text-blue-900" : "text-right text-[10px] font-semibold text-blue-900 md:text-xs"}>
+              {adjustment.note}
+            </span>
+          )}
+        </span>
+      );
+    }
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return <span className={`${base} bg-purple-200 text-purple-900`}>BYE</span>;
     if (tournamentFormat === "eliminator" && b.rank <= 4) return <span className={`${base} bg-yellow-200 text-yellow-900`}>TOP 4</span>;
     if (b.rank <= displayCashers) return <span className={`${base} bg-green-100 text-green-800`}>CASH</span>;
@@ -9976,7 +10019,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         </div>
       )}
 
-      {publicArchiveSection === "qualifying" && selectedPublicArchiveSnapshot && !selectedPublicArchiveIsMatchplay && !selectedPublicArchiveIsEliminatorTournament && <StandingsPublic ranked={getRankedTournamentEntries(selectedPublicArchiveSnapshot.bowlers || [], Boolean(selectedPublicArchiveSnapshot.useHandicapScores), selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedPublicArchiveSnapshot.bowlers || []).length, ...(selectedPublicArchiveSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} tournamentFormat={selectedPublicArchiveSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"} />}
+      {publicArchiveSection === "qualifying" && selectedPublicArchiveSnapshot && !selectedPublicArchiveIsMatchplay && !selectedPublicArchiveIsEliminatorTournament && <StandingsPublic ranked={getRankedTournamentEntries(selectedPublicArchiveSnapshot.bowlers || [], Boolean(selectedPublicArchiveSnapshot.useHandicapScores), selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedPublicArchiveSnapshot.bowlers || []).length, ...(selectedPublicArchiveSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} tournamentFormat={selectedPublicArchiveSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles"} archiveResults={selectedPublicArchive.results || []} />}
       {publicArchiveSection === "qualifying" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with full scoring snapshots.</p>}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && <PublicMatchplayBracketView bowlers={selectedPublicArchiveSnapshot.bowlers || []} matchplayState={selectedPublicArchiveSnapshot.matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && selectedPublicArchiveIsEliminatorTournament && <EliminatorTournamentTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} eliminatorTournamentState={selectedPublicArchiveSnapshot.eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} readOnly />}
@@ -13239,7 +13282,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                 </table>
               </div>
             )}
-            {archivedDetailSection === "qualifying" && selectedSnapshot && !selectedArchiveIsMatchplay && !selectedArchiveIsEliminatorTournament && <StandingsPublic ranked={getRankedTournamentEntries(selectedSnapshot.bowlers || [], Boolean(selectedSnapshot.useHandicapScores), selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedSnapshot.bowlers || []).length, ...(selectedSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} tournamentFormat={selectedSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"} />}
+            {archivedDetailSection === "qualifying" && selectedSnapshot && !selectedArchiveIsMatchplay && !selectedArchiveIsEliminatorTournament && <StandingsPublic ranked={getRankedTournamentEntries(selectedSnapshot.bowlers || [], Boolean(selectedSnapshot.useHandicapScores), selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} financials={calculateFinancials({ entries: getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"), lineageEntries: (selectedSnapshot.bowlers || []).length, ...(selectedSnapshot.payoutState || {}) })} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} tournamentFormat={selectedSnapshot.tournamentFormat || "eliminator"} tournamentStyle={selectedSnapshot.tournamentInfo?.tournamentStyle || "singles"} archiveResults={selectedArchivedTournament.results || []} />}
             {archivedDetailSection === "qualifying" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "finals" && selectedSnapshot && isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && <PublicMatchplayBracketView bowlers={selectedSnapshot.bowlers || []} matchplayState={selectedSnapshot.matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "finals" && selectedSnapshot && selectedArchiveIsEliminatorTournament && <EliminatorTournamentTab bowlers={selectedSnapshot.bowlers || []} eliminatorTournamentState={selectedSnapshot.eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
