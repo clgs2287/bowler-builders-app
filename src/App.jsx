@@ -2700,7 +2700,9 @@ function TournamentInfoTab({
   const currentStage = shouldShowPreTournamentStage
     ? isTournamentRegistrationWindow(tournamentStartDate, tournamentStartTime)
       ? "Registration"
-      : "Taking Reservations"
+      : reservationsMatchCurrentTournament
+        ? "Taking Reservations"
+        : "Upcoming Event"
     : normalStage;
 const infoRows = [
   ["Tournament Name", tournamentInfo.name || "Tournament"],
