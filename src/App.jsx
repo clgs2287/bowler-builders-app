@@ -7160,6 +7160,7 @@ function PublicReservations({
   reservationState,
   setReservationState,
   tournamentInfo,
+  selectedReservationKey = "",
   onReservationSubmit = () => Promise.resolve(),
 }) {
   const [submittingReservation, setSubmittingReservation] = useState(false);
@@ -7193,10 +7194,18 @@ function PublicReservations({
       if (selectedPublicReservationKey) setSelectedPublicReservationKey("");
       return;
     }
+    if (
+      selectedReservationKey &&
+      publicReservationOptions.some((option) => option.key === selectedReservationKey) &&
+      selectedPublicReservationKey !== selectedReservationKey
+    ) {
+      setSelectedPublicReservationKey(selectedReservationKey);
+      return;
+    }
     if (!activePublicReservationKey) {
       setSelectedPublicReservationKey(publicReservationOptions[0].key);
     }
-  }, [activePublicReservationKey, publicReservationOptions, selectedPublicReservationKey]);
+  }, [activePublicReservationKey, publicReservationOptions, selectedPublicReservationKey, selectedReservationKey]);
 
   const formValid =
   form.name.trim() &&
@@ -9120,7 +9129,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        onRegisterClick();
+                        onRegisterClick(reservationKeyFromScheduleItem(item));
                       }}
                       className="rounded-full bg-green-600 px-3 py-1 text-xs font-black text-white shadow-sm hover:bg-green-700"
                     >
@@ -15918,6 +15927,7 @@ const [reservationState, setReservationState] = useState({
   reservationsByTournament: {},
   openTournamentKeys: [],
 });
+const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
   const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
@@ -17212,7 +17222,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       scheduleItems={scheduleItems}
       tournamentHistory={tournamentHistory}
       reservationState={reservationState}
-      onRegisterClick={() => setActiveTab("publicreservations")}
+      onRegisterClick={(reservationKey) => {
+        setSelectedPublicReservationKey(reservationKey || "");
+        setActiveTab("publicreservations");
+      }}
     />
   </AppErrorBoundary>
 )}
@@ -17231,6 +17244,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   reservationState={reservationState}
   setReservationState={setReservationState}
   tournamentInfo={tournamentInfo}
+  selectedReservationKey={selectedPublicReservationKey}
   onReservationSubmit={submitReservationToSupabase}
 />
   </AppErrorBoundary>
