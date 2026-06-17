@@ -734,6 +734,7 @@ function findScheduleItemByName(scheduleItems = [], name = "") {
 
 function reservationBucketFromState(reservationState = {}) {
   return {
+    entriesOpen: Boolean(reservationState.entriesOpen),
     tournamentName: reservationState.tournamentName || "",
     tournamentDate: reservationState.tournamentDate || "",
     tournamentStartTime: reservationState.tournamentStartTime || "",
@@ -752,6 +753,7 @@ function sanitizeReservationsByTournament(reservationsByTournament = {}) {
     Object.entries(reservationsByTournament || {}).map(([key, bucket]) => [
       key,
       {
+        entriesOpen: Boolean(bucket?.entriesOpen),
         tournamentName: bucket?.tournamentName || "",
         tournamentDate: bucket?.tournamentDate || "",
         tournamentStartTime: bucket?.tournamentStartTime || "",
@@ -829,6 +831,49 @@ function getNextReservationNumber(reservationState = {}) {
     ...existingNumbers.map((number) => number + 1),
     1
   );
+}
+
+function getOpenReservationKeys(reservationState = {}) {
+  return Array.from(new Set([
+    ...(Array.isArray(reservationState.openTournamentKeys) ? reservationState.openTournamentKeys : []),
+    ...Object.entries(reservationState.reservationsByTournament || {})
+      .filter(([, bucket]) => Boolean(bucket?.entriesOpen))
+      .map(([key]) => key),
+    ...(reservationState.entriesOpen && reservationKeyFromState(reservationState) ? [reservationKeyFromState(reservationState)] : []),
+  ].filter(Boolean)));
+}
+
+function reservationStateForKey(reservationState = {}, tournamentKey = "") {
+  if (!tournamentKey || tournamentKey === reservationKeyFromState(reservationState)) {
+    return reservationState;
+  }
+  const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
+  return {
+    ...reservationState,
+    ...bucket,
+    entriesOpen: Boolean(bucket.entriesOpen || getOpenReservationKeys(reservationState).includes(tournamentKey)),
+    reservationsByTournament: reservationState.reservationsByTournament || {},
+    openTournamentKeys: getOpenReservationKeys(reservationState),
+  };
+}
+
+function openReservationOptions(reservationState = {}) {
+  return getOpenReservationKeys(reservationState)
+    .map((key) => {
+      const bucket = key === reservationKeyFromState(reservationState)
+        ? reservationBucketFromState(reservationState)
+        : reservationState.reservationsByTournament?.[key] || {};
+      return {
+        key,
+        state: reservationStateForKey(reservationState, key),
+        label: [
+          bucket.tournamentDate || "",
+          bucket.tournamentStartTime ? formatStartTime(bucket.tournamentStartTime) : "",
+          bucket.tournamentName || "Tournament",
+        ].filter(Boolean).join(" - "),
+      };
+    })
+    .filter((option) => option.state.entriesOpen && option.state.tournamentName);
 }
 
 async function sendReservationConfirmationEmail({ reservation, reservationState = {}, tournamentInfo = {} }) {
@@ -2664,14 +2709,14 @@ function TournamentInfoTab({
     ...(tournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: tournamentInfo.recentVideoLink }] : []),
     ...videoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href })),
   ].filter((item) => item.href);
-  const reservationsMatchCurrentTournament = reservationState.entriesOpen && (
-    normalizeMatchText(reservationState.tournamentName) === normalizeMatchText(tournamentInfo.name) ||
+  const reservationsMatchCurrentTournament = openReservationOptions(reservationState).some(({ state }) => (
+    normalizeMatchText(state.tournamentName) === normalizeMatchText(tournamentInfo.name) ||
     (
-      reservationState.tournamentDate &&
-      reservationState.tournamentDate === tournamentInfo.date &&
-      normalizeMatchText(reservationState.tournamentCenter) === normalizeMatchText(tournamentInfo.center)
+      state.tournamentDate &&
+      state.tournamentDate === tournamentInfo.date &&
+      normalizeMatchText(state.tournamentCenter) === normalizeMatchText(tournamentInfo.center)
     )
-  );
+  ));
   const normalStage = getTournamentStage({
     bowlers,
     eliminatorState,
@@ -6574,10 +6619,14 @@ function ReservationsTab({
       }
 
       const savedBucket = reservationsByTournament[nextKey] || {};
+      const openTournamentKeys = getOpenReservationKeys(current);
+      const nextEntriesOpen = Boolean(savedBucket.entriesOpen || openTournamentKeys.includes(nextKey));
 
       return {
         ...current,
         reservationsByTournament,
+        openTournamentKeys,
+        entriesOpen: nextEntriesOpen,
         tournamentName: name,
         tournamentDate: item?.startDate || savedBucket.tournamentDate || "",
         tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
@@ -6588,6 +6637,30 @@ function ReservationsTab({
         waitlistOnlyNames: savedBucket.waitlistOnlyNames || "",
         reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
         reservations: savedBucket.reservations || [],
+      };
+    });
+  };
+
+  const setSelectedTournamentOpen = (checked) => {
+    setReservationState((current) => {
+      const currentKey = reservationKeyFromState(current);
+      const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+      const openTournamentKeys = new Set(getOpenReservationKeys(current));
+
+      if (currentKey) {
+        reservationsByTournament[currentKey] = {
+          ...reservationBucketFromState(current),
+          entriesOpen: checked,
+        };
+        if (checked) openTournamentKeys.add(currentKey);
+        else openTournamentKeys.delete(currentKey);
+      }
+
+      return {
+        ...current,
+        entriesOpen: checked,
+        reservationsByTournament,
+        openTournamentKeys: Array.from(openTournamentKeys),
       };
     });
   };
@@ -6738,12 +6811,7 @@ function ReservationsTab({
 
             <Switch
               checked={reservationState.entriesOpen}
-              onCheckedChange={(checked) =>
-                setReservationState((current) => ({
-                  ...current,
-                  entriesOpen: checked,
-                }))
-              }
+              onCheckedChange={setSelectedTournamentOpen}
             />
           </div>
           </div>
@@ -7096,6 +7164,15 @@ function PublicReservations({
 }) {
   const [submittingReservation, setSubmittingReservation] = useState(false);
   const [submitNotice, setSubmitNotice] = useState("");
+  const publicReservationOptions = useMemo(() => openReservationOptions(reservationState), [reservationState]);
+  const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
+  const activePublicReservationKey =
+    publicReservationOptions.some((option) => option.key === selectedPublicReservationKey)
+      ? selectedPublicReservationKey
+      : publicReservationOptions[0]?.key || "";
+  const activeReservationState = activePublicReservationKey
+    ? reservationStateForKey(reservationState, activePublicReservationKey)
+    : reservationState;
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -7111,25 +7188,36 @@ function PublicReservations({
     }));
   };
 
+  useEffect(() => {
+    if (!publicReservationOptions.length) {
+      if (selectedPublicReservationKey) setSelectedPublicReservationKey("");
+      return;
+    }
+    if (!activePublicReservationKey) {
+      setSelectedPublicReservationKey(publicReservationOptions[0].key);
+    }
+  }, [activePublicReservationKey, publicReservationOptions, selectedPublicReservationKey]);
+
   const formValid =
   form.name.trim() &&
-  form.email.trim();
+  form.email.trim() &&
+  activePublicReservationKey;
   const currentReservations =
-  reservationState.reservations || [];
+  activeReservationState.reservations || [];
   const currentReservationCount = Number(
-    reservationState.reservationCount ?? currentReservations.length
+    activeReservationState.reservationCount ?? currentReservations.length
   );
-  const formForcedToWaitlist = isReservationWaitlistOnly(form, reservationState);
+  const formForcedToWaitlist = isReservationWaitlistOnly(form, activeReservationState);
 
 const registrationStatus =
   formForcedToWaitlist
     ? "Waitlisted"
     : currentReservationCount <
-  Number(reservationState.reservationLimit || 48)
+  Number(activeReservationState.reservationLimit || 48)
     ? "Registered"
     : "Waitlisted";
 
-  if (!reservationState.entriesOpen) {
+  if (!publicReservationOptions.length) {
     return (
       <Card className="rounded-2xl border border-red-200 bg-white shadow-sm">
         <CardContent className="p-5">
@@ -7155,10 +7243,24 @@ const registrationStatus =
         <p className="mb-5 text-sm text-blue-700">
           Register for:
           <span className="ml-1 font-bold">
-            {reservationState.tournamentName ||
+            {activeReservationState.tournamentName ||
               tournamentInfo.name}
           </span>
         </p>
+        {publicReservationOptions.length > 1 && (
+          <div className="mb-5 space-y-2">
+            <Label>Select Tournament</Label>
+            <select
+              value={activePublicReservationKey}
+              onChange={(event) => setSelectedPublicReservationKey(event.target.value)}
+              className="h-11 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950 outline-none"
+            >
+              {publicReservationOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="mb-5 space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
           <p>After submitting, please check your inbox and spam folder for your confirmation email.</p>
           <p>If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.</p>
@@ -7218,9 +7320,9 @@ const registrationStatus =
   onClick={async () => {
     const pendingReservation = {
       tournament:
-        reservationState.tournamentName ||
+        activeReservationState.tournamentName ||
         tournamentInfo.name,
-      tournamentKey: reservationKeyFromState(reservationState),
+      tournamentKey: activePublicReservationKey || reservationKeyFromState(activeReservationState),
       name: form.name,
       nickname: form.nickname,
       phone: formatPhoneNumber(form.phone),
@@ -7236,7 +7338,7 @@ const registrationStatus =
         return;
       }
     }
-    const registrationNumber = getNextReservationNumber(reservationState);
+    const registrationNumber = getNextReservationNumber(activeReservationState);
     const newReservation = {
       id: Date.now(),
       ...pendingReservation,
@@ -7261,17 +7363,37 @@ const registrationStatus =
     }
 
     setReservationState((current) => {
-      const currentReservations = current.reservations || [];
+      const selectedKey = activePublicReservationKey || reservationKeyFromState(activeReservationState);
+      const selectedState = reservationStateForKey(current, selectedKey);
+      const currentReservations = selectedState.reservations || [];
       const nextReservations = [
         ...currentReservations,
         savedReservation,
       ];
-      const currentCount = Number(current.reservationCount ?? currentReservations.length);
-      return {
-        ...current,
-        reservationNextNumber: Math.max(Number(current.reservationNextNumber || 1), Number(savedReservation.registrationNumber || registrationNumber) + 1),
+      const currentCount = Number(selectedState.reservationCount ?? currentReservations.length);
+      const nextBucket = {
+        ...reservationBucketFromState(selectedState),
+        entriesOpen: true,
+        reservationNextNumber: Math.max(Number(selectedState.reservationNextNumber || 1), Number(savedReservation.registrationNumber || registrationNumber) + 1),
         reservationCount: Math.max(currentCount + 1, nextReservations.length),
         reservations: nextReservations,
+      };
+      const reservationsByTournament = {
+        ...(current.reservationsByTournament || {}),
+        [selectedKey]: nextBucket,
+      };
+      const selectedIsCurrent = selectedKey === reservationKeyFromState(current);
+      return {
+        ...current,
+        reservationsByTournament,
+        openTournamentKeys: getOpenReservationKeys({ ...current, reservationsByTournament }),
+        ...(selectedIsCurrent
+          ? {
+              reservationNextNumber: nextBucket.reservationNextNumber,
+              reservationCount: nextBucket.reservationCount,
+              reservations: nextBucket.reservations,
+            }
+          : {}),
       };
     });
 
@@ -7279,7 +7401,7 @@ const registrationStatus =
     try {
       const emailResult = await sendReservationConfirmationEmail({
         reservation: savedReservation,
-        reservationState,
+        reservationState: activeReservationState,
         tournamentInfo,
       });
       if (emailResult?.skipped) {
@@ -8660,11 +8782,11 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
     return item.startDate;
   };
   const isRegistrationOpenForItem = (item) => {
-    if (!reservationState.entriesOpen) return false;
-    const openTournament = normalizeMatchText(reservationState.tournamentName || "");
     const scheduleTournament = normalizeMatchText(item.name || "");
-    if (!openTournament || !scheduleTournament) return false;
-    return openTournament === scheduleTournament;
+    if (!scheduleTournament) return false;
+    return openReservationOptions(reservationState).some(({ state }) =>
+      normalizeMatchText(state.tournamentName || "") === scheduleTournament
+    );
   };
 
   const hasRecap = (archive) => {
@@ -15794,6 +15916,7 @@ const [reservationState, setReservationState] = useState({
   waitlistOnlyNames: "",
   reservations: [],
   reservationsByTournament: {},
+  openTournamentKeys: [],
 });
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
   const appTopRef = useRef(null);
@@ -16114,6 +16237,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
     const reservationSettings = {
       entriesOpen: Boolean(reservationState.entriesOpen),
+      openTournamentKeys: getOpenReservationKeys(reservationState),
       registrationEmail: reservationState.registrationEmail || "",
       tournamentName: reservationState.tournamentName || "",
       tournamentDate: reservationState.tournamentDate || "",
@@ -16396,7 +16520,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           });
         }
         if (parsed.tournamentRecap) setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...parsed.tournamentRecap });
-        if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: 48, reservationNextNumber: 1, reservations: [], reservationsByTournament: {}, ...parsed.reservationState });
+        if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: 48, reservationNextNumber: 1, reservations: [], reservationsByTournament: {}, openTournamentKeys: [], ...parsed.reservationState });
         if (parsed.multiDayEvent) setMultiDayEvent({ ...createDefaultMultiDayEvent(), ...parsed.multiDayEvent });
         if (parsed.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
         if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, ...parsed.bracketState });
