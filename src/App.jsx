@@ -2787,6 +2787,24 @@ const infoRows = [
           Tournament Info
         </h2>
 
+        <section className="mb-3 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 p-4 text-white shadow-sm md:mb-5 md:p-5">
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-200">Maine Bowling Tournaments</p>
+              <h3 className="mt-2 text-2xl font-black md:text-3xl">Bowler Builders Tournament Hub</h3>
+              <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-blue-100 md:text-base">
+                Follow Bowler Builders tournament schedules, reserve tournament entries, view live leaderboards, track finals, side action, bowler stats, title history, and Hall of Fame records.
+              </p>
+            </div>
+            <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm font-bold text-blue-100 md:text-base">
+              <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-300" />Schedules</li>
+              <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-300" />Reservations</li>
+              <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-300" />Live Scores</li>
+              <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-300" />Tournament History</li>
+            </ul>
+          </div>
+        </section>
+
         <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-5">
           <div className="space-y-2.5 md:space-y-4">
 {infoRows.map(([label, value]) => {
