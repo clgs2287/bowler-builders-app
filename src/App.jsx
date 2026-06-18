@@ -785,59 +785,6 @@ function publicReservationRosterFromRows(rows = []) {
   })).filter((reservation) => reservation.name);
 }
 
-function printPublicReservationRoster({ title = "Tournament Reservations", reservations = [], limit = 0, count = 0 }) {
-  if (typeof window === "undefined") return;
-  const rows = (reservations || []).map((reservation, index) => ({
-    number: reservation.registrationNumber || reservation.confirmationNumber || index + 1,
-    name: getReservationDisplayName(reservation),
-    status: reservation.status || "Registered",
-  })).filter((row) => row.name);
-  const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  }[char]));
-  const registeredCount = Number(count || rows.length || 0);
-  const fieldLimit = Number(limit || 0);
-  const remaining = fieldLimit ? Math.max(0, fieldLimit - registeredCount) : 0;
-  const rosterWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
-  if (!rosterWindow) {
-    window.alert("Allow pop-ups to print or save the reservation roster.");
-    return;
-  }
-  rosterWindow.document.write(`<!doctype html>
-<html>
-  <head>
-    <title>${safe(title)} Roster</title>
-    <style>
-      body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
-      h1 { margin: 0 0 6px; font-size: 24px; }
-      p { margin: 0 0 18px; font-size: 13px; color: #334155; }
-      table { width: 100%; border-collapse: collapse; font-size: 14px; }
-      th, td { border-bottom: 1px solid #cbd5e1; padding: 8px; text-align: left; }
-      th { background: #dbeafe; color: #172554; }
-      .status { width: 130px; }
-      @media print { button { display: none; } body { margin: 12mm; } }
-    </style>
-  </head>
-  <body>
-    <button onclick="window.print()" style="float:right;padding:8px 12px;font-weight:700;">Print / Save PDF</button>
-    <h1>${safe(title)}</h1>
-    <p>Field: ${fieldLimit || "TBD"} | Reserved: ${registeredCount}${fieldLimit ? ` | Remaining: ${remaining}` : ""}</p>
-    <table>
-      <thead><tr><th>#</th><th>Name</th><th class="status">Status</th></tr></thead>
-      <tbody>
-        ${rows.map((row) => `<tr><td>${safe(row.number)}</td><td>${safe(row.name)}</td><td>${safe(row.status)}</td></tr>`).join("") || `<tr><td colspan="3">No reservations shown yet.</td></tr>`}
-      </tbody>
-    </table>
-  </body>
-</html>`);
-  rosterWindow.document.close();
-  rosterWindow.focus();
-}
-
 function reservationWaitlistOnlyEntries(value = "") {
   return String(value || "")
     .split(/\n|,/)
@@ -2947,22 +2894,10 @@ const infoRows = [
             </div>
             {showReservationRoster && (
               <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-3">
-                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="mb-3">
                   <p className="text-sm font-bold text-blue-950">
                     Public roster shows bowler nickname when provided, otherwise name. Contact information is hidden.
                   </p>
-                  <Button
-                    variant="outline"
-                    className="rounded-xl bg-blue-50 text-blue-950"
-                    onClick={() => printPublicReservationRoster({
-                      title: matchingReservationState?.tournamentName || tournamentInfo.name || "Tournament Reservations",
-                      reservations: publicReservationEntries,
-                      limit: publicReservationLimit,
-                      count: publicReservationCount,
-                    })}
-                  >
-                    Print / Save PDF
-                  </Button>
                 </div>
                 {publicReservationEntries.length ? (
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
