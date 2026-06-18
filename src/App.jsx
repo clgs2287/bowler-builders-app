@@ -2713,6 +2713,10 @@ function TournamentInfoTab({
         ? matchingReservationState.reservations
         : matchingReservationState.publicReservations || [])
     : [];
+  const sortedPublicReservationEntries = [...publicReservationEntries].sort((a, b) => (
+    Number(a.registrationNumber || a.confirmationNumber || 0) - Number(b.registrationNumber || b.confirmationNumber || 0) ||
+    String(getReservationDisplayName(a)).localeCompare(String(getReservationDisplayName(b)))
+  ));
   const publicReservationCount = Number(
     matchingReservationState?.reservationCount ??
     publicReservationEntries.length ??
@@ -2869,9 +2873,9 @@ const infoRows = [
     </div>
     {isField && showReservationRoster && (
       <div className="rounded-2xl border border-blue-100 bg-white p-3">
-        {publicReservationEntries.length ? (
+        {sortedPublicReservationEntries.length ? (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {publicReservationEntries.map((reservation, index) => (
+            {sortedPublicReservationEntries.map((reservation, index) => (
               <div key={reservation.id || `${reservation.tournamentKey || "reservation"}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-slate-50 px-3 py-2">
                 <span className="text-sm font-bold text-slate-900">
                   {reservation.registrationNumber || reservation.confirmationNumber || index + 1}. {getReservationDisplayName(reservation)}
