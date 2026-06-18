@@ -41,7 +41,6 @@ function Switch({ checked, onCheckedChange, compact = false }) {
 const HISTORICAL_TITLE_SERIES_OPTIONS = ["M.I.S.T.", "KWT", "F.B.E.T.", "FDDS", "Handicap/Non-FKM"];
 const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
 const ARCHIVED_AVERAGE_MIN_GAMES = 30;
-const PUBLIC_APP_URL = "https://tournaments.bowlerbuildersproshop.com";
 const OWNER_ADMIN_EMAILS = ["cory.lagner@gmail.com"];
 const TOURNAMENT_SERIES_LABELS = {
   "M.I.S.T.": "Maine Invitational Scratch Tournament",
@@ -50,15 +49,6 @@ const TOURNAMENT_SERIES_LABELS = {
   FDDS: "Frankie and Ding Dong Series",
   "Handicap/Non-FKM": "Handicap / Non-FKM",
 };
-
-function getSupabaseAuthRedirectUrl() {
-  if (typeof window === "undefined") return PUBLIC_APP_URL;
-  const hostname = window.location.hostname;
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "") {
-    return PUBLIC_APP_URL;
-  }
-  return window.location.origin;
-}
 
 function isOwnerAdminEmail(email = "") {
   return OWNER_ADMIN_EMAILS.includes(String(email || "").trim().toLowerCase());
@@ -902,23 +892,6 @@ async function sendReservationConfirmationEmail({ reservation, reservationState 
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(result.error || "Reservation email could not be sent.");
-  }
-  return result;
-}
-
-async function sendAdminAccountRequestEmail(email) {
-  const response = await fetch("/api/send-admin-request-email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      email,
-      createdAt: new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-    }),
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(result.error || "Admin request email could not be sent.");
   }
   return result;
 }
@@ -3392,7 +3365,7 @@ function SupabaseMigrationCard({
   );
 }
 
-function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onCreateAccount, onSignOut }) {
+function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSignOut }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -3411,20 +3384,6 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onCr
       setPassword("");
       setExpanded(false);
     }
-  };
-
-  const createAccount = async () => {
-    setError("");
-    setMessage("");
-    setSubmitting(true);
-    const result = await onCreateAccount(email.trim(), password);
-    setSubmitting(false);
-    if (result?.error) {
-      setError(result.error);
-      return;
-    }
-    setPassword("");
-    setMessage(result?.message || "Account created. Cory still needs to approve admin access.");
   };
 
   if (!hasSupabaseConfig) {
@@ -3483,9 +3442,6 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onCr
       />
       <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={submit} disabled={submitting}>
         {submitting ? "Signing In..." : "Admin Sign In"}
-      </Button>
-      <Button variant="outline" className="rounded-2xl bg-blue-100 text-blue-950 hover:bg-blue-50" onClick={createAccount} disabled={submitting}>
-        Create Account
       </Button>
       <Button variant="outline" className="rounded-2xl bg-white/80 text-blue-950 hover:bg-blue-50" onClick={() => { setExpanded(false); setError(""); setMessage(""); }}>
         Cancel
@@ -16116,50 +16072,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return { ok: true };
   };
 
-  const createSupabaseAccount = async (email, password) => {
-    if (!supabase) return { error: "Supabase is not configured." };
-    if (!email || !password) return { error: "Enter email and password." };
-    if (password.length < 6) return { error: "Password must be at least 6 characters." };
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: getSupabaseAuthRedirectUrl(),
-      },
-    });
-    if (error) return { error: error.message };
-
-    const profile = await loadSupabaseAdminProfile(data?.session || null);
-    if (profile) {
-      setIsAdminMode(true);
-      setActiveTab("dashboard");
-      return { ok: true, message: "Account created and admin access is active." };
-    }
-
-    let requestNotice = "Approval request created.";
-    try {
-      const emailResult = await sendAdminAccountRequestEmail(email);
-      requestNotice = emailResult?.skipped
-        ? "Approval request created. Cory still needs to approve this email."
-        : "Approval request sent to Cory.";
-    } catch (requestError) {
-      console.warn("Admin account request email could not be sent", requestError);
-      requestNotice = "Approval request created, but the email notice could not be sent.";
-    }
-
-    if (data?.session) {
-      await clearNonAdminSupabaseSession("Account is waiting for admin approval.");
-    }
-
-    return {
-      ok: true,
-      message: data?.session
-        ? `${requestNotice} You will not be able to sign in until approval is complete.`
-        : `${requestNotice} Check your email if Supabase asks you to confirm it. You will not be able to sign in until approval is complete.`,
-    };
-  };
-
   const signOutSupabaseAdmin = async () => {
     setSupabaseSession(null);
     setSupabaseAdminProfile(null);
@@ -17041,7 +16953,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                       adminProfile={supabaseAdminProfile}
                       authLoading={supabaseAuthLoading}
                       onSignIn={signInSupabaseAdmin}
-                      onCreateAccount={createSupabaseAccount}
                       onSignOut={signOutSupabaseAdmin}
                     />
                   </div>
