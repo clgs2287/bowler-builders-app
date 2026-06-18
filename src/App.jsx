@@ -2860,18 +2860,13 @@ const infoRows = [
             className="rounded-xl bg-white px-3 py-1.5 text-xs text-blue-950"
             onClick={() => setShowReservationRoster((current) => !current)}
           >
-            {showReservationRoster ? "Hide Roster" : "View Roster"}
+            Current Roster
           </Button>
         )}
       </span>
     </div>
     {isField && showReservationRoster && (
       <div className="rounded-2xl border border-blue-100 bg-white p-3">
-        <div className="mb-3">
-          <p className="text-sm font-bold text-blue-950">
-            Public roster shows bowler nickname when provided, otherwise name. Contact information is hidden.
-          </p>
-        </div>
         {publicReservationEntries.length ? (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {publicReservationEntries.map((reservation, index) => (
