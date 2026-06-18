@@ -772,6 +772,72 @@ function getReservationDisplayName(reservation = {}) {
   return nickname || name || "";
 }
 
+function publicReservationRosterFromRows(rows = []) {
+  return (rows || []).map((row, index) => ({
+    id: row.id || `${row.tournament_id || "reservation"}-${index + 1}`,
+    tournamentKey: row.tournament_id || "",
+    name: row.display_name || "",
+    nickname: "",
+    status: row.status || "Registered",
+    registrationNumber: row.registration_number || "",
+    confirmationNumber: row.registration_number || "",
+    publicOnly: true,
+  })).filter((reservation) => reservation.name);
+}
+
+function printPublicReservationRoster({ title = "Tournament Reservations", reservations = [], limit = 0, count = 0 }) {
+  if (typeof window === "undefined") return;
+  const rows = (reservations || []).map((reservation, index) => ({
+    number: reservation.registrationNumber || reservation.confirmationNumber || index + 1,
+    name: getReservationDisplayName(reservation),
+    status: reservation.status || "Registered",
+  })).filter((row) => row.name);
+  const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char]));
+  const registeredCount = Number(count || rows.length || 0);
+  const fieldLimit = Number(limit || 0);
+  const remaining = fieldLimit ? Math.max(0, fieldLimit - registeredCount) : 0;
+  const rosterWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+  if (!rosterWindow) {
+    window.alert("Allow pop-ups to print or save the reservation roster.");
+    return;
+  }
+  rosterWindow.document.write(`<!doctype html>
+<html>
+  <head>
+    <title>${safe(title)} Roster</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
+      h1 { margin: 0 0 6px; font-size: 24px; }
+      p { margin: 0 0 18px; font-size: 13px; color: #334155; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th, td { border-bottom: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+      th { background: #dbeafe; color: #172554; }
+      .status { width: 130px; }
+      @media print { button { display: none; } body { margin: 12mm; } }
+    </style>
+  </head>
+  <body>
+    <button onclick="window.print()" style="float:right;padding:8px 12px;font-weight:700;">Print / Save PDF</button>
+    <h1>${safe(title)}</h1>
+    <p>Field: ${fieldLimit || "TBD"} | Reserved: ${registeredCount}${fieldLimit ? ` | Remaining: ${remaining}` : ""}</p>
+    <table>
+      <thead><tr><th>#</th><th>Name</th><th class="status">Status</th></tr></thead>
+      <tbody>
+        ${rows.map((row) => `<tr><td>${safe(row.number)}</td><td>${safe(row.name)}</td><td>${safe(row.status)}</td></tr>`).join("") || `<tr><td colspan="3">No reservations shown yet.</td></tr>`}
+      </tbody>
+    </table>
+  </body>
+</html>`);
+  rosterWindow.document.close();
+  rosterWindow.focus();
+}
+
 function reservationWaitlistOnlyEntries(value = "") {
   return String(value || "")
     .split(/\n|,/)
@@ -2657,6 +2723,7 @@ function TournamentInfoTab({
   matchplayState = DEFAULT_MATCHPLAY_STATE,
 }) {
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
+  const [showReservationRoster, setShowReservationRoster] = useState(false);
   const sponsorList = String(tournamentInfo.sponsors || "")
     .split(",")
     .map((item) => item.trim())
@@ -2682,7 +2749,7 @@ function TournamentInfoTab({
     ...(tournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: tournamentInfo.recentVideoLink }] : []),
     ...videoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href })),
   ].filter((item) => item.href);
-  const reservationsMatchCurrentTournament = openReservationOptions(reservationState).some(({ state }) => (
+  const matchingReservationOption = openReservationOptions(reservationState).find(({ state }) => (
     normalizeMatchText(state.tournamentName) === normalizeMatchText(tournamentInfo.name) ||
     (
       state.tournamentDate &&
@@ -2690,6 +2757,23 @@ function TournamentInfoTab({
       normalizeMatchText(state.tournamentCenter) === normalizeMatchText(tournamentInfo.center)
     )
   ));
+  const matchingReservationState = matchingReservationOption?.state || null;
+  const reservationsMatchCurrentTournament = Boolean(matchingReservationState);
+  const publicReservationEntries = matchingReservationState
+    ? (matchingReservationState.reservations?.length
+        ? matchingReservationState.reservations
+        : matchingReservationState.publicReservations || [])
+    : [];
+  const publicReservationCount = Number(
+    matchingReservationState?.reservationCount ??
+    publicReservationEntries.length ??
+    0
+  );
+  const publicReservationLimit = Number(matchingReservationState?.reservationLimit || 0);
+  const publicReservationRemaining = publicReservationLimit
+    ? Math.max(0, publicReservationLimit - publicReservationCount)
+    : 0;
+  const showPublicFieldInfo = Boolean(matchingReservationState && publicReservationLimit);
   const normalStage = getTournamentStage({
     bowlers,
     eliminatorState,
@@ -2842,6 +2926,68 @@ const infoRows = [
             </div>
           </div>
         </div>
+
+        {showPublicFieldInfo && (
+          <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-3 md:mt-5 md:p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 className="text-base font-black text-blue-950 md:text-lg">Field</h3>
+                <p className="mt-1 text-sm font-bold text-blue-900 md:text-base">
+                  {publicReservationCount}/{publicReservationLimit} reserved
+                  <span className="ml-2 text-slate-700">({publicReservationRemaining} spots remaining)</span>
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="rounded-xl bg-white text-blue-950"
+                onClick={() => setShowReservationRoster((current) => !current)}
+              >
+                {showReservationRoster ? "Hide Roster" : "View Roster"}
+              </Button>
+            </div>
+            {showReservationRoster && (
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-3">
+                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm font-bold text-blue-950">
+                    Public roster shows bowler nickname when provided, otherwise name. Contact information is hidden.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="rounded-xl bg-blue-50 text-blue-950"
+                    onClick={() => printPublicReservationRoster({
+                      title: matchingReservationState?.tournamentName || tournamentInfo.name || "Tournament Reservations",
+                      reservations: publicReservationEntries,
+                      limit: publicReservationLimit,
+                      count: publicReservationCount,
+                    })}
+                  >
+                    Print / Save PDF
+                  </Button>
+                </div>
+                {publicReservationEntries.length ? (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {publicReservationEntries.map((reservation, index) => (
+                      <div key={reservation.id || `${reservation.tournamentKey || "reservation"}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-slate-50 px-3 py-2">
+                        <span className="text-sm font-bold text-slate-900">
+                          {reservation.registrationNumber || reservation.confirmationNumber || index + 1}. {getReservationDisplayName(reservation)}
+                        </span>
+                        {reservation.status && (
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${String(reservation.status).toLowerCase().includes("wait") ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                            {reservation.status}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm font-semibold text-slate-600">
+                    Reservation names will show here once the public roster view is enabled.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {(sponsorList.length > 0 || logoLinks.length > 0 || announcementImages.length > 0 || lanePatternImages.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
           <div className="mt-3 grid gap-3 md:mt-5 md:gap-4 lg:grid-cols-2">
@@ -16269,16 +16415,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           loadSupabaseRestRows("bowler_identities", "?select=id,data&order=created_at.asc", controller.signal),
           reservationRead,
           loadSupabaseRestRows("reservation_public_counts", "?select=tournament_id,reservation_count", controller.signal),
+          loadSupabaseRestRows("reservation_public_roster", "?select=id,tournament_id,display_name,status,registration_number&order=registration_number.asc", controller.signal),
           loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal),
           loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
           draftRead,
         ]);
 
-        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "archive", "active snapshot", "draft"];
+        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "public roster", "archive", "active snapshot", "draft"];
         const failedReads = reads
           .map((result, index) => result.status === "rejected" ? `${readNames[index]}: ${result.reason?.message || "failed"}` : "")
           .filter(Boolean);
-        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, archiveRows, activeSnapshotRows, draftRows] = reads.map((result) =>
+        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, reservationRosterRows, archiveRows, activeSnapshotRows, draftRows] = reads.map((result) =>
           result.status === "fulfilled" ? result.value : []
         );
 
@@ -16302,6 +16449,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         const reservationCountByTournament = Object.fromEntries(
           (reservationCountRows || []).map((row) => [row.tournament_id || "", Number(row.reservation_count || 0)])
         );
+        const publicRosterByTournament = publicReservationRosterFromRows(reservationRosterRows || []).reduce((groups, reservation) => {
+          const tournamentKey = reservation.tournamentKey || "";
+          if (!tournamentKey) return groups;
+          groups[tournamentKey] = [...(groups[tournamentKey] || []), reservation];
+          return groups;
+        }, {});
         const nextArchives = (archiveRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
         const nextActiveSnapshot = dataFromRow((activeSnapshotRows || [])[0] || {});
         const nextDrafts = (draftRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
@@ -16322,6 +16475,16 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
               ...(reservationsByTournament[tournamentKey] || {}),
               reservationCount: count,
               reservations: reservationsByTournament[tournamentKey]?.reservations || [],
+              publicReservations: publicRosterByTournament[tournamentKey] || reservationsByTournament[tournamentKey]?.publicReservations || [],
+            };
+          });
+          Object.entries(publicRosterByTournament).forEach(([tournamentKey, publicReservations]) => {
+            if (!tournamentKey) return;
+            reservationsByTournament[tournamentKey] = {
+              ...(reservationsByTournament[tournamentKey] || {}),
+              reservationCount: Number(reservationCountByTournament[tournamentKey] ?? publicReservations.length),
+              reservations: reservationsByTournament[tournamentKey]?.reservations || [],
+              publicReservations,
             };
           });
           nextReservations.forEach((reservation) => {
@@ -16336,12 +16499,16 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                 reservationLimit: Number(reservationSettings.reservationLimit || 48),
                 reservationNextNumber: Number(reservationSettings.reservationNextNumber || 1),
                 reservations: [],
+                publicReservations: [],
               };
             }
             reservationsByTournament[tournamentKey].reservations = [
               ...(reservationsByTournament[tournamentKey].reservations || []).filter((item) => String(item.id) !== String(reservation.id)),
               reservation,
             ];
+            reservationsByTournament[tournamentKey].publicReservations = reservationsByTournament[tournamentKey].publicReservations?.length
+              ? reservationsByTournament[tournamentKey].publicReservations
+              : publicRosterByTournament[tournamentKey] || [];
           });
           const currentTournamentReservations = nextReservations.filter((reservation) => (reservation.tournamentKey || "") === currentReservationKey);
           const currentReservationCount = Number(

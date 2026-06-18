@@ -94,6 +94,18 @@ select
 from public.reservations
 group by tournament_id;
 
+create or replace view public.reservation_public_roster as
+select
+  id,
+  tournament_id,
+  case
+    when lower(trim(coalesce(data->>'nickname', ''))) in ('', 'na', 'n/a', 'none', 'unknown', 'tbd', '-') then coalesce(nullif(trim(name), ''), 'Reserved Bowler')
+    else trim(data->>'nickname')
+  end as display_name,
+  coalesce(nullif(trim(data->>'status'), ''), 'Registered') as status,
+  coalesce(nullif(trim(data->>'registrationNumber'), ''), nullif(trim(data->>'confirmationNumber'), '')) as registration_number
+from public.reservations;
+
 create or replace view public.public_app_settings as
 select
   id,
@@ -181,6 +193,7 @@ grant select on public.bowler_identities to anon, authenticated;
 grant select on public.archived_tournaments to anon, authenticated;
 grant select on public.active_tournament_snapshots to anon, authenticated;
 grant select on public.reservation_public_counts to anon, authenticated;
+grant select on public.reservation_public_roster to anon, authenticated;
 revoke select on public.tournament_drafts from anon;
 grant select on public.tournament_drafts to authenticated;
 revoke select on public.reservations from anon;
