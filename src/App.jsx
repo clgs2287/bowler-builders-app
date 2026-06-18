@@ -2764,6 +2764,12 @@ const infoRows = [
   "Current Stage",
   currentStage,
 ],
+  ...(showPublicFieldInfo
+    ? [[
+        "Field",
+        `${publicReservationCount}/${publicReservationLimit} reserved (${publicReservationRemaining} spots remaining)`,
+      ]]
+    : []),
   ["Qualifying Games", qualifyingGames || 4],
   ["Tournament Style", getTournamentStyleConfig(tournamentInfo.tournamentStyle || "singles").label],
   ...(getTournamentTeamSize(tournamentInfo.tournamentStyle || "singles") > 1
@@ -2813,13 +2819,16 @@ const infoRows = [
           <div className="space-y-2.5 md:space-y-4">
 {infoRows.map(([label, value]) => {
   const isCurrentStage = label === "Current Stage";
+  const isField = label === "Field";
 
   return (
+    <React.Fragment key={label}>
     <div
-      key={label}
       className={
         isCurrentStage
           ? "flex items-center justify-between gap-3 rounded-2xl border border-green-300 bg-green-50 p-3 md:gap-6 md:p-4"
+          : isField
+            ? "flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-3 md:gap-6 md:p-4"
           : "flex items-center justify-between gap-3 border-b pb-2 md:gap-6 md:pb-3"
       }
     >
@@ -2827,6 +2836,8 @@ const infoRows = [
         className={
           isCurrentStage
             ? "text-sm font-bold text-blue-900 md:text-lg"
+            : isField
+              ? "text-sm font-bold text-blue-900 md:text-lg"
             : "text-sm font-semibold text-blue-900 md:text-base"
         }
       >
@@ -2837,12 +2848,53 @@ const infoRows = [
         className={
           isCurrentStage
             ? "text-right text-lg font-black text-green-700 md:text-2xl"
+            : isField
+              ? "flex flex-col items-end gap-2 text-right text-sm font-black text-blue-900 md:flex-row md:items-center md:text-base"
             : "text-right text-sm font-bold text-slate-900 md:text-base"
         }
       >
         {value}
+        {isField && (
+          <Button
+            variant="outline"
+            className="rounded-xl bg-white px-3 py-1.5 text-xs text-blue-950"
+            onClick={() => setShowReservationRoster((current) => !current)}
+          >
+            {showReservationRoster ? "Hide Roster" : "View Roster"}
+          </Button>
+        )}
       </span>
     </div>
+    {isField && showReservationRoster && (
+      <div className="rounded-2xl border border-blue-100 bg-white p-3">
+        <div className="mb-3">
+          <p className="text-sm font-bold text-blue-950">
+            Public roster shows bowler nickname when provided, otherwise name. Contact information is hidden.
+          </p>
+        </div>
+        {publicReservationEntries.length ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {publicReservationEntries.map((reservation, index) => (
+              <div key={reservation.id || `${reservation.tournamentKey || "reservation"}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-slate-50 px-3 py-2">
+                <span className="text-sm font-bold text-slate-900">
+                  {reservation.registrationNumber || reservation.confirmationNumber || index + 1}. {getReservationDisplayName(reservation)}
+                </span>
+                {reservation.status && (
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${String(reservation.status).toLowerCase().includes("wait") ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                    {reservation.status}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm font-semibold text-slate-600">
+            Reservation names will show here once the public roster view is enabled.
+          </p>
+        )}
+      </div>
+    )}
+    </React.Fragment>
   );
 })}
 
@@ -2873,56 +2925,6 @@ const infoRows = [
             </div>
           </div>
         </div>
-
-        {showPublicFieldInfo && (
-          <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-3 md:mt-5 md:p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 className="text-base font-black text-blue-950 md:text-lg">Field</h3>
-                <p className="mt-1 text-sm font-bold text-blue-900 md:text-base">
-                  {publicReservationCount}/{publicReservationLimit} reserved
-                  <span className="ml-2 text-slate-700">({publicReservationRemaining} spots remaining)</span>
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                className="rounded-xl bg-white text-blue-950"
-                onClick={() => setShowReservationRoster((current) => !current)}
-              >
-                {showReservationRoster ? "Hide Roster" : "View Roster"}
-              </Button>
-            </div>
-            {showReservationRoster && (
-              <div className="mt-4 rounded-2xl border border-blue-100 bg-white p-3">
-                <div className="mb-3">
-                  <p className="text-sm font-bold text-blue-950">
-                    Public roster shows bowler nickname when provided, otherwise name. Contact information is hidden.
-                  </p>
-                </div>
-                {publicReservationEntries.length ? (
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {publicReservationEntries.map((reservation, index) => (
-                      <div key={reservation.id || `${reservation.tournamentKey || "reservation"}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-slate-50 px-3 py-2">
-                        <span className="text-sm font-bold text-slate-900">
-                          {reservation.registrationNumber || reservation.confirmationNumber || index + 1}. {getReservationDisplayName(reservation)}
-                        </span>
-                        {reservation.status && (
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${String(reservation.status).toLowerCase().includes("wait") ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
-                            {reservation.status}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm font-semibold text-slate-600">
-                    Reservation names will show here once the public roster view is enabled.
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {(sponsorList.length > 0 || logoLinks.length > 0 || announcementImages.length > 0 || lanePatternImages.length > 0 || watchLinks.length > 0 || tournamentInfo.notes) && (
           <div className="mt-3 grid gap-3 md:mt-5 md:gap-4 lg:grid-cols-2">
