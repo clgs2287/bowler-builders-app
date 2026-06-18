@@ -735,6 +735,7 @@ function reservationBucketFromState(reservationState = {}) {
     waitlistOnlyNames: reservationState.waitlistOnlyNames || "",
     reservationCount: (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0),
     reservations: reservationState.reservations || [],
+    publicReservations: reservationState.publicReservations || [],
   };
 }
 
@@ -754,6 +755,7 @@ function sanitizeReservationsByTournament(reservationsByTournament = {}) {
         waitlistOnlyNames: bucket?.waitlistOnlyNames || "",
         reservationCount: (bucket?.reservations || []).length || Number(bucket?.reservationCount || 0),
         reservations: [],
+        publicReservations: [],
       },
     ])
   );
@@ -16448,6 +16450,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             reservationSettings.reservationCount ??
             0
           );
+          const currentPublicReservations = publicRosterByTournament[currentReservationKey] || [];
           setReservationState((current) => ({
             ...current,
             ...reservationSettings,
@@ -16456,6 +16459,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
               ? currentTournamentReservations.length
               : currentReservationCount,
             reservations: currentTournamentReservations,
+            publicReservations: currentTournamentReservations.length
+              ? currentTournamentReservations
+              : currentPublicReservations,
           }));
         }
 
