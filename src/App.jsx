@@ -2656,6 +2656,45 @@ function clampBowlingScoreInput(value, min = 1, max = 300) {
   return Math.max(min, Math.min(max, Number(value || 0)));
 }
 
+function ImageLightbox({ image, onClose }) {
+  useEffect(() => {
+    if (!image) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [image, onClose]);
+
+  if (!image?.src) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 md:p-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label={image.name || "Expanded tournament image"}
+      onClick={onClose}
+    >
+      <div className="relative flex max-h-full max-w-6xl flex-col items-center" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-2 top-2 z-10 rounded-full bg-white px-3 py-1 text-lg font-black text-blue-950 shadow"
+          aria-label="Close image preview"
+        >
+          x
+        </button>
+        <img
+          src={image.src}
+          alt={image.name || "Tournament image"}
+          className="max-h-[88vh] max-w-full rounded-2xl bg-white object-contain shadow-2xl"
+        />
+      </div>
+    </div>
+  );
+}
+
 function TournamentInfoTab({
   tournamentInfo,
   reservationState = {},
@@ -2673,6 +2712,7 @@ function TournamentInfoTab({
 }) {
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
   const [showReservationRoster, setShowReservationRoster] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
   const sponsorList = String(tournamentInfo.sponsors || "")
     .split(",")
     .map((item) => item.trim())
@@ -2961,7 +3001,14 @@ const infoRows = [
                 <div className="grid gap-3 md:grid-cols-2 md:gap-4">
                   {announcementImages.map((image) => (
                     <figure key={image.id || image.src} className="overflow-hidden rounded-2xl border border-blue-100 bg-slate-50">
-                      <img src={image.src} alt={image.name || "Tournament announcement"} className="max-h-[340px] w-full object-contain md:max-h-[520px]" />
+                      <button
+                        type="button"
+                        className="block w-full cursor-zoom-in"
+                        onClick={() => setPreviewImage(image)}
+                        aria-label={`Enlarge ${image.name || "tournament announcement"}`}
+                      >
+                        <img src={image.src} alt={image.name || "Tournament announcement"} className="max-h-[340px] w-full object-contain md:max-h-[520px]" />
+                      </button>
                     </figure>
                   ))}
                 </div>
@@ -2969,7 +3016,7 @@ const infoRows = [
             )}
 
             {lanePatternImages.length > 0 && (
-              <LanePatternImagesView images={lanePatternImages} />
+              <LanePatternImagesView images={lanePatternImages} onImageClick={setPreviewImage} />
             )}
 
             {watchLinks.length > 0 && (
@@ -2993,12 +3040,13 @@ const infoRows = [
             )}
           </div>
         )}
+        <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
       </CardContent>
     </AppCard>
   );
 }
 
-function LanePatternImagesView({ images = [], emptyMessage = "No lane pattern was saved for this tournament." }) {
+function LanePatternImagesView({ images = [], emptyMessage = "No lane pattern was saved for this tournament.", onImageClick = null }) {
   const visibleImages = (Array.isArray(images) ? images : []).filter((image) => image?.src);
 
   if (!visibleImages.length) {
@@ -3015,7 +3063,18 @@ function LanePatternImagesView({ images = [], emptyMessage = "No lane pattern wa
       <div className="grid gap-3 md:grid-cols-2 md:gap-4">
         {visibleImages.map((image) => (
           <figure key={image.id || image.src} className="overflow-hidden rounded-2xl border border-blue-100 bg-slate-50">
-            <img src={image.src} alt={image.name || "Lane pattern"} className="max-h-[360px] w-full object-contain md:max-h-[620px]" />
+            {onImageClick ? (
+              <button
+                type="button"
+                className="block w-full cursor-zoom-in"
+                onClick={() => onImageClick(image)}
+                aria-label={`Enlarge ${image.name || "lane pattern"}`}
+              >
+                <img src={image.src} alt={image.name || "Lane pattern"} className="max-h-[360px] w-full object-contain md:max-h-[620px]" />
+              </button>
+            ) : (
+              <img src={image.src} alt={image.name || "Lane pattern"} className="max-h-[360px] w-full object-contain md:max-h-[620px]" />
+            )}
           </figure>
         ))}
       </div>
