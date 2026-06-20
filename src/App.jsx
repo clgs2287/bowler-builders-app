@@ -2698,8 +2698,6 @@ function ImageLightbox({ image, onClose }) {
 function TournamentInfoTab({
   tournamentInfo,
   reservationState = {},
-  selectedReservationKey = "",
-  onSelectedReservationKeyChange = () => {},
   qualifyingGames,
   tournamentFormat,
   payoutState,
@@ -2740,27 +2738,15 @@ function TournamentInfoTab({
     ...(tournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: tournamentInfo.recentVideoLink }] : []),
     ...videoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href })),
   ].filter((item) => item.href);
-  const publicReservationOptions = openReservationOptions(reservationState);
-  const selectedReservationOption = publicReservationOptions.find((option) => option.key === selectedReservationKey);
-  const matchingReservationOption = selectedReservationOption || publicReservationOptions.find(({ state }) => (
+  const matchingReservationOption = openReservationOptions(reservationState).find(({ state }) => (
     normalizeMatchText(state.tournamentName) === normalizeMatchText(tournamentInfo.name) ||
     (
       state.tournamentDate &&
       state.tournamentDate === tournamentInfo.date &&
       normalizeMatchText(state.tournamentCenter) === normalizeMatchText(tournamentInfo.center)
     )
-  )) || publicReservationOptions[0] || null;
+  ));
   const matchingReservationState = matchingReservationOption?.state || null;
-  const displayedTournamentInfo = matchingReservationState
-    ? {
-        ...tournamentInfo,
-        name: matchingReservationState.tournamentName || tournamentInfo.name,
-        date: matchingReservationState.tournamentDate || tournamentInfo.date,
-        startTime: matchingReservationState.tournamentStartTime || tournamentInfo.startTime,
-        center: matchingReservationState.tournamentCenter || tournamentInfo.center,
-        location: matchingReservationState.tournamentAddress || tournamentInfo.location,
-      }
-    : tournamentInfo;
   const reservationsMatchCurrentTournament = Boolean(matchingReservationState);
   const publicReservationEntries = matchingReservationState
     ? (matchingReservationState.reservations?.length
@@ -2792,10 +2778,10 @@ function TournamentInfoTab({
     bracketState,
     laneEliminatorState,
     matchplayState,
-    tournamentInfo: displayedTournamentInfo,
+    tournamentInfo,
   });
-  const tournamentStartDate = displayedTournamentInfo.date || reservationState.tournamentDate || "";
-  const tournamentStartTime = displayedTournamentInfo.startTime || reservationState.tournamentStartTime || "";
+  const tournamentStartDate = tournamentInfo.date || reservationState.tournamentDate || "";
+  const tournamentStartTime = tournamentInfo.startTime || reservationState.tournamentStartTime || "";
   const hasSavedQualifyingGame = Object.values(savedScoreGames || {}).some(Boolean);
   const hasMatchplayActivity = isMatchplayTournament(tournamentFormat, tournamentInfo) && countMatchplayLineageGames(matchplayState) > 0;
   const tournamentStartDateTime = getTournamentStartDateTime(tournamentStartDate, tournamentStartTime);
@@ -2814,11 +2800,11 @@ function TournamentInfoTab({
         : "Upcoming Event"
     : normalStage;
 const infoRows = [
-  ["Tournament Name", displayedTournamentInfo.name || "Tournament"],
-  ["Date", displayedTournamentInfo.date || "TBD"],
-  ["Start Time", formatStartTime(displayedTournamentInfo.startTime || reservationState.tournamentStartTime)],
-  ["Center", displayedTournamentInfo.center || "TBD"],
-  ["Address", displayedTournamentInfo.location || "TBD"],
+  ["Tournament Name", tournamentInfo.name || "Tournament"],
+  ["Date", tournamentInfo.date || "TBD"],
+  ["Start Time", formatStartTime(tournamentInfo.startTime || reservationState.tournamentStartTime)],
+  ["Center", tournamentInfo.center || "TBD"],
+  ["Address", tournamentInfo.location || "TBD"],
   ["Entry Fee", currency(payoutState.entryFee || 0)],
 [
   "Current Stage",
@@ -2831,9 +2817,9 @@ const infoRows = [
       ]]
     : []),
   ["Qualifying Games", qualifyingGames || 4],
-  ["Tournament Style", getTournamentStyleConfig(displayedTournamentInfo.tournamentStyle || "singles").label],
-  ...(getTournamentTeamSize(displayedTournamentInfo.tournamentStyle || "singles") > 1
-    ? [["Team Finals", getFinalsScoreMode(displayedTournamentInfo) === "baker" ? "Baker Team Game" : "Full Games Per Bowler"]]
+  ["Tournament Style", getTournamentStyleConfig(tournamentInfo.tournamentStyle || "singles").label],
+  ...(getTournamentTeamSize(tournamentInfo.tournamentStyle || "singles") > 1
+    ? [["Team Finals", getFinalsScoreMode(tournamentInfo) === "baker" ? "Baker Team Game" : "Full Games Per Bowler"]]
     : []),
   [
     "Finals Format",
@@ -2845,9 +2831,9 @@ const infoRows = [
           ? "Lane Pair Eliminator"
           : "Eliminator",
   ],
-  ["Series", displayedTournamentInfo.series || DEFAULT_TOURNAMENT_SERIES],
-  ["FKM Eligible", displayedTournamentInfo.titleEligible ?? true ? "Yes" : "No"],
-  ["Major", displayedTournamentInfo.major ? "Yes" : "No"],
+  ["Series", tournamentInfo.series || DEFAULT_TOURNAMENT_SERIES],
+  ["FKM Eligible", tournamentInfo.titleEligible ?? true ? "Yes" : "No"],
+  ["Major", tournamentInfo.major ? "Yes" : "No"],
 ];
 
   return (
@@ -2877,23 +2863,6 @@ const infoRows = [
 
         <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-5">
           <div className="space-y-2.5 md:space-y-4">
-            {publicReservationOptions.length > 1 && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 md:p-4">
-                <Label className="mb-2 block">Open Tournament</Label>
-                <select
-                  value={matchingReservationOption?.key || ""}
-                  onChange={(event) => {
-                    onSelectedReservationKeyChange(event.target.value);
-                    setShowReservationRoster(false);
-                  }}
-                  className="h-11 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950 outline-none"
-                >
-                  {publicReservationOptions.map((option) => (
-                    <option key={option.key} value={option.key}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
 {infoRows.map(([label, value]) => {
   const isCurrentStage = label === "Current Stage";
   const isField = label === "Field";
@@ -17325,8 +17294,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 <TournamentInfoTab
   tournamentInfo={tournamentInfo}
   reservationState={reservationState}
-  selectedReservationKey={selectedPublicReservationKey}
-  onSelectedReservationKeyChange={setSelectedPublicReservationKey}
   qualifyingGames={qualifyingGames}
   tournamentFormat={tournamentFormat}
   payoutState={payoutState}
