@@ -14,6 +14,20 @@ To enable delivery in production, add these environment variables in Vercel:
 
 The Reservations admin page also has a "Confirmation Email Copies" box for tournament-specific copy recipients.
 
+## Local Staging Supabase
+
+Local development reads Supabase settings from `.env.local`. That file is ignored by Git, so it is safe to use a separate staging Supabase project locally without affecting the live Vercel site.
+
+Recommended setup:
+
+1. Create a second Supabase project for staging/testing.
+2. In that staging project, run `supabase/schema.sql` in the Supabase SQL Editor.
+3. Copy `.env.local.example` to `.env.local`.
+4. Put the staging project's API URL and publishable key in `.env.local`.
+5. Restart the local dev server with `npm run dev`.
+
+Do not put production Supabase keys in local testing if you want localhost changes to stay away from the live site.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
