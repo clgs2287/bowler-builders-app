@@ -741,7 +741,9 @@ function tournamentInfoMatchesReservationKey(tournamentInfo = {}, tournamentKey 
 
 function findTournamentDraftForReservationKey(savedTournamentDrafts = [], tournamentKey = "") {
   if (!tournamentKey) return null;
-  return (savedTournamentDrafts || []).find((draft) =>
+  return [...(savedTournamentDrafts || [])]
+    .sort((a, b) => new Date(b?.savedAt || 0).getTime() - new Date(a?.savedAt || 0).getTime())
+    .find((draft) =>
     tournamentInfoMatchesReservationKey(draft?.snapshot?.tournamentInfo || {}, tournamentKey)
   ) || null;
 }
@@ -17083,7 +17085,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const draftRecords = (savedTournamentDrafts || []).map(tournamentDraftRecordFromItem);
     const publicInfoSnapshots = [
       activeTournamentSnapshotRef.current,
-      ...(savedTournamentDrafts || []).map((draft) => draft?.snapshot),
+      ...[...(savedTournamentDrafts || [])]
+        .sort((a, b) => new Date(b?.savedAt || 0).getTime() - new Date(a?.savedAt || 0).getTime())
+        .map((draft) => draft?.snapshot),
     ].filter((snapshot) => snapshot?.tournamentInfo);
     const publicInfoSnapshotForKey = (tournamentKey) =>
       publicInfoSnapshots.find((snapshot) => tournamentInfoMatchesReservationKey(snapshot.tournamentInfo || {}, tournamentKey)) || null;
@@ -17582,18 +17586,21 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setReservationState((current) => {
       const currentKey = reservationKeyFromState(current);
       const openTournamentKeys = getOpenReservationKeys(current);
+      const matchingKey = openTournamentKeys.find((key) =>
+        key === targetKey || tournamentInfoMatchesReservationKey(snapshotTournamentInfo, key)
+      ) || targetKey;
       const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
-      const targetBucket = targetKey === currentKey
+      const targetBucket = matchingKey === currentKey
         ? reservationBucketFromState(current)
-        : reservationsByTournament[targetKey];
+        : reservationsByTournament[matchingKey];
       const isOpen = Boolean(
         targetBucket?.entriesOpen ||
-        openTournamentKeys.includes(targetKey) ||
-        (targetKey === currentKey && current.entriesOpen)
+        openTournamentKeys.includes(matchingKey) ||
+        (matchingKey === currentKey && current.entriesOpen)
       );
       if (!targetBucket || !isOpen) return current;
 
-      const scheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === targetKey) || null;
+      const scheduleItem = scheduleItemForReservationKey(scheduleItems, matchingKey);
       const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
         tournamentInfo: snapshotTournamentInfo,
         payoutState: snapshotPayoutState,
@@ -17609,14 +17616,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         },
       });
 
-      reservationsByTournament[targetKey] = {
+      reservationsByTournament[matchingKey] = {
         ...targetBucket,
         publicTournamentInfo,
       };
 
       return {
         ...current,
-        ...(targetKey === currentKey ? { publicTournamentInfo } : {}),
+        ...(matchingKey === currentKey ? { publicTournamentInfo } : {}),
         reservationsByTournament,
       };
     });
@@ -17640,7 +17647,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         snapshot,
       };
       refreshOpenReservationPublicInfoFromSnapshot(snapshot);
-      setSavedTournamentDrafts((current) => [draft, ...current.filter((item) => item.name !== name)]);
+      setSavedTournamentDrafts((current) => [draft, ...current.filter((item) =>
+        item.name !== name &&
+        !tournamentInfoMatchesReservationKey(item?.snapshot?.tournamentInfo || {}, reservationTournamentKey({
+          name: snapshot.tournamentInfo?.name,
+          date: snapshot.tournamentInfo?.date,
+          center: snapshot.tournamentInfo?.center,
+        }))
+      )]);
     }, 0);
   };
 
