@@ -724,12 +724,19 @@ function scheduleItemForReservationKey(scheduleItems = [], tournamentKey = "") {
 
 function tournamentInfoMatchesReservationKey(tournamentInfo = {}, tournamentKey = "") {
   if (!tournamentKey) return false;
+  const [keyName = "", keyDate = "", keyCenter = ""] = String(tournamentKey || "").split("|");
+  const infoName = getIdentityKey(tournamentInfo.name);
+  const infoDate = getIdentityKey(tournamentInfo.date);
+  const infoCenter = getIdentityKey(tournamentInfo.center);
   const tournamentInfoKey = reservationTournamentKey({
     name: tournamentInfo.name,
     date: tournamentInfo.date,
     center: tournamentInfo.center,
   });
-  return Boolean(tournamentInfoKey && tournamentInfoKey === tournamentKey);
+  if (tournamentInfoKey && tournamentInfoKey === tournamentKey) return true;
+  if (!infoName || !infoDate) return false;
+  if (infoName !== getIdentityKey(keyName) || infoDate !== getIdentityKey(keyDate)) return false;
+  return !infoCenter || !keyCenter || infoCenter === getIdentityKey(keyCenter);
 }
 
 function findTournamentDraftForReservationKey(savedTournamentDrafts = [], tournamentKey = "") {
