@@ -4400,6 +4400,14 @@ function DashboardTab({
                       <p className="text-xs font-semibold text-slate-500">
                         {draft.savedAt ? new Date(draft.savedAt).toLocaleString() : "Saved"}
                       </p>
+                      <p className="text-xs font-semibold text-blue-700">
+                        {[
+                          draft.snapshot?.tournamentInfo?.date,
+                          draft.snapshot?.tournamentInfo?.startTime ? formatStartTime(draft.snapshot.tournamentInfo.startTime) : "",
+                          draft.snapshot?.tournamentInfo?.center,
+                          `${Array.isArray(draft.snapshot?.bowlers) ? draft.snapshot.bowlers.filter((bowler) => bowler?.name?.trim()).length : 0} bowlers`,
+                        ].filter(Boolean).join(" • ")}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" className="rounded-xl" onClick={() => onLoadTournamentDraft(draft.id)}>
@@ -13690,7 +13698,15 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   });
 
   const archiveTournament = () => {
-    const confirmed = window.confirm("Archive this completed tournament into stats history?");
+    const archiveName = tournamentInfo.name || "Tournament";
+    const archiveDetails = [tournamentInfo.date, tournamentInfo.center || tournamentInfo.location].filter(Boolean).join(" • ");
+    const existingArchive = tournamentHistory.some((tournament) =>
+      normalizeMatchText(tournament.name || "") === normalizeMatchText(archiveName) &&
+      String(tournament.date || "") === String(tournamentInfo.date || "")
+    );
+    const confirmed = window.confirm(
+      `Archive "${archiveName}"${archiveDetails ? ` (${archiveDetails})` : ""} into stats history?\n\nThis saves the current results, finals, side action, recap, and restore snapshot. It does not clear the active tournament workspace.\n\n${existingArchive ? "A tournament with this name and date is already archived. Continuing will create another archive record.\n\n" : ""}After confirming the archive looks right, use Reset Active Tournament when you are ready to clear this workspace.`
+    );
     if (!confirmed) return;
 
     const getBracketScoresForEntry = (entry) => {
@@ -13936,6 +13952,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     };
 
     setTournamentHistory((current) => [archived, ...current]);
+    window.alert(`Archived "${archived.name}". The active tournament workspace is still open until you use Reset Active Tournament.`);
   };
 
   const deleteTournament = (id) => {
@@ -17424,7 +17441,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const loadTournamentDraft = (draftId) => {
     const draft = savedTournamentDrafts.find((item) => item.id === draftId);
     if (!draft) return;
-    const confirmed = window.confirm(`Open ${draft.name}? This will replace the current active tournament.`);
+    const draftInfo = draft.snapshot?.tournamentInfo || {};
+    const activeName = tournamentInfo.name || "the current active tournament";
+    const draftDetails = [draftInfo.date, draftInfo.startTime ? formatStartTime(draftInfo.startTime) : "", draftInfo.center].filter(Boolean).join(" • ");
+    const confirmed = window.confirm(
+      `Open saved tournament "${draft.name || draftInfo.name || "Saved Tournament"}"${draftDetails ? ` (${draftDetails})` : ""}?\n\nThis will replace "${activeName}" in the active workspace. Saved drafts, reservations, archives, schedule, and titles will stay.`
+    );
     if (!confirmed) return;
     applyActiveTournamentSnapshot(draft.snapshot || {}, { navigateToDashboard: true });
   };
@@ -17584,7 +17606,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   };
 
   const restoreTournament = (archivedTournament) => {
-    const confirmed = window.confirm(`Restore ${archivedTournament?.name || "this tournament"} as the active tournament? This will replace the current active tournament.`);
+    const archiveDetails = [archivedTournament?.date, archivedTournament?.center || archivedTournament?.location].filter(Boolean).join(" • ");
+    const confirmed = window.confirm(
+      `Restore archived tournament "${archivedTournament?.name || "this tournament"}"${archiveDetails ? ` (${archiveDetails})` : ""} as the active workspace?\n\nThis will replace "${tournamentInfo.name || "the current active tournament"}". Archives, saved drafts, reservations, schedule, and titles will stay.`
+    );
     if (!confirmed) return;
 
     const snapshot = archivedTournament?.activeSnapshot;
@@ -17616,8 +17641,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       window.alert("Only the owner account can reset the active tournament.");
       return;
     }
-    const confirmed = window.confirm("Reset the active tournament workspace? This clears the current roster, scores, finals, side action, payouts, recap, and active setup. Saved tournament drafts, archived tournaments, schedule, titles, and reservations for other open tournaments will stay.");
-    if (!confirmed) return;
+    const activeName = tournamentInfo.name || "Bowler Builders Tournament";
+    const typed = window.prompt(
+      `Reset active tournament workspace for "${activeName}"?\n\nThis clears the current roster, scores, finals, side action, payouts, recap, and active setup. Saved tournament drafts, archived tournaments, schedule, titles, and reservations for open tournaments will stay.\n\nType RESET to continue.`
+    );
+    if (typed !== "RESET") return;
     window.localStorage.removeItem(STORAGE_KEY);
     setQualifyingGames(4);
     setBowlers(buildInitialBowlers(0, 4));
