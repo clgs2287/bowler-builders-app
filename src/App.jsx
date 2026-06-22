@@ -717,6 +717,11 @@ function reservationKeyFromScheduleItem(item = {}) {
   });
 }
 
+function scheduleItemForReservationKey(scheduleItems = [], tournamentKey = "") {
+  if (!tournamentKey) return null;
+  return (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === tournamentKey) || null;
+}
+
 function findScheduleItemByName(scheduleItems = [], name = "") {
   const needle = normalizeMatchText(name);
   if (!needle) return null;
@@ -873,43 +878,48 @@ function getOpenReservationKeys(reservationState = {}) {
   ].filter(Boolean)));
 }
 
-function reservationStateForKey(reservationState = {}, tournamentKey = "") {
+function reservationStateForKey(reservationState = {}, tournamentKey = "", scheduleItems = []) {
   if (!tournamentKey || tournamentKey === reservationKeyFromState(reservationState)) {
     return reservationState;
   }
   const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
   const snapshot = bucket.publicTournamentInfo || {};
+  const scheduleItem = scheduleItemForReservationKey(scheduleItems, tournamentKey);
   const [keyName = "", keyDate = "", keyCenter = ""] = String(tournamentKey || "").split("|");
+  const bucketName = String(bucket.tournamentName || "").trim();
+  const bucketNameLooksLikeKey = bucketName && keyName && getIdentityKey(bucketName) === getIdentityKey(keyName);
   return {
     ...reservationState,
     ...bucket,
-    tournamentName: bucket.tournamentName || keyName || snapshot.name || "",
-    tournamentDate: bucket.tournamentDate || keyDate || snapshot.date || "",
-    tournamentStartTime: bucket.tournamentStartTime || snapshot.startTime || "",
-    tournamentCenter: bucket.tournamentCenter || keyCenter || snapshot.center || "",
-    tournamentAddress: bucket.tournamentAddress || snapshot.location || "",
+    tournamentName: (bucketNameLooksLikeKey ? "" : bucketName) || snapshot.name || scheduleItem?.name || keyName || "",
+    tournamentDate: bucket.tournamentDate || snapshot.date || scheduleItem?.startDate || keyDate || "",
+    tournamentStartTime: bucket.tournamentStartTime || snapshot.startTime || scheduleItem?.startTime || "",
+    tournamentCenter: bucket.tournamentCenter || snapshot.center || scheduleItem?.center || keyCenter || "",
+    tournamentAddress: bucket.tournamentAddress || snapshot.location || scheduleItem?.address || "",
     entriesOpen: Boolean(bucket.entriesOpen || getOpenReservationKeys(reservationState).includes(tournamentKey)),
     reservationsByTournament: reservationState.reservationsByTournament || {},
     openTournamentKeys: getOpenReservationKeys(reservationState),
   };
 }
 
-function openReservationOptions(reservationState = {}) {
+function openReservationOptions(reservationState = {}, scheduleItems = []) {
   const seen = new Set();
   return getOpenReservationKeys(reservationState)
     .map((key) => {
       const bucket = key === reservationKeyFromState(reservationState)
         ? reservationBucketFromState(reservationState)
         : reservationState.reservationsByTournament?.[key] || {};
-      const state = reservationStateForKey(reservationState, key);
+      const state = reservationStateForKey(reservationState, key, scheduleItems);
       const snapshot = bucket.publicTournamentInfo || state.publicTournamentInfo || {};
+      const scheduleItem = scheduleItemForReservationKey(scheduleItems, key);
       const [keyName = "", keyDate = "", keyCenter = ""] = String(key || "").split("|");
-      const labelName = state.tournamentName || bucket.tournamentName || snapshot.name || keyName || "Tournament";
-      const labelDate = state.tournamentDate || bucket.tournamentDate || snapshot.date || keyDate || "";
-      const labelTime = state.tournamentStartTime || bucket.tournamentStartTime || snapshot.startTime || "";
+      const labelName = state.tournamentName || snapshot.name || scheduleItem?.name || bucket.tournamentName || keyName || "Tournament";
+      const labelDate = state.tournamentDate || snapshot.date || scheduleItem?.startDate || bucket.tournamentDate || keyDate || "";
+      const labelTime = state.tournamentStartTime || snapshot.startTime || scheduleItem?.startTime || bucket.tournamentStartTime || "";
       return {
         key,
         state,
+        scheduleItem,
         label: [
           labelDate,
           labelTime ? formatStartTime(labelTime) : "",
@@ -2756,6 +2766,7 @@ function ImageLightbox({ image, onClose }) {
 function TournamentInfoTab({
   tournamentInfo,
   reservationState = {},
+  scheduleItems = [],
   selectedReservationKey = "",
   onSelectedReservationKeyChange = () => {},
   qualifyingGames,
@@ -2773,7 +2784,7 @@ function TournamentInfoTab({
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
   const [showReservationRoster, setShowReservationRoster] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
-  const publicReservationOptions = openReservationOptions(reservationState);
+  const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
   const selectedReservationOption = publicReservationOptions.find((option) => option.key === selectedReservationKey);
   const dashboardReservationOption = publicReservationOptions.length <= 1
     ? publicReservationOptions.find(({ state }) => (
@@ -2788,9 +2799,10 @@ function TournamentInfoTab({
   const matchingReservationOption = selectedReservationOption || dashboardReservationOption || publicReservationOptions[0] || null;
   const matchingReservationState = matchingReservationOption?.state || null;
   const reservationTournamentInfo = matchingReservationState?.publicTournamentInfo || null;
+  const matchingScheduleItem = matchingReservationOption?.scheduleItem || null;
   const displayedTournamentInfoBase = reservationTournamentInfo || (
     matchingReservationState
-      ? buildReservationTournamentInfoSnapshot({ tournamentInfo, reservationState: matchingReservationState, payoutState })
+      ? buildReservationTournamentInfoSnapshot({ tournamentInfo, scheduleItem: matchingScheduleItem, reservationState: matchingReservationState, payoutState })
       : tournamentInfo
   );
   const displayedTournamentInfo = matchingReservationState
@@ -7546,6 +7558,7 @@ function PublicReservations({
   reservationState,
   setReservationState,
   tournamentInfo,
+  scheduleItems = [],
   tournamentHistory = [],
   manualTitles = [],
   bowlerIdentities = [],
@@ -7555,14 +7568,14 @@ function PublicReservations({
 }) {
   const [submittingReservation, setSubmittingReservation] = useState(false);
   const [submitNotice, setSubmitNotice] = useState("");
-  const publicReservationOptions = useMemo(() => openReservationOptions(reservationState), [reservationState]);
+  const publicReservationOptions = useMemo(() => openReservationOptions(reservationState, scheduleItems), [reservationState, scheduleItems]);
   const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
   const activePublicReservationKey =
     publicReservationOptions.some((option) => option.key === selectedPublicReservationKey)
       ? selectedPublicReservationKey
       : publicReservationOptions[0]?.key || "";
   const activeReservationState = activePublicReservationKey
-    ? reservationStateForKey(reservationState, activePublicReservationKey)
+    ? reservationStateForKey(reservationState, activePublicReservationKey, scheduleItems)
     : reservationState;
   const activeTournamentInfo = activeReservationState.publicTournamentInfo || tournamentInfo || {};
   const reservationEligibility = activeTournamentInfo.reservationEligibility || "open";
@@ -9640,7 +9653,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
   const isRegistrationOpenForItem = (item) => {
     const scheduleTournament = normalizeMatchText(item.name || "");
     if (!scheduleTournament) return false;
-    return openReservationOptions(reservationState).some(({ state }) =>
+    return openReservationOptions(reservationState, scheduleItems).some(({ state }) =>
       normalizeMatchText(state.tournamentName || "") === scheduleTournament
     );
   };
@@ -18192,6 +18205,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 <TournamentInfoTab
   tournamentInfo={tournamentInfo}
   reservationState={reservationState}
+  scheduleItems={scheduleItems}
   selectedReservationKey={selectedPublicReservationKey}
   onSelectedReservationKeyChange={setSelectedPublicReservationKey}
   qualifyingGames={qualifyingGames}
@@ -18270,6 +18284,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   reservationState={reservationState}
   setReservationState={setReservationState}
   tournamentInfo={tournamentInfo}
+  scheduleItems={scheduleItems}
   tournamentHistory={tournamentHistory}
   manualTitles={manualTitles}
   bowlerIdentities={bowlerIdentities}
