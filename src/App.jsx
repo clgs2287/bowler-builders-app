@@ -732,6 +732,13 @@ function tournamentInfoMatchesReservationKey(tournamentInfo = {}, tournamentKey 
   return Boolean(tournamentInfoKey && tournamentInfoKey === tournamentKey);
 }
 
+function findTournamentDraftForReservationKey(savedTournamentDrafts = [], tournamentKey = "") {
+  if (!tournamentKey) return null;
+  return (savedTournamentDrafts || []).find((draft) =>
+    tournamentInfoMatchesReservationKey(draft?.snapshot?.tournamentInfo || {}, tournamentKey)
+  ) || null;
+}
+
 function findScheduleItemByName(scheduleItems = [], name = "") {
   const needle = normalizeMatchText(name);
   if (!needle) return null;
@@ -2777,6 +2784,7 @@ function TournamentInfoTab({
   tournamentInfo,
   reservationState = {},
   scheduleItems = [],
+  savedTournamentDrafts = [],
   selectedReservationKey = "",
   onSelectedReservationKeyChange = () => {},
   qualifyingGames,
@@ -2811,9 +2819,17 @@ function TournamentInfoTab({
   const reservationTournamentInfo = matchingReservationState?.publicTournamentInfo || null;
   const matchingScheduleItem = matchingReservationOption?.scheduleItem || null;
   const selectedTournamentKey = matchingReservationOption?.key || "";
+  const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, selectedTournamentKey)?.snapshot || null;
   const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, selectedTournamentKey);
-  const displayedTournamentInfoBase = reservationTournamentInfo || (
-    matchingReservationState
+  const displayedTournamentInfoBase = matchingDraftSnapshot
+    ? buildReservationTournamentInfoSnapshot({
+        tournamentInfo: matchingDraftSnapshot.tournamentInfo || {},
+        scheduleItem: matchingScheduleItem,
+        reservationState: matchingReservationState,
+        payoutState: matchingDraftSnapshot.payoutState || {},
+      })
+    : reservationTournamentInfo || (
+      matchingReservationState
       ? buildReservationTournamentInfoSnapshot({
           tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
           scheduleItem: matchingScheduleItem,
@@ -6863,6 +6879,7 @@ function ReservationsTab({
   tournamentInfo = {},
   payoutState = {},
   scheduleItems = [],
+  savedTournamentDrafts = [],
   bowlerIdentities = [],
   setBowlerIdentities = () => {},
   isOwnerAdmin = false,
@@ -6961,19 +6978,34 @@ function ReservationsTab({
       const openTournamentKeys = getOpenReservationKeys(current);
       const nextEntriesOpen = Boolean(savedBucket.entriesOpen || openTournamentKeys.includes(nextKey));
       const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, nextKey);
-      const publicTournamentInfo = savedBucket.publicTournamentInfo || buildReservationTournamentInfoSnapshot({
-        tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
-        payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
-        scheduleItem: item || null,
-        reservationState: {
-          ...current,
-          tournamentName: name,
-          tournamentDate: item?.startDate || savedBucket.tournamentDate || keyDate || "",
-          tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
-          tournamentCenter: item?.center || savedBucket.tournamentCenter || keyCenter || "",
-          tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
-        },
-      });
+      const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, nextKey)?.snapshot || null;
+      const publicTournamentInfo = matchingDraftSnapshot
+        ? buildReservationTournamentInfoSnapshot({
+            tournamentInfo: matchingDraftSnapshot.tournamentInfo || {},
+            payoutState: matchingDraftSnapshot.payoutState || {},
+            scheduleItem: item || null,
+            reservationState: {
+              ...current,
+              tournamentName: name,
+              tournamentDate: item?.startDate || savedBucket.tournamentDate || keyDate || "",
+              tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
+              tournamentCenter: item?.center || savedBucket.tournamentCenter || keyCenter || "",
+              tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
+            },
+          })
+        : savedBucket.publicTournamentInfo || buildReservationTournamentInfoSnapshot({
+            tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
+            payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
+            scheduleItem: item || null,
+            reservationState: {
+              ...current,
+              tournamentName: name,
+              tournamentDate: item?.startDate || savedBucket.tournamentDate || keyDate || "",
+              tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
+              tournamentCenter: item?.center || savedBucket.tournamentCenter || keyCenter || "",
+              tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
+            },
+          });
 
       return {
         ...current,
@@ -7005,13 +7037,14 @@ function ReservationsTab({
       if (currentKey) {
         const currentScheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentKey);
         const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
+        const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, currentKey)?.snapshot || null;
         reservationsByTournament[currentKey] = {
           ...reservationBucketFromState(current),
           entriesOpen: checked,
           publicTournamentInfo: checked
             ? buildReservationTournamentInfoSnapshot({
-                tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
-                payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
+                tournamentInfo: matchingDraftSnapshot?.tournamentInfo || (dashboardTournamentMatchesSelection ? tournamentInfo : {}),
+                payoutState: matchingDraftSnapshot?.payoutState || (dashboardTournamentMatchesSelection ? payoutState : {}),
                 scheduleItem: currentScheduleItem || null,
                 reservationState: current,
               })
@@ -7040,9 +7073,10 @@ function ReservationsTab({
       const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
       const currentScheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentKey);
       const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
+      const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, currentKey)?.snapshot || null;
       const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
-        tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
-        payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
+        tournamentInfo: matchingDraftSnapshot?.tournamentInfo || (dashboardTournamentMatchesSelection ? tournamentInfo : {}),
+        payoutState: matchingDraftSnapshot?.payoutState || (dashboardTournamentMatchesSelection ? payoutState : {}),
         scheduleItem: currentScheduleItem || null,
         reservationState: current,
       });
@@ -18132,6 +18166,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   tournamentInfo={tournamentInfo}
   payoutState={payoutState}
   scheduleItems={scheduleItems}
+  savedTournamentDrafts={savedTournamentDrafts}
   bowlerIdentities={bowlerIdentities}
   setBowlerIdentities={setBowlerIdentities}
   isOwnerAdmin={isOwnerAdmin}
@@ -18226,6 +18261,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   tournamentInfo={tournamentInfo}
   reservationState={reservationState}
   scheduleItems={scheduleItems}
+  savedTournamentDrafts={savedTournamentDrafts}
   selectedReservationKey={selectedPublicReservationKey}
   onSelectedReservationKeyChange={setSelectedPublicReservationKey}
   qualifyingGames={qualifyingGames}
