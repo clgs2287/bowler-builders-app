@@ -2831,23 +2831,13 @@ function TournamentInfoTab({
   const matchingReservationState = matchingReservationOption?.state || null;
   const reservationTournamentInfo = matchingReservationState?.publicTournamentInfo || null;
   const matchingScheduleItem = matchingReservationOption?.scheduleItem || null;
-  const selectedTournamentKey = matchingReservationOption?.key || "";
-  const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, selectedTournamentKey)?.snapshot || null;
-  const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, selectedTournamentKey);
-  const displayedTournamentInfoBase = matchingDraftSnapshot
-    ? buildReservationTournamentInfoSnapshot({
-        tournamentInfo: matchingDraftSnapshot.tournamentInfo || {},
-        scheduleItem: matchingScheduleItem,
-        reservationState: matchingReservationState,
-        payoutState: matchingDraftSnapshot.payoutState || {},
-      })
-    : reservationTournamentInfo || (
-      matchingReservationState
+  const displayedTournamentInfoBase = reservationTournamentInfo || (
+    matchingReservationState
       ? buildReservationTournamentInfoSnapshot({
-          tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
+          tournamentInfo: {},
           scheduleItem: matchingScheduleItem,
           reservationState: matchingReservationState,
-          payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
+          payoutState: {},
         })
       : tournamentInfo
   );
@@ -7644,7 +7634,14 @@ function PublicReservations({
   const activeReservationState = activePublicReservationKey
     ? reservationStateForKey(reservationState, activePublicReservationKey, scheduleItems)
     : reservationState;
-  const activeTournamentInfo = activeReservationState.publicTournamentInfo || tournamentInfo || {};
+  const activeTournamentInfo = activePublicReservationKey
+    ? activeReservationState.publicTournamentInfo || buildReservationTournamentInfoSnapshot({
+        tournamentInfo: {},
+        scheduleItem: scheduleItemForReservationKey(scheduleItems, activePublicReservationKey),
+        reservationState: activeReservationState,
+        payoutState: {},
+      })
+    : tournamentInfo || {};
   const reservationEligibility = activeTournamentInfo.reservationEligibility || "open";
   const [form, setForm] = useState({
     name: "",
