@@ -7837,7 +7837,9 @@ const registrationStatus =
         return;
       }
     }
-    const registrationNumber = getNextReservationNumber(activeReservationState);
+    const selectedReservationKey = activePublicReservationKey || reservationKeyFromState(activeReservationState);
+    const selectedReservationState = reservationStateForKey(reservationState, selectedReservationKey, scheduleItems);
+    const registrationNumber = getNextReservationNumber(selectedReservationState);
     const newReservation = {
       id: Date.now(),
       ...pendingReservation,
@@ -7862,8 +7864,8 @@ const registrationStatus =
     }
 
     setReservationState((current) => {
-      const selectedKey = activePublicReservationKey || reservationKeyFromState(activeReservationState);
-      const selectedState = reservationStateForKey(current, selectedKey);
+      const selectedKey = selectedReservationKey;
+      const selectedState = reservationStateForKey(current, selectedKey, scheduleItems);
       const currentReservations = selectedState.reservations || [];
       const nextReservations = [
         ...currentReservations,

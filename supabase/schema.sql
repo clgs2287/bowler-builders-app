@@ -276,7 +276,6 @@ declare
   next_nickname text := lower(trim(coalesce(payload->>'nickname', '')));
   next_email text := lower(trim(coalesce(payload->>'email', '')));
   current_max_number integer := 0;
-  requested_number integer := 0;
   next_number integer := 1;
   next_data jsonb;
 begin
@@ -309,11 +308,7 @@ begin
   from public.reservations
   where tournament_id = next_tournament_id;
 
-  requested_number := greatest(
-    case when coalesce(payload->>'registrationNumber', '') ~ '^[0-9]+$' then (payload->>'registrationNumber')::integer else 0 end,
-    case when coalesce(payload->>'confirmationNumber', '') ~ '^[0-9]+$' then (payload->>'confirmationNumber')::integer else 0 end
-  );
-  next_number := greatest(current_max_number + 1, requested_number, 1);
+  next_number := greatest(current_max_number + 1, 1);
   next_data := payload || jsonb_build_object(
     'id', next_id,
     'tournamentKey', next_tournament_id,
