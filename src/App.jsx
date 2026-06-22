@@ -906,7 +906,11 @@ function getOpenReservationKeys(reservationState = {}) {
 
 function reservationStateForKey(reservationState = {}, tournamentKey = "", scheduleItems = []) {
   if (!tournamentKey || tournamentKey === reservationKeyFromState(reservationState)) {
-    return reservationState;
+    const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
+    return {
+      ...reservationState,
+      publicTournamentInfo: reservationState.publicTournamentInfo || bucket.publicTournamentInfo || null,
+    };
   }
   const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
   const snapshot = bucket.publicTournamentInfo || {};
@@ -17168,6 +17172,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         }),
       };
     });
+    const currentPublicTournamentInfo = currentReservationKey
+      ? reservationsForSettings[currentReservationKey]?.publicTournamentInfo || reservationState.publicTournamentInfo || null
+      : reservationState.publicTournamentInfo || null;
     const reservationSettings = {
       entriesOpen: Boolean(reservationState.entriesOpen),
       openTournamentKeys: getOpenReservationKeys(reservationState),
@@ -17181,6 +17188,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       reservationNextNumber: getNextReservationNumber(reservationState),
       waitlistOnlyNames: reservationState.waitlistOnlyNames || "",
       reservationCount: (reservationState.reservations || []).length,
+      publicTournamentInfo: currentPublicTournamentInfo,
       reservationsByTournament: sanitizeReservationsByTournament(reservationsForSettings),
     };
     await withTimeout(
@@ -17364,6 +17372,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             0
           );
           const currentPublicReservations = publicRosterByTournament[currentReservationKey] || [];
+          const currentPublicTournamentInfo = reservationSettings.publicTournamentInfo || reservationsByTournament[currentReservationKey]?.publicTournamentInfo || null;
           setReservationState((current) => ({
             ...current,
             ...reservationSettings,
@@ -17375,6 +17384,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             publicReservations: currentTournamentReservations.length
               ? currentTournamentReservations
               : currentPublicReservations,
+            publicTournamentInfo: currentPublicTournamentInfo,
           }));
         }
 
