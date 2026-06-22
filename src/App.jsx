@@ -17074,6 +17074,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const archiveRecords = (tournamentHistory || []).map(archivedTournamentRecordFromItem);
     const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || {});
     const draftRecords = (savedTournamentDrafts || []).map(tournamentDraftRecordFromItem);
+    const publicInfoSnapshots = [
+      activeTournamentSnapshotRef.current,
+      ...(savedTournamentDrafts || []).map((draft) => draft?.snapshot),
+    ].filter((snapshot) => snapshot?.tournamentInfo);
+    const publicInfoSnapshotForKey = (tournamentKey) =>
+      publicInfoSnapshots.find((snapshot) => tournamentInfoMatchesReservationKey(snapshot.tournamentInfo || {}, tournamentKey)) || null;
 
     const syncTable = async (table, records, { removeStale = true } = {}) => {
       setSupabaseSaveStatus(`Saving ${table}...`);
@@ -17128,6 +17134,29 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (currentReservationKey) {
       reservationsForSettings[currentReservationKey] = reservationBucketFromState(reservationState);
     }
+    getOpenReservationKeys(reservationState).forEach((tournamentKey) => {
+      const snapshot = publicInfoSnapshotForKey(tournamentKey);
+      if (!snapshot) return;
+      const bucket = reservationsForSettings[tournamentKey] || {};
+      const scheduleItem = scheduleItemForReservationKey(scheduleItems, tournamentKey);
+      reservationsForSettings[tournamentKey] = {
+        ...bucket,
+        publicTournamentInfo: buildReservationTournamentInfoSnapshot({
+          tournamentInfo: snapshot.tournamentInfo || {},
+          payoutState: snapshot.payoutState || {},
+          scheduleItem,
+          reservationState: {
+            ...reservationState,
+            ...bucket,
+            tournamentName: snapshot.tournamentInfo?.name || bucket.tournamentName,
+            tournamentDate: snapshot.tournamentInfo?.date || bucket.tournamentDate,
+            tournamentStartTime: snapshot.tournamentInfo?.startTime || bucket.tournamentStartTime,
+            tournamentCenter: snapshot.tournamentInfo?.center || bucket.tournamentCenter,
+            tournamentAddress: snapshot.tournamentInfo?.location || bucket.tournamentAddress,
+          },
+        }),
+      };
+    });
     const reservationSettings = {
       entriesOpen: Boolean(reservationState.entriesOpen),
       openTournamentKeys: getOpenReservationKeys(reservationState),
