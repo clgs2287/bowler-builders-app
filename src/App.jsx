@@ -49,6 +49,11 @@ const TOURNAMENT_SERIES_LABELS = {
   FDDS: "Frankie and Ding Dong Series",
   "Handicap/Non-FKM": "Handicap / Non-FKM",
 };
+const RESERVATION_ELIGIBILITY_OPTIONS = [
+  { value: "open", label: "Open to all" },
+  { value: "nonChampions", label: "Non-champions only" },
+  { value: "championsOnly", label: "Champions only" },
+];
 
 function isOwnerAdminEmail(email = "") {
   return OWNER_ADMIN_EMAILS.includes(String(email || "").trim().toLowerCase());
@@ -4357,6 +4362,18 @@ function DashboardTab({
                   </div>
                 </div>
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+                  <Label className="text-left text-sm font-bold text-blue-900">Reservation Eligibility</Label>
+                  <select
+                    value={tournamentInfo.reservationEligibility || "open"}
+                    onChange={(e) => update("reservationEligibility", e.target.value)}
+                    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+                  >
+                    {RESERVATION_ELIGIBILITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
   <Label className="text-left text-sm font-bold text-blue-900">
     Major
   </Label>
@@ -4764,6 +4781,69 @@ function getTitleCategoryLabel(title) {
   if (title?.major) return "Major";
   if (title?.eligible) return "FKM";
   return "Non-FKM";
+}
+
+function getReservationEligibilityLabel(value = "open") {
+  return RESERVATION_ELIGIBILITY_OPTIONS.find((option) => option.value === value)?.label || "Open to all";
+}
+
+function getChampionTitleRows(tournamentHistory = [], manualTitles = []) {
+  const archiveTitles = (tournamentHistory || []).flatMap((tournament) =>
+    (tournament.results || [])
+      .filter((result) => result.tournamentWinner)
+      .map((result) => ({
+        bowler: result.name,
+        tournament: tournament.name,
+        date: tournament.date,
+        source: tournament.series || tournament.activeSnapshot?.tournamentInfo?.series || DEFAULT_TOURNAMENT_SERIES,
+      }))
+  );
+  const manualChampionTitles = (manualTitles || [])
+    .filter((title) => !title.hof && (title.bowler || title.name))
+    .map((title) => ({
+      ...title,
+      bowler: title.bowler || title.name,
+      tournament: title.tournament || title.source || getTitleCategoryLabel(title),
+    }));
+  return [...archiveTitles, ...manualChampionTitles];
+}
+
+function namesMatchWithIdentities(nameA = "", nameB = "", bowlerIdentities = []) {
+  const aKeys = new Set(getBowlerNameLookupList(nameA, bowlerIdentities).map(getIdentityKey).filter(Boolean));
+  if (!aKeys.size) return false;
+  return getBowlerNameLookupList(nameB, bowlerIdentities).some((name) => aKeys.has(getIdentityKey(name)));
+}
+
+function findChampionTitleForReservation(reservation = {}, tournamentHistory = [], manualTitles = [], bowlerIdentities = []) {
+  const submittedNames = [
+    reservation.name,
+    reservation.nickname,
+    getReservationDisplayName(reservation),
+  ].map((value) => String(value || "").trim()).filter(Boolean);
+  if (!submittedNames.length) return null;
+  return getChampionTitleRows(tournamentHistory, manualTitles).find((title) =>
+    submittedNames.some((submittedName) => namesMatchWithIdentities(submittedName, title.bowler, bowlerIdentities))
+  ) || null;
+}
+
+function validateReservationEligibility({ reservation, tournamentInfo = {}, tournamentHistory = [], manualTitles = [], bowlerIdentities = [] }) {
+  const eligibility = tournamentInfo.reservationEligibility || "open";
+  if (eligibility === "open") return { ok: true };
+  const championMatch = findChampionTitleForReservation(reservation, tournamentHistory, manualTitles, bowlerIdentities);
+  const displayName = getReservationDisplayName(reservation) || reservation.name || "This bowler";
+  if (eligibility === "nonChampions" && championMatch) {
+    return {
+      ok: false,
+      message: `${displayName} appears to be a previous champion from ${championMatch.tournament || "title history"}. This event is for non-champions only. If this seems wrong, please email bowlerbuildersproshop@yahoo.com.`,
+    };
+  }
+  if (eligibility === "championsOnly" && !championMatch) {
+    return {
+      ok: false,
+      message: "This event is for previous champions only. If you believe you are eligible, please email bowlerbuildersproshop@yahoo.com.",
+    };
+  }
+  return { ok: true, championMatch };
 }
 
 function lanePositionParts(value) {
@@ -7466,6 +7546,9 @@ function PublicReservations({
   reservationState,
   setReservationState,
   tournamentInfo,
+  tournamentHistory = [],
+  manualTitles = [],
+  bowlerIdentities = [],
   selectedReservationKey = "",
   onSelectedReservationKeyChange = () => {},
   onReservationSubmit = () => Promise.resolve(),
@@ -7481,6 +7564,8 @@ function PublicReservations({
   const activeReservationState = activePublicReservationKey
     ? reservationStateForKey(reservationState, activePublicReservationKey)
     : reservationState;
+  const activeTournamentInfo = activeReservationState.publicTournamentInfo || tournamentInfo || {};
+  const reservationEligibility = activeTournamentInfo.reservationEligibility || "open";
   const [form, setForm] = useState({
     name: "",
     nickname: "",
@@ -7560,6 +7645,7 @@ const registrationStatus =
           Register for:
           <span className="ml-1 font-bold">
             {activeReservationState.tournamentName ||
+              activeTournamentInfo.name ||
               tournamentInfo.name}
           </span>
         </p>
@@ -7584,6 +7670,11 @@ const registrationStatus =
           <p>After submitting, please check your inbox and spam folder for your confirmation email.</p>
           <p>If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.</p>
           <p>Withdrawals should be made at least 48 hours before the tournament. Anyone withdrawing within 48 hours may be moved to the waitlist for future reservations.</p>
+          {reservationEligibility !== "open" && (
+            <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
+              Eligibility: {getReservationEligibilityLabel(reservationEligibility)}.
+            </p>
+          )}
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -7640,6 +7731,7 @@ const registrationStatus =
     const pendingReservation = {
       tournament:
         activeReservationState.tournamentName ||
+        activeTournamentInfo.name ||
         tournamentInfo.name,
       tournamentKey: activePublicReservationKey || reservationKeyFromState(activeReservationState),
       name: form.name,
@@ -7648,6 +7740,17 @@ const registrationStatus =
       email: form.email,
       note: form.note,
     };
+    const eligibilityResult = validateReservationEligibility({
+      reservation: pendingReservation,
+      tournamentInfo: activeTournamentInfo,
+      tournamentHistory,
+      manualTitles,
+      bowlerIdentities,
+    });
+    if (!eligibilityResult.ok) {
+      alert(eligibilityResult.message);
+      return;
+    }
     if (!supabase) {
       const duplicateReservation = currentReservations.find((reservation) =>
         isDuplicateReservation(reservation, pendingReservation)
@@ -7721,7 +7824,7 @@ const registrationStatus =
       const emailResult = await sendReservationConfirmationEmail({
         reservation: savedReservation,
         reservationState: activeReservationState,
-        tournamentInfo,
+        tournamentInfo: activeTournamentInfo,
       });
       if (emailResult?.skipped) {
         emailNotice = "Reservation saved. Confirmation email is not configured yet.";
@@ -16624,7 +16727,7 @@ export default function BowlingPayoutApp() {
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState("bracket");
-  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], lanePatternImages: [] });
+  const [tournamentInfo, setTournamentInfo] = useState({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, reservationEligibility: "open", tournamentStyle: "singles", announcementImages: [], lanePatternImages: [] });
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
   const [payoutState, setPayoutState] = useState(DEFAULT_PAYOUT_STATE);
@@ -17326,7 +17429,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(Array.isArray(snapshot.bowlers) ? snapshot.bowlers.map((bowler) => normalizeBowlerGames(bowler, Number(snapshot.qualifyingGames || qualifyingGames || 4))) : buildInitialBowlers(0, Number(snapshot.qualifyingGames || 4)));
     setUseHandicapScores(Boolean(snapshot.useHandicapScores));
     setTournamentFormat(snapshot.tournamentFormat || "eliminator");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], lanePatternImages: [], ...(snapshot.tournamentInfo || {}) });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, reservationEligibility: "open", tournamentStyle: "singles", announcementImages: [], lanePatternImages: [], ...(snapshot.tournamentInfo || {}) });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "", ...(snapshot.tournamentRecap || {}) });
     setSavedScoreGames(snapshot.savedScoreGames || {});
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
@@ -17651,7 +17754,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setBowlers(buildInitialBowlers(0, 4));
     setUseHandicapScores(false);
     setTournamentFormat("bracket");
-    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, tournamentStyle: "singles", announcementImages: [], lanePatternImages: [] });
+    setTournamentInfo({ name: "Bowler Builders Tournament", date: "", startTime: "", center: "", location: "", director: DEFAULT_TOURNAMENT_DIRECTOR, directorEmail: DEFAULT_TOURNAMENT_DIRECTOR_EMAIL, lanesUsed: "", season: new Date().getFullYear().toString(), series: DEFAULT_TOURNAMENT_SERIES, stage: "Qualifying", titleEligible: true, major: false, reservationEligibility: "open", tournamentStyle: "singles", announcementImages: [], lanePatternImages: [] });
     setTournamentRecap({ winner: "", runnerUp: "", highGame: "", recapNotes: "" });
     setSavedScoreGames({});
     setSavedFinalsRounds({});
@@ -18167,6 +18270,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   reservationState={reservationState}
   setReservationState={setReservationState}
   tournamentInfo={tournamentInfo}
+  tournamentHistory={tournamentHistory}
+  manualTitles={manualTitles}
+  bowlerIdentities={bowlerIdentities}
   selectedReservationKey={selectedPublicReservationKey}
   onSelectedReservationKeyChange={setSelectedPublicReservationKey}
   onReservationSubmit={submitReservationToSupabase}
