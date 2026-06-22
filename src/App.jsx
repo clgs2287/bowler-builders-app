@@ -722,6 +722,16 @@ function scheduleItemForReservationKey(scheduleItems = [], tournamentKey = "") {
   return (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === tournamentKey) || null;
 }
 
+function tournamentInfoMatchesReservationKey(tournamentInfo = {}, tournamentKey = "") {
+  if (!tournamentKey) return false;
+  const tournamentInfoKey = reservationTournamentKey({
+    name: tournamentInfo.name,
+    date: tournamentInfo.date,
+    center: tournamentInfo.center,
+  });
+  return Boolean(tournamentInfoKey && tournamentInfoKey === tournamentKey);
+}
+
 function findScheduleItemByName(scheduleItems = [], name = "") {
   const needle = normalizeMatchText(name);
   if (!needle) return null;
@@ -2800,9 +2810,16 @@ function TournamentInfoTab({
   const matchingReservationState = matchingReservationOption?.state || null;
   const reservationTournamentInfo = matchingReservationState?.publicTournamentInfo || null;
   const matchingScheduleItem = matchingReservationOption?.scheduleItem || null;
+  const selectedTournamentKey = matchingReservationOption?.key || "";
+  const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, selectedTournamentKey);
   const displayedTournamentInfoBase = reservationTournamentInfo || (
     matchingReservationState
-      ? buildReservationTournamentInfoSnapshot({ tournamentInfo, scheduleItem: matchingScheduleItem, reservationState: matchingReservationState, payoutState })
+      ? buildReservationTournamentInfoSnapshot({
+          tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
+          scheduleItem: matchingScheduleItem,
+          reservationState: matchingReservationState,
+          payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
+        })
       : tournamentInfo
   );
   const displayedTournamentInfo = matchingReservationState
@@ -6943,9 +6960,10 @@ function ReservationsTab({
       const savedBucket = reservationsByTournament[nextKey] || {};
       const openTournamentKeys = getOpenReservationKeys(current);
       const nextEntriesOpen = Boolean(savedBucket.entriesOpen || openTournamentKeys.includes(nextKey));
+      const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, nextKey);
       const publicTournamentInfo = savedBucket.publicTournamentInfo || buildReservationTournamentInfoSnapshot({
-        tournamentInfo,
-        payoutState,
+        tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
+        payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
         scheduleItem: item || null,
         reservationState: {
           ...current,
@@ -6986,13 +7004,14 @@ function ReservationsTab({
 
       if (currentKey) {
         const currentScheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentKey);
+        const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
         reservationsByTournament[currentKey] = {
           ...reservationBucketFromState(current),
           entriesOpen: checked,
           publicTournamentInfo: checked
             ? buildReservationTournamentInfoSnapshot({
-                tournamentInfo,
-                payoutState,
+                tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
+                payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
                 scheduleItem: currentScheduleItem || null,
                 reservationState: current,
               })
@@ -7020,9 +7039,10 @@ function ReservationsTab({
       if (!currentKey) return current;
       const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
       const currentScheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentKey);
+      const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
       const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
-        tournamentInfo,
-        payoutState,
+        tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
+        payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
         scheduleItem: currentScheduleItem || null,
         reservationState: current,
       });
