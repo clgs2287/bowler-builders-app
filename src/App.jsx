@@ -2497,6 +2497,15 @@ tabs: [
   },
 
   {
+    id: "display",
+    label: "Display",
+    tabs: [
+      { id: "displayLeaderboard", label: "Leaderboard Display" },
+      { id: "displayFinals", label: "Finals Display", hideForSweeper: true },
+    ],
+  },
+
+  {
     id: "finals",
     label: "Finals",
     tabs: [
@@ -8173,6 +8182,440 @@ function getBracketByeRanks(qualifiers) {
   if (typeof size !== "number") return [];
   const byes = Math.max(0, size - qualifiers);
   return Array.from({ length: byes }, (_, index) => index + 1);
+}
+
+function TournamentDisplayShell({ title, subtitle, children }) {
+  return (
+    <div className="min-h-[78vh] rounded-3xl border border-blue-300 bg-slate-950 p-4 text-white shadow-2xl md:p-8">
+      <div className="mx-auto mb-5 flex w-full max-w-[1500px] flex-col gap-2 border-b border-blue-400/40 pb-4 text-center">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-blue-200">Bowler Builders Display</p>
+          <h2 className="text-3xl font-black leading-tight md:text-6xl">{title}</h2>
+        </div>
+        {subtitle && <p className="text-lg font-black text-blue-100 md:text-3xl">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function LeaderboardDisplayView({ ranked = [], financials = {}, useHandicapScores = false, tournamentInfo = {}, qualifyingGames = 4, savedScoreGames = {} }) {
+  const [currentPage, setCurrentPage] = useState(0);
+  const displayCashers = Number(financials.cashers || 0);
+  const currentGame = Math.min(
+    Number(qualifyingGames || 4),
+    Math.max(1, Object.values(savedScoreGames || {}).filter(Boolean).length + 1)
+  );
+  const rowsPerPage = 16;
+  const pageCount = Math.max(1, Math.ceil((ranked.length || 0) / rowsPerPage));
+  const displayRows = ranked.slice(currentPage * rowsPerPage, currentPage * rowsPerPage + rowsPerPage);
+  const cutScore = ranked[Math.max(displayCashers - 1, 0)]
+    ? Number(useHandicapScores ? ranked[Math.max(displayCashers - 1, 0)].handicap : ranked[Math.max(displayCashers - 1, 0)].scratch)
+    : 0;
+  const byeRanks = new Set(getBracketByeRanks(displayCashers));
+  const scoreLabel = useHandicapScores ? "Total" : "Scratch";
+  const goToPreviousPage = () => setCurrentPage((page) => (page - 1 + pageCount) % pageCount);
+  const goToNextPage = () => setCurrentPage((page) => (page + 1) % pageCount);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, pageCount - 1));
+  }, [pageCount, ranked.length]);
+
+  useEffect(() => {
+    if (pageCount <= 1) return undefined;
+    const timerId = window.setInterval(() => {
+      setCurrentPage((page) => (page + 1) % pageCount);
+    }, 12000);
+    return () => window.clearInterval(timerId);
+  }, [pageCount]);
+
+  return (
+    <TournamentDisplayShell
+      title={tournamentInfo.name || "Tournament Leaderboard"}
+      subtitle={`Game ${currentGame} of ${qualifyingGames || 4}`}
+    >
+      <div className="mx-auto w-full max-w-[1500px]">
+      <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/10 p-3 md:flex-row md:items-center md:justify-between">
+        <div className="text-lg font-black text-blue-100 md:text-2xl">
+          Showing {ranked.length ? currentPage * rowsPerPage + 1 : 0}-{Math.min((currentPage + 1) * rowsPerPage, ranked.length)} of {ranked.length}
+        </div>
+        {pageCount > 1 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={goToPreviousPage}>
+              Previous
+            </Button>
+            <span className="min-w-24 text-center text-lg font-black text-white md:text-2xl">
+              {currentPage + 1} / {pageCount}
+            </span>
+            <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={goToNextPage}>
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="grid gap-3">
+        <div className="grid grid-cols-[72px_minmax(220px,1fr)_110px_110px_120px] rounded-2xl bg-blue-700 px-4 py-3 text-lg font-black uppercase text-white md:grid-cols-[96px_minmax(360px,1fr)_150px_150px_170px] md:gap-5 md:text-2xl xl:grid-cols-[96px_minmax(460px,1fr)_170px_170px_190px]">
+          <div>Rank</div>
+          <div>Name</div>
+          <div className="text-right">Scratch</div>
+          <div className="text-right">{scoreLabel}</div>
+          <div className="text-right">Status</div>
+        </div>
+        {displayRows.map((row) => {
+          const isCashing = displayCashers > 0 && row.rank <= displayCashers;
+          const hasBye = isCashing && byeRanks.has(Number(row.rank || 0));
+          const displayScore = useHandicapScores ? row.handicap : row.scratch;
+          const fromCut = displayCashers > 0 && row.rank > displayCashers ? Number(displayScore || 0) - cutScore : 0;
+          return (
+            <div
+              key={row.id || row.name || row.rank}
+              className={`grid grid-cols-[72px_minmax(220px,1fr)_110px_110px_120px] items-center rounded-2xl px-4 py-2.5 md:grid-cols-[96px_minmax(360px,1fr)_150px_150px_170px] md:gap-5 xl:grid-cols-[96px_minmax(460px,1fr)_170px_170px_190px] ${
+                isCashing ? "bg-emerald-500/20 ring-2 ring-emerald-300/60" : "bg-white/10"
+              }`}
+            >
+              <div className="text-3xl font-black md:text-5xl">{row.rank}</div>
+              <div className="min-w-0">
+                <div className="truncate text-2xl font-black md:text-5xl">{row.name}</div>
+                {row.members?.length > 0 && (
+                  <div className="truncate text-sm font-bold text-blue-100 md:text-xl">
+                    {row.members.map((member) => member.name).filter(Boolean).join(" / ")}
+                  </div>
+                )}
+              </div>
+              <div className="text-right text-3xl font-black md:text-5xl">{row.scratch || 0}</div>
+              <div className="text-right text-3xl font-black text-blue-100 md:text-5xl">{displayScore || 0}</div>
+              <div className={`text-right text-2xl font-black md:text-4xl ${isCashing ? "text-emerald-200" : "text-red-200"}`}>
+                {hasBye ? "Bye" : isCashing ? "In" : fromCut < 0 ? fromCut : "-"}
+              </div>
+            </div>
+          );
+        })}
+        {displayRows.length === 0 && (
+          <div className="rounded-2xl bg-white/10 p-8 text-center text-3xl font-black text-blue-100">
+            Scores will appear after they are saved.
+          </div>
+        )}
+      </div>
+      </div>
+    </TournamentDisplayShell>
+  );
+}
+
+function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracketState = {}, tournamentInfo = {} }) {
+  const [currentPage, setCurrentPage] = useState(0);
+  const { scores = {}, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
+  const scratchScores = bracketState.scratchScores || {};
+  const matchLanes = bracketState.matchLanes || {};
+  const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
+  const rounds = Array.isArray(bracketRounds) ? bracketRounds : [];
+  const matchWinner = (match, roundIndex) => {
+    if (!match) return null;
+    const leftKey = `${match.id}-l`;
+    const rightKey = `${match.id}-r`;
+    if (matchScoring === "bestOf3") return winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id);
+    if (matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores) {
+      return winnerFromAverageAdvantageMatch(match.left, match.right, scores[leftKey], scores[rightKey]);
+    }
+    return winnerFromMatch(match.left, match.right, scores[leftKey], scores[rightKey]);
+  };
+  const activeRoundIndex = Math.max(
+    0,
+    rounds.findIndex((round, roundIndex) =>
+      (round.matches || []).some((match) => {
+        const winner = matchWinner(match, roundIndex);
+        return !winner || winner.name === "TIE";
+      })
+    )
+  );
+  const selectedRoundIndex = activeRoundIndex >= 0 ? activeRoundIndex : Math.max(0, rounds.length - 1);
+  const selectedRound = rounds[selectedRoundIndex] || { title: "Finals", matches: [] };
+  const matches = selectedRound.matches || [];
+  const rowsPerPage = 4;
+  const pageCount = Math.max(1, Math.ceil(matches.length / rowsPerPage));
+  const pageMatches = matches.slice(currentPage * rowsPerPage, currentPage * rowsPerPage + rowsPerPage);
+  const roundLabels = rounds.map((round) => round.title);
+  const matchNumberOffset = rounds
+    .slice(0, selectedRoundIndex)
+    .reduce((sum, previousRound) => sum + (previousRound.matches || []).length, 0);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [selectedRoundIndex, matches.length]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, pageCount - 1));
+  }, [pageCount]);
+
+  useEffect(() => {
+    if (pageCount <= 1) return undefined;
+    const timerId = window.setInterval(() => {
+      setCurrentPage((page) => (page + 1) % pageCount);
+    }, 10000);
+    return () => window.clearInterval(timerId);
+  }, [pageCount]);
+
+  const scoreFor = (player, value, scratchValue, opponent, isAverageAdvantage = false) => {
+    if (!player) return "TBD";
+    if (player.name === "BYE") return "BYE";
+    if (isAverageAdvantage) {
+      const scratch = Number(value || 0);
+      if (!scratch) return "-";
+      const bonus = roundOneAverageBonus(player, opponent);
+      return bonus ? `${scratch} + ${bonus} = ${scratch + bonus}` : String(scratch);
+    }
+    const handicap = useHandicapScores ? handicapPerGame(player) : 0;
+    const scratch =
+      scratchValue !== undefined && scratchValue !== null && scratchValue !== ""
+        ? Number(scratchValue || 0)
+        : useHandicapScores && value !== undefined && value !== null && value !== ""
+          ? Math.max(0, Number(value || 0) - handicap)
+          : Number(value || 0);
+    if (!scratch) return "-";
+    return useHandicapScores ? `${scratch} + ${handicap} = ${scratch + handicap}` : String(scratch);
+  };
+
+  const playerName = (player) => {
+    if (!player) return "TBD";
+    if (player.name === "BYE") return "BYE";
+    if (!useHandicapScores) return player.name || "TBD";
+    return `${player.name || "TBD"} (+${handicapPerGame(player)})`;
+  };
+
+  const renderStandardMatch = (match, matchIndex) => {
+    const leftKey = `${match.id}-l`;
+    const rightKey = `${match.id}-r`;
+    const laneLabel = String(matchLanes[match.id] || "").trim();
+    const usesAverageAdvantage = matchScoring === "avgAdvantage" && selectedRoundIndex === 0 && !useHandicapScores;
+    const winner = matchWinner(match, selectedRoundIndex);
+    const leftWon = winner?.seed !== undefined && String(winner.seed) === String(match.left?.seed) && winner.name !== "TIE";
+    const rightWon = winner?.seed !== undefined && String(winner.seed) === String(match.right?.seed) && winner.name !== "TIE";
+    const cardClass = winner?.name && winner.name !== "TIE"
+      ? "border-emerald-300 bg-emerald-500/15 ring-2 ring-emerald-300/50"
+      : "border-blue-300/50 bg-white/10";
+    const rowClass = (won) => won
+      ? "grid grid-cols-[minmax(0,1fr)_minmax(112px,200px)] items-center gap-2 rounded-2xl bg-emerald-400/20 p-2.5 text-emerald-50 ring-2 ring-emerald-300/50"
+      : "grid grid-cols-[minmax(0,1fr)_minmax(112px,200px)] items-center gap-2 rounded-2xl bg-slate-950/50 p-2.5 text-white";
+
+    return (
+      <div key={match.id} className={`rounded-2xl border p-2.5 shadow-xl ${cardClass}`}>
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-full bg-blue-700 px-3 py-1 text-base font-black uppercase text-white">
+            Match {matchNumberOffset + matchIndex + 1}
+          </div>
+          {laneLabel && <div className="rounded-full bg-white px-3 py-1 text-base font-black text-blue-950">Lanes {laneLabel}</div>}
+        </div>
+        <div className="grid gap-2">
+          <div className={rowClass(leftWon)}>
+            <div className="truncate text-xl font-black md:text-3xl">{playerName(match.left)}</div>
+            <div className="rounded-xl bg-white px-3 py-2 text-center text-xl font-black text-blue-950 md:text-3xl">
+              {scoreFor(match.left, scores[leftKey], scratchScores[leftKey], match.right, usesAverageAdvantage)}
+            </div>
+          </div>
+          <div className={rowClass(rightWon)}>
+            <div className="truncate text-xl font-black md:text-3xl">{playerName(match.right)}</div>
+            <div className="rounded-xl bg-white px-3 py-2 text-center text-xl font-black text-blue-950 md:text-3xl">
+              {scoreFor(match.right, scores[rightKey], scratchScores[rightKey], match.left, usesAverageAdvantage)}
+            </div>
+          </div>
+        </div>
+        <div className="mt-2.5 text-center text-lg font-black text-blue-100 md:text-2xl">
+          Winner: <span className="text-white">{winner?.name && winner.name !== "TIE" ? winner.name : "TBD"}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBestOfThreeMatch = (match, matchIndex) => {
+    const laneLabel = String(matchLanes[match.id] || "").trim();
+    const winner = matchWinner(match, selectedRoundIndex);
+    const record = getBestOfThreeRecord(scores, match.id);
+    const leftWon = winner?.seed !== undefined && String(winner.seed) === String(match.left?.seed) && winner.name !== "TIE";
+    const rightWon = winner?.seed !== undefined && String(winner.seed) === String(match.right?.seed) && winner.name !== "TIE";
+    const rowClass = (won) => won
+      ? "rounded-2xl bg-emerald-400/20 p-2.5 text-emerald-50 ring-2 ring-emerald-300/50"
+      : "rounded-2xl bg-slate-950/50 p-2.5 text-white";
+    const gameScore = (side, gameNumber) => {
+      const scoreKey = `${match.id}-g${gameNumber}-${side}`;
+      const scratchKey = `${scoreKey}`;
+      const player = side === "l" ? match.left : match.right;
+      return scoreFor(player, scores[scoreKey], scratchScores[scratchKey], side === "l" ? match.right : match.left);
+    };
+
+    return (
+      <div key={match.id} className="rounded-2xl border border-blue-300/50 bg-white/10 p-2.5 shadow-xl">
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="rounded-full bg-blue-700 px-3 py-1 text-base font-black uppercase text-white">
+            Match {matchNumberOffset + matchIndex + 1}
+          </div>
+          {laneLabel && <div className="rounded-full bg-white px-3 py-1 text-base font-black text-blue-950">Lanes {laneLabel}</div>}
+        </div>
+        <div className="grid gap-2">
+          <div className={`${rowClass(leftWon)} grid grid-cols-[minmax(0,1fr)_96px_96px_96px_86px] items-center gap-2`}>
+            <div className="truncate text-xl font-black md:text-2xl">{playerName(match.left)}</div>
+            {[1, 2, 3].map((gameNumber) => <div key={`${match.id}-left-g${gameNumber}`} className="rounded-xl bg-white px-2 py-1.5 text-center text-xl font-black text-blue-950">{gameScore("l", gameNumber)}</div>)}
+            <div className="rounded-xl bg-blue-700 px-2 py-1.5 text-center text-2xl font-black text-white">{record.left}</div>
+          </div>
+          <div className={`${rowClass(rightWon)} grid grid-cols-[minmax(0,1fr)_96px_96px_96px_86px] items-center gap-2`}>
+            <div className="truncate text-xl font-black md:text-2xl">{playerName(match.right)}</div>
+            {[1, 2, 3].map((gameNumber) => <div key={`${match.id}-right-g${gameNumber}`} className="rounded-xl bg-white px-2 py-1.5 text-center text-xl font-black text-blue-950">{gameScore("r", gameNumber)}</div>)}
+            <div className="rounded-xl bg-blue-700 px-2 py-1.5 text-center text-2xl font-black text-white">{record.right}</div>
+          </div>
+        </div>
+        <div className="mt-2.5 text-center text-lg font-black text-blue-100 md:text-2xl">
+          Winner: <span className="text-white">{winner?.name && winner.name !== "TIE" ? winner.name : "TBD"}</span>
+        </div>
+      </div>
+    );
+  };
+
+  if (size === "Over 64") {
+    return (
+      <div className="rounded-3xl bg-white/10 p-8 text-center text-3xl font-black text-blue-100">
+        Finals display supports brackets up to 64 qualifiers.
+      </div>
+    );
+  }
+
+  return (
+    <TournamentDisplayShell
+      title={tournamentInfo.name || "Tournament Finals"}
+      subtitle={`${selectedRound.title || "Current Round"}${champion?.name ? ` • Champion: ${champion.name}` : qualifiers ? ` • ${qualifiers} Qualifiers` : ""}`}
+    >
+      <div className="mx-auto w-full max-w-[1500px]">
+        <div className="mb-3 flex flex-col gap-2 rounded-2xl bg-white/10 p-2.5 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {roundLabels.map((label, index) => (
+              <div
+                key={`display-round-${label}`}
+                className={index === selectedRoundIndex ? "rounded-full bg-blue-100 px-3 py-1.5 text-base font-black text-blue-950" : "rounded-full bg-white/10 px-3 py-1.5 text-base font-black text-blue-100"}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          <div className="text-base font-black text-blue-100 md:text-xl">
+            Showing {matches.length ? currentPage * rowsPerPage + 1 : 0}-{Math.min((currentPage + 1) * rowsPerPage, matches.length)} of {matches.length}
+          </div>
+        </div>
+        <div className="grid gap-2.5">
+          {pageMatches.map((match, matchIndex) =>
+            matchScoring === "bestOf3"
+              ? renderBestOfThreeMatch(match, currentPage * rowsPerPage + matchIndex)
+              : renderStandardMatch(match, currentPage * rowsPerPage + matchIndex)
+          )}
+          {pageMatches.length === 0 && (
+            <div className="rounded-2xl bg-white/10 p-8 text-center text-3xl font-black text-blue-100">
+              Finals matches will appear after qualifiers are set.
+            </div>
+          )}
+        </div>
+      </div>
+    </TournamentDisplayShell>
+  );
+}
+
+function FinalsDisplayView({
+  entries,
+  tournamentInfo = {},
+  bowlers = [],
+  financials = {},
+  useHandicapScores = false,
+  tournamentFormat = "bracket",
+  bracketState = {},
+  eliminatorState = {},
+  laneEliminatorState = DEFAULT_LANE_ELIMINATOR_STATE,
+  matchplayState = DEFAULT_MATCHPLAY_STATE,
+  eliminatorTournamentState = DEFAULT_ELIMINATOR_TOURNAMENT_STATE,
+}) {
+  const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
+  const isMatchplay = isMatchplayTournament(tournamentFormat, tournamentInfo);
+  const isEliminatorTournament = isEliminatorTournamentStyle(tournamentStyle);
+  const finalistCount = Number(financials.cashers || entries || 0);
+  const champion = getFinalPlacementRows({
+    entries,
+    bowlers,
+    useHandicapScores,
+    tournamentFormat,
+    bracketState,
+    eliminatorState,
+    laneEliminatorState,
+    matchplayState,
+    eliminatorTournamentState,
+    tournamentInfo,
+  })?.[0];
+  const finalsLabel = isEliminatorTournament
+    ? "Eliminator Tournament"
+    : isMatchplay
+      ? "Matchplay"
+      : tournamentFormat === "laneEliminator"
+        ? "Lane Pair Eliminator"
+        : tournamentFormat === "eliminator"
+          ? "Eliminator + Stepladder"
+          : "Bracket Finals";
+
+  if (!isMatchplay && !isEliminatorTournament && tournamentFormat === "bracket") {
+    return (
+      <BracketFinalsDisplayBoard
+        entries={entries}
+        bowlers={bowlers}
+        useHandicapScores={useHandicapScores}
+        bracketState={bracketState}
+        tournamentInfo={tournamentInfo}
+      />
+    );
+  }
+
+  return (
+    <TournamentDisplayShell
+      title={tournamentInfo.name || "Tournament Finals"}
+      subtitle={`${finalsLabel}${champion?.name ? ` • Leader: ${champion.name}` : finalistCount ? ` • Top ${finalistCount}` : ""}`}
+    >
+      <div className="mx-auto w-full max-w-[1500px]">
+        <div className="rounded-3xl bg-white p-3 text-slate-950 shadow-2xl md:p-5">
+          {isMatchplay && (
+            <PublicMatchplayBracketView
+              bowlers={bowlers}
+              matchplayState={matchplayState || DEFAULT_MATCHPLAY_STATE}
+              tournamentInfo={tournamentInfo}
+              bigScreen
+            />
+          )}
+          {isEliminatorTournament && (
+            <EliminatorTournamentTab
+              bowlers={bowlers}
+              eliminatorTournamentState={eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE}
+              tournamentInfo={tournamentInfo}
+              readOnly
+            />
+          )}
+          {!isMatchplay && !isEliminatorTournament && tournamentFormat === "eliminator" && (
+            <PublicEliminatorView
+              entries={entries}
+              bowlers={bowlers}
+              useHandicapScores={useHandicapScores}
+              eliminatorState={eliminatorState}
+              tournamentInfo={tournamentInfo}
+            />
+          )}
+          {!isMatchplay && !isEliminatorTournament && tournamentFormat === "laneEliminator" && (
+            <LanePairEliminatorTab
+              entries={entries}
+              bowlers={bowlers}
+              useHandicapScores={useHandicapScores}
+              laneEliminatorState={laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE}
+              tournamentInfo={tournamentInfo}
+              readOnly
+            />
+          )}
+          {!isMatchplay && !isEliminatorTournament && tournamentFormat === "sweeper" && (
+            <p className="rounded-2xl bg-blue-50 p-6 text-center text-xl font-black text-blue-900">
+              Sweeper format has no finals bracket.
+            </p>
+          )}
+        </div>
+      </div>
+    </TournamentDisplayShell>
+  );
 }
 
 function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat, tournamentStyle = "singles", allowBigScreen = false, archiveResults = [] }) {
@@ -16885,6 +17328,24 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (navigateToDashboard) setActiveTab("dashboard");
   };
 
+  const refreshActiveTournamentSnapshotForDisplay = async ({ signal } = {}) => {
+    if (!supabase) return;
+    const rows = await withTimeout(
+      loadSupabaseRestRows(
+        "active_tournament_snapshots",
+        "?select=id,data&id=eq.active",
+        signal,
+        supabaseSession?.access_token || ""
+      ),
+      "Refreshing display snapshot",
+      8000
+    );
+    const nextActiveSnapshot = dataFromRow((rows || [])[0] || {});
+    if (!Object.keys(nextActiveSnapshot).length) return;
+    supabaseSaveSkipRef.current = true;
+    applyActiveTournamentSnapshot(nextActiveSnapshot);
+  };
+
   const refreshOpenReservationPublicInfoFromSnapshot = (snapshot = {}) => {
     const snapshotTournamentInfo = snapshot.tournamentInfo || {};
     const snapshotPayoutState = snapshot.payoutState || {};
@@ -17273,10 +17734,72 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
   }, [activeTab, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, requestedPublicResultsTab, tournamentFormat, tournamentInfo]);
 
+  const isDisplayMode = ["displayLeaderboard", "displayFinals"].includes(activeTab);
+
+  useEffect(() => {
+    if (!isDisplayMode || !supabase || !supabaseLoadReady) return undefined;
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const refreshDisplay = async () => {
+      try {
+        await refreshActiveTournamentSnapshotForDisplay({ signal: controller.signal });
+      } catch (error) {
+        if (!cancelled && error.name !== "AbortError") {
+          console.warn("Could not refresh display snapshot", error);
+        }
+      }
+    };
+
+    const timerId = window.setInterval(refreshDisplay, 10000);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearInterval(timerId);
+    };
+  }, [isDisplayMode, supabaseLoadReady, supabaseSession]);
+
   return (
-    <div ref={appTopRef} className="bb-stage min-h-screen p-2 md:p-8">
+    <div ref={appTopRef} className={`bb-stage min-h-screen ${isDisplayMode ? "p-0" : "p-2 md:p-8"}`}>
       <style>{numberInputStyles}</style>
-      <div className="bb-app-shell mx-auto max-w-7xl space-y-3 md:space-y-6">
+      <div className={`bb-app-shell mx-auto ${isDisplayMode ? "max-w-none space-y-0" : "max-w-7xl space-y-3 md:space-y-6"}`}>
+        {isDisplayMode && (
+          <div className="fixed right-4 top-4 z-50 flex flex-wrap justify-end gap-2">
+            <Button
+              variant="outline"
+              className={`rounded-2xl border-white/50 shadow-xl ${
+                activeTab === "displayLeaderboard"
+                  ? "bg-blue-100 text-blue-950 ring-2 ring-white hover:bg-blue-50"
+                  : "bg-white/95 text-blue-950 hover:bg-blue-50"
+              }`}
+              onClick={() => setActiveTab("displayLeaderboard")}
+            >
+              Leaderboard
+            </Button>
+            {tournamentFormat !== "sweeper" && (
+              <Button
+                variant="outline"
+                className={`rounded-2xl border-white/50 shadow-xl ${
+                  activeTab === "displayFinals"
+                    ? "bg-blue-100 text-blue-950 ring-2 ring-white hover:bg-blue-50"
+                    : "bg-white/95 text-blue-950 hover:bg-blue-50"
+                }`}
+                onClick={() => setActiveTab("displayFinals")}
+              >
+                Finals
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="rounded-2xl border-white/50 bg-white/95 text-blue-950 shadow-xl hover:bg-blue-50"
+              onClick={() => setActiveTab("public")}
+            >
+              Exit Display
+            </Button>
+          </div>
+        )}
+        {!isDisplayMode && (
         <div className="overflow-hidden rounded-3xl border border-blue-300/60 bg-slate-950 shadow-xl print:hidden">
           <div className="bb-header relative p-4 text-white md:p-5">
             <div className="bb-header-strip absolute inset-x-0 bottom-0 h-3 opacity-90" />
@@ -17371,6 +17894,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             </div>
           </div>
         </div>
+        )}
 
         {activeTab === "dashboard" && (
   <AppErrorBoundary key="dashboard">
@@ -17554,6 +18078,35 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 )}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} allowLeaderboardBigScreen={isAdminMode} qualifyingAdjustments={qualifyingAdjustments} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} /></AppErrorBoundary>}
+        {activeTab === "displayLeaderboard" && isAdminMode && (
+          <AppErrorBoundary key="displayLeaderboard">
+            <LeaderboardDisplayView
+              ranked={getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle)}
+              financials={financials}
+              useHandicapScores={useHandicapScores}
+              tournamentInfo={tournamentInfo}
+              qualifyingGames={qualifyingGames}
+              savedScoreGames={savedScoreGames}
+            />
+          </AppErrorBoundary>
+        )}
+        {activeTab === "displayFinals" && isAdminMode && tournamentFormat !== "sweeper" && (
+          <AppErrorBoundary key="displayFinals">
+            <FinalsDisplayView
+              entries={entries}
+              tournamentInfo={tournamentInfo}
+              bowlers={bowlers}
+              financials={financials}
+              useHandicapScores={useHandicapScores}
+              tournamentFormat={tournamentFormat}
+              bracketState={bracketState}
+              eliminatorState={eliminatorState}
+              laneEliminatorState={laneEliminatorState}
+              matchplayState={matchplayState}
+              eliminatorTournamentState={eliminatorTournamentState}
+            />
+          </AppErrorBoundary>
+        )}
         {activeTab === "publicsideaction" && <AppErrorBoundary key="publicsideaction"><PublicSideActionTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
         {activeTab === "sidepots" && <AppErrorBoundary key="sidepots"><SidePotBracketTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
         {activeTab === "highgame" && <AppErrorBoundary key="highgame"><HighGameTab bowlers={bowlers} useHandicapScores={useHandicapScores} sidePotState={sidePotState} qualifyingGames={qualifyingGames} tournamentInfo={tournamentInfo} /></AppErrorBoundary>}
