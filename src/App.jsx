@@ -2627,7 +2627,7 @@ function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournament
             </TabButton>
           ))}
         </div>
-        {isAdminMode && isOwnerAdmin && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset</Button>}
+        {isAdminMode && isOwnerAdmin && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset Active Tournament</Button>}
       </div>
     </div>
   );
@@ -3604,12 +3604,17 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
     setError("");
     setMessage("");
     setSubmitting(true);
-    const result = await onSignIn(email.trim(), password);
-    setSubmitting(false);
-    if (result?.error) setError(result.error);
-    else {
-      setPassword("");
-      setExpanded(false);
+    try {
+      const result = await onSignIn(email.trim(), password);
+      if (result?.error) setError(result.error);
+      else {
+        setPassword("");
+        setExpanded(false);
+      }
+    } catch (error) {
+      setError(error.message || "Login did not finish. Refresh and try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -4391,9 +4396,11 @@ function DashboardTab({
                       <Button variant="outline" className="rounded-xl" onClick={() => onLoadTournamentDraft(draft.id)}>
                         Open
                       </Button>
-                      <Button variant="outline" className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => onDeleteTournamentDraft(draft.id)}>
-                        Delete
-                      </Button>
+                      {isOwnerAdmin && (
+                        <Button variant="outline" className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => onDeleteTournamentDraft(draft.id)}>
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -6732,6 +6739,7 @@ function ReservationsTab({
   scheduleItems = [],
   bowlerIdentities = [],
   setBowlerIdentities = () => {},
+  isOwnerAdmin = false,
   onAddReservationToRegistration = () => {},
   onDeleteReservation = () => Promise.resolve(),
   onRemoveHiddenReservation = () => Promise.resolve(0),
@@ -6947,7 +6955,7 @@ function ReservationsTab({
   };
 
   const clearAllReservations = () => {
-    const confirmed = window.confirm("Clear all reservations for every saved tournament? This cannot be undone.");
+    const confirmed = window.confirm("Clear all reservation lists for every open/saved reservation tournament? This does not delete tournament drafts or archives, but it cannot be undone.");
     if (!confirmed) return;
 
     setReservationState((current) => ({
@@ -7050,13 +7058,15 @@ function ReservationsTab({
           </div>
 
           <div className="flex flex-wrap items-center justify-end gap-3">
-          <Button
-            variant="outline"
-            className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-            onClick={clearAllReservations}
-          >
-            Clear All Reservations
-          </Button>
+          {isOwnerAdmin && (
+            <Button
+              variant="outline"
+              className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+              onClick={clearAllReservations}
+            >
+              Clear All Reservations
+            </Button>
+          )}
           <Button
             variant="outline"
             className="rounded-2xl border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
@@ -13490,7 +13500,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       window.alert("Only the owner account can delete archived tournaments.");
       return;
     }
-    const confirmed = window.confirm("Remove this tournament from stats history?");
+    const confirmed = window.confirm("Delete this archived tournament from stats history? This can affect public archives, stats, and titles connected to the archive.");
     if (!confirmed) return;
     if (selectedArchivedTournamentId === id) setSelectedArchivedTournamentId(null);
     setTournamentHistory((current) => current.filter((t) => t.id !== id));
@@ -16367,7 +16377,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (!supabase) return { error: "Supabase is not configured." };
     if (!email || !password) return { error: "Enter email and password." };
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await withTimeout(
+      supabase.auth.signInWithPassword({ email, password }),
+      "Signing in",
+      10000
+    );
     if (error) return { error: error.message };
 
     const profile = await loadSupabaseAdminProfile(data?.session || null);
@@ -16955,8 +16969,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   };
 
   const deleteTournamentDraft = (draftId) => {
+    if (!isOwnerAdmin) {
+      window.alert("Only the owner account can delete saved tournament drafts.");
+      return;
+    }
     const draft = savedTournamentDrafts.find((item) => item.id === draftId);
-    const confirmed = window.confirm(`Delete saved tournament ${draft?.name || ""}?`);
+    const confirmed = window.confirm(`Delete saved tournament draft "${draft?.name || ""}"? This does not delete archives, reservations, or live tournament data.`);
     if (!confirmed) return;
     setSavedTournamentDrafts((current) => current.filter((item) => item.id !== draftId));
   };
@@ -17137,7 +17155,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       window.alert("Only the owner account can reset the active tournament.");
       return;
     }
-    const confirmed = window.confirm("Reset this tournament and clear saved data? This cannot be undone.");
+    const confirmed = window.confirm("Reset the active tournament workspace? This clears the current roster, scores, finals, side action, payouts, recap, and active setup. Saved tournament drafts, archived tournaments, schedule, titles, and reservations for other open tournaments will stay.");
     if (!confirmed) return;
     window.localStorage.removeItem(STORAGE_KEY);
     setQualifyingGames(4);
@@ -17156,6 +17174,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setMatchplayState(DEFAULT_MATCHPLAY_STATE);
     setEliminatorTournamentState(DEFAULT_ELIMINATOR_TOURNAMENT_STATE);
     setSidePotState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: DEFAULT_BRACKET_PRICE, teamBracketPrice: DEFAULT_BRACKET_PRICE, highGamePrice: 10, handicapHighGamePrice: 10, teamHighGamePrice: 10, teamBracketEntries: {}, teamHighGameEntries: {}, entries: {}, bracketSets: { early: {}, handicapEarly: {}, middle: {}, late: {}, team: {} }, brackets: [], bracketGroups: { early: [], handicapEarly: [], middle: [], late: [], team: [] }, leftovers: 0, leftoversBySet: { early: 0, handicapEarly: 0, middle: 0, late: 0, team: 0 }, refunds: [], refundsBySet: { early: [], handicapEarly: [], middle: [], late: [], team: [] }, selectedPlanIds: { early: "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only", team: "full-only" } });
+    setPaidPayouts({});
+    setPaidSideActionPayouts({});
     setMultiDayEvent(createDefaultMultiDayEvent());
     setActiveTab("dashboard");
   };
@@ -17426,6 +17446,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   scheduleItems={scheduleItems}
   bowlerIdentities={bowlerIdentities}
   setBowlerIdentities={setBowlerIdentities}
+  isOwnerAdmin={isOwnerAdmin}
   onAddReservationToRegistration={addReservationToRegistration}
   onDeleteReservation={deleteReservationFromSupabase}
   onRemoveHiddenReservation={removeHiddenReservationFromSupabase}
