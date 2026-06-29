@@ -93,14 +93,33 @@ const numberInputStyles = String.raw`
   }
 
 @page {
-  margin: 0;
+  margin: 0.25in;
 }
 
 @media print {
+  html,
   body {
     margin: 0;
     padding: 0;
     background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: economy !important;
+    print-color-adjust: economy !important;
+  }
+
+  #root,
+  .bb-stage,
+  .bb-shell,
+  main {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+
+  .bb-stage::before,
+  .bb-stage::after {
+    display: none !important;
+    content: none !important;
   }
 
   .print-sheet {
@@ -125,6 +144,11 @@ const numberInputStyles = String.raw`
   body b {
     font-weight: 400 !important;
     text-shadow: none !important;
+  }
+
+  .bb-finals-slip-print {
+    transform: scale(0.95);
+    transform-origin: top left;
   }
 }
 
@@ -8405,11 +8429,11 @@ Lane {lanePairForGame(
 
 
 {printMode === "finals" && (
-  <div className="grid grid-cols-2 gap-3 print:grid-cols-2 print:gap-4">
+  <div className="grid grid-cols-2 gap-3 print:grid-cols-2 print:gap-3">
     {Array.from({ length: 6 }, (_, index) => (
       <div
         key={`finals-slip-${index}`}
-        className="rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl print:p-5"
+        className="bb-finals-slip-print rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl print:p-4"
       >
         <div className="mb-3 flex items-start justify-between gap-2 border-b-2 border-slate-900 pb-2 print:mb-3 print:pb-2">
           <h2 className="max-h-12 min-w-0 flex-1 overflow-hidden text-lg font-black leading-tight print:max-h-10 print:text-[13px] print:leading-tight">
