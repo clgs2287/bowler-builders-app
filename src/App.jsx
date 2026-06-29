@@ -16812,7 +16812,7 @@ row.matches.push({
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:min-w-[520px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-left md:p-2">Bracket/Game</th><th className="p-1.5 text-right md:p-2">Opp</th><th className="p-1.5 text-left md:p-2">Opponent</th><th className="p-1.5 text-right md:p-2">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-${row.seed}-${matchIndex}`} className="border-t"><td className="bb-side-round-cell p-1.5 md:max-w-[120px] md:truncate md:p-2">{match.round}<span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></td><td className="p-1.5 text-right font-bold md:p-2">
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:hidden"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-left">Bracket/Game</th><th className="p-1.5 text-right">Opp</th><th className="p-1.5 text-left">Opponent</th><th className="p-1.5 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-mobile-${row.seed}-${matchIndex}`} className="border-t"><td className="bb-side-round-cell p-1.5">{match.round}<span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></td><td className="p-1.5 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
@@ -16828,6 +16828,32 @@ row.matches.push({
 <td className="bb-side-opponent-cell p-1.5 font-semibold md:max-w-[110px] md:truncate md:p-2">{match.opponent}</td>
 
 <td className="p-1.5 text-right font-bold md:p-2">
+  {match.playerBreakdown ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+      <span className="text-xs font-semibold text-blue-700">
+        ({match.playerBreakdown})
+      </span>
+      <span>{match.playerScore}</span>
+    </span>
+  ) : (
+    match.playerScore
+  )}
+</td></tr>)}</tbody></table><table className="hidden w-full min-w-[520px] text-sm md:table"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-desktop-${row.seed}-${matchIndex}`} className="border-t"><td className="max-w-[92px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
+    {match.opponentBreakdown ? (
+    <span className="inline-flex items-center gap-2 justify-end">
+      <span className="text-xs font-semibold text-blue-700">
+        {match.opponentBreakdown}
+      </span>
+      <span>{match.opponentScore}</span>
+    </span>
+  ) : (
+    match.opponentScore
+  )}
+</td>
+
+<td className="max-w-[80px] truncate p-2 font-semibold">{match.opponent}</td>
+
+<td className="p-2 text-right font-bold">
   {match.playerBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
