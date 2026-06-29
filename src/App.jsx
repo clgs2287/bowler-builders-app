@@ -17242,6 +17242,8 @@ export default function BowlingPayoutApp() {
   const [supabaseLoadStatus, setSupabaseLoadStatus] = useState("Not loaded");
   const [supabaseLoadReady, setSupabaseLoadReady] = useState(false);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState("Sign in as admin to save to Supabase");
+  const shouldLoadSupabaseArchiveData =
+    Boolean(supabaseAdminProfile) || ["stats", "archives", "titles", "publicstats", "publicschedule"].includes(activeTab);
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
@@ -17308,6 +17310,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const activeTournamentSnapshotRef = useRef(null);
   const supabasePublicDataLoadedRef = useRef(false);
   const supabaseSaveSkipRef = useRef(true);
+  const supabaseSaveInFlightRef = useRef(false);
+  const supabaseQueuedSaveModeRef = useRef("");
+  const supabaseLastFullSyncSignatureRef = useRef("");
   const restoredInitialPublicTabRef = useRef(false);
 
   const scrollAppToTop = () => {
@@ -17506,7 +17511,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
   };
 
-  const syncSupabaseCoreData = async () => {
+  const syncSupabaseCoreDataOnce = async () => {
     if (!supabase || !supabaseAdminProfile) {
       setSupabaseSaveStatus("Sign in as admin to save to Supabase");
       return;
@@ -17655,6 +17660,63 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${archiveRecords.length} archives, ${draftRecords.length} drafts, active snapshot`);
   };
 
+  const syncSupabaseLiveSnapshotOnce = async () => {
+    if (!supabase || !supabaseAdminProfile) {
+      setSupabaseSaveStatus("Sign in as admin to save to Supabase");
+      return;
+    }
+    const accessToken = supabaseSession?.access_token;
+    if (!accessToken) {
+      setSupabaseSaveStatus("Save issue: Supabase session token is missing. Clear login and sign in again.");
+      return;
+    }
+
+    setSupabaseSaveStatus("Saving live scores...");
+    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || buildActiveTournamentSnapshot());
+    await withTimeout(
+      supabaseRestRequest("active_tournament_snapshots", "?on_conflict=id", {
+        method: "POST",
+        body: activeSnapshotRecord,
+        accessToken,
+        prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+      "Saving live scores",
+      20000
+    );
+    setSupabaseSaveStatus("Saved live scores");
+  };
+
+  const runQueuedSupabaseSave = async (mode = "full") => {
+    const normalizedMode = mode === "live" ? "live" : "full";
+    if (supabaseSaveInFlightRef.current) {
+      supabaseQueuedSaveModeRef.current =
+        supabaseQueuedSaveModeRef.current === "full" || normalizedMode === "full" ? "full" : "live";
+      setSupabaseSaveStatus("Save running. Queued latest changes...");
+      return;
+    }
+
+    supabaseSaveInFlightRef.current = true;
+    let nextMode = normalizedMode;
+    try {
+      while (nextMode) {
+        supabaseQueuedSaveModeRef.current = "";
+        if (nextMode === "full") {
+          await syncSupabaseCoreDataOnce();
+        } else {
+          await syncSupabaseLiveSnapshotOnce();
+        }
+        nextMode = supabaseQueuedSaveModeRef.current;
+        if (nextMode) setSupabaseSaveStatus("Saving queued changes...");
+      }
+    } finally {
+      supabaseQueuedSaveModeRef.current = "";
+      supabaseSaveInFlightRef.current = false;
+    }
+  };
+
+  const syncSupabaseCoreData = () => runQueuedSupabaseSave("full");
+  const syncSupabaseLiveSnapshot = () => runQueuedSupabaseSave("live");
+
   useEffect(() => {
     window.__currentTournamentFormat = tournamentFormat;
   }, [tournamentFormat]);
@@ -17700,11 +17762,15 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       const timeoutId = window.setTimeout(() => controller.abort(), 12000);
       try {
         const adminAccessToken = supabaseAdminProfile ? supabaseSession?.access_token || "" : "";
+        const shouldLoadArchiveData = shouldLoadSupabaseArchiveData;
         const reservationRead = adminAccessToken
           ? loadSupabaseRestRows("reservations", "?select=id,data,tournament_id,added_to_roster&order=created_at.asc", controller.signal, adminAccessToken)
           : Promise.resolve([]);
         const draftRead = adminAccessToken
           ? loadSupabaseRestRows("tournament_drafts", "?select=id,data,saved_at&order=saved_at.desc", controller.signal, adminAccessToken)
+          : Promise.resolve([]);
+        const archiveRead = shouldLoadArchiveData
+          ? loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal)
           : Promise.resolve([]);
         const reads = await Promise.allSettled([
           loadSupabaseRestRows("schedule_events", "?select=id,data,sort_date&order=sort_date.asc", controller.signal),
@@ -17714,7 +17780,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           reservationRead,
           loadSupabaseRestRows("reservation_public_counts", "?select=tournament_id,reservation_count", controller.signal),
           loadSupabaseRestRows("reservation_public_roster", "?select=id,tournament_id,display_name,status,registration_number&order=registration_number.asc", controller.signal),
-          loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal),
+          archiveRead,
           loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
           draftRead,
         ]);
@@ -17852,7 +17918,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return () => {
       cancelled = true;
     };
-  }, [hasLoadedHistory, hasLoadedSavedData, supabaseAdminProfile, supabaseSession]);
+  }, [hasLoadedHistory, hasLoadedSavedData, shouldLoadSupabaseArchiveData, supabaseAdminProfile, supabaseSession]);
 
   useEffect(() => {
     if (!supabase || !supabaseAdminProfile) {
@@ -17869,9 +17935,29 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return undefined;
     }
 
-    setSupabaseSaveStatus("Waiting to save...");
+    const fullSyncSignature = JSON.stringify({
+      scheduleItems,
+      scheduleLocked,
+      manualTitles,
+      bowlerIdentities,
+      reservationState,
+      tournamentHistory,
+      savedTournamentDrafts,
+      qualifyingGames,
+      useHandicapScores,
+      tournamentFormat,
+      tournamentInfo,
+      tournamentRecap,
+      payoutState,
+    });
+    const shouldRunFullSync = supabaseLastFullSyncSignatureRef.current !== fullSyncSignature;
+
+    setSupabaseSaveStatus(shouldRunFullSync ? "Waiting to save..." : "Waiting to save live scores...");
     const timeoutId = window.setTimeout(() => {
-      syncSupabaseCoreData().catch((error) => {
+      const savePromise = shouldRunFullSync ? syncSupabaseCoreData() : syncSupabaseLiveSnapshot();
+      savePromise.then(() => {
+        if (shouldRunFullSync) supabaseLastFullSyncSignatureRef.current = fullSyncSignature;
+      }).catch((error) => {
         setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save to Supabase."}`);
       });
     }, 900);
