@@ -8463,7 +8463,7 @@ Lane {lanePairForGame(
                 {!useHandicapScores && (
                   <>
                     <span className="font-bold">Score:</span>
-                    <div className="w-12 translate-y-1.5 border-b border-slate-900" />
+                    <div className="w-12 translate-y-2.5 border-b border-slate-900" />
                   </>
                 )}
               </div>
@@ -8472,15 +8472,15 @@ Lane {lanePairForGame(
                 <div className="grid grid-cols-3 gap-2 text-sm font-semibold print:text-base">
                   <div>
                     Scratch:
-                    <div className="mt-3 border-b border-slate-900" />
+                    <div className="mt-5 border-b border-slate-900" />
                   </div>
                   <div>
                     Hdcp:
-                    <div className="mt-3 border-b border-slate-900" />
+                    <div className="mt-5 border-b border-slate-900" />
                   </div>
                   <div>
                     Total:
-                    <div className="mt-3 border-b border-slate-900" />
+                    <div className="mt-5 border-b border-slate-900" />
                   </div>
                 </div>
               )}
