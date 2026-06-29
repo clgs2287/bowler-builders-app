@@ -8429,11 +8429,11 @@ Lane {lanePairForGame(
 
 
 {printMode === "finals" && (
-  <div className="grid grid-cols-2 gap-3 print:grid-cols-2 print:gap-3">
-    {Array.from({ length: 6 }, (_, index) => (
+  <div className={`grid grid-cols-2 gap-3 print:grid-cols-2 ${useHandicapScores ? "print:gap-4" : "print:gap-3"}`}>
+    {Array.from({ length: useHandicapScores ? 4 : 6 }, (_, index) => (
       <div
         key={`finals-slip-${index}`}
-        className="bb-finals-slip-print rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl print:p-4"
+        className={`bb-finals-slip-print rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl ${useHandicapScores ? "print:min-h-[4.6in] print:p-5" : "print:p-4"}`}
       >
         <div className="mb-3 flex items-start justify-between gap-2 border-b-2 border-slate-900 pb-2 print:mb-3 print:pb-2">
           <h2 className="max-h-12 min-w-0 flex-1 overflow-hidden text-lg font-black leading-tight print:max-h-10 print:text-[13px] print:leading-tight">
@@ -8454,20 +8454,38 @@ Lane {lanePairForGame(
           Lane Pair: ____________
         </div>
 
-        <div className="space-y-3 print:space-y-4">
-          <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-base">
-            <span className="font-bold">Bowler 1:</span>
-            <div className="min-w-0 flex-1 translate-y-1.5 border-b border-slate-900" />
-            <span className="font-bold">Score:</span>
-            <div className="w-12 translate-y-1.5 border-b border-slate-900" />
-          </div>
+        <div className={useHandicapScores ? "space-y-4 print:space-y-5" : "space-y-3 print:space-y-4"}>
+          {[1, 2].map((bowlerNumber) => (
+            <div key={`finals-slip-${index}-bowler-${bowlerNumber}`} className={useHandicapScores ? "space-y-2 print:space-y-2.5" : ""}>
+              <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-base">
+                <span className="font-bold">Bowler {bowlerNumber}:</span>
+                <div className="min-w-0 flex-1 translate-y-1.5 border-b border-slate-900" />
+                {!useHandicapScores && (
+                  <>
+                    <span className="font-bold">Score:</span>
+                    <div className="w-12 translate-y-1.5 border-b border-slate-900" />
+                  </>
+                )}
+              </div>
 
-          <div className="flex items-center gap-2 pb-2 print:pb-2 print:text-base">
-            <span className="font-bold">Bowler 2:</span>
-            <div className="min-w-0 flex-1 translate-y-1.5 border-b border-slate-900" />
-            <span className="font-bold">Score:</span>
-            <div className="w-12 translate-y-1.5 border-b border-slate-900" />
-          </div>
+              {useHandicapScores && (
+                <div className="grid grid-cols-3 gap-2 text-sm font-semibold print:text-base">
+                  <div>
+                    Scratch:
+                    <div className="mt-3 border-b border-slate-900" />
+                  </div>
+                  <div>
+                    Hdcp:
+                    <div className="mt-3 border-b border-slate-900" />
+                  </div>
+                  <div>
+                    Total:
+                    <div className="mt-3 border-b border-slate-900" />
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
     ))}
