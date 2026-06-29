@@ -6993,6 +6993,7 @@ function ReservationsTab({
       phone: reservation.phone || "",
       email: reservation.email || "",
       note: reservation.note || "",
+      status: reservation.status || "Registered",
     });
   };
 
@@ -7008,26 +7009,55 @@ function ReservationsTab({
     }));
   };
 
+  const updateReservationRows = (reservationId, updater) => {
+    setReservationState((current) => {
+      const currentKey = reservationKeyFromState(current);
+      const nextReservations = (current.reservations || []).map((reservation) =>
+        String(reservation.id) === String(reservationId)
+          ? updater(reservation)
+          : reservation
+      );
+      const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+      if (currentKey) {
+        reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
+          ...reservationBucketFromState(current),
+          reservations: nextReservations,
+          reservationCount: nextReservations.length,
+        });
+      }
+      return {
+        ...current,
+        reservations: nextReservations,
+        reservationCount: nextReservations.length,
+        reservationsByTournament,
+      };
+    });
+  };
+
   const saveEditReservation = () => {
     if (!editingReservationId || !editingReservation) return;
-    setReservationState((current) => ({
-      ...current,
-      reservations: (current.reservations || []).map((reservation) =>
-        reservation.id === editingReservationId
-          ? {
-              ...reservation,
-              name: editingReservation.name,
-              nickname: editingReservation.nickname,
-              phone: formatPhoneNumber(editingReservation.phone || ""),
-              email: editingReservation.email,
-              note: editingReservation.note,
-              updatedAt: new Date().toISOString(),
-            }
-          : reservation
-      ),
+    updateReservationRows(editingReservationId, (reservation) => ({
+      ...reservation,
+      name: editingReservation.name,
+      nickname: editingReservation.nickname,
+      phone: formatPhoneNumber(editingReservation.phone || ""),
+      email: editingReservation.email,
+      note: editingReservation.note,
+      status: editingReservation.status || reservation.status || "Registered",
+      updatedAt: new Date().toISOString(),
     }));
     setRosterNotice(`${editingReservation.name || "Reservation"} was updated.`);
     cancelEditReservation();
+  };
+
+  const toggleReservationStatus = (reservation) => {
+    const nextStatus = reservation.status === "Registered" ? "Waitlisted" : "Registered";
+    updateReservationRows(reservation.id, (item) => ({
+      ...item,
+      status: nextStatus,
+      updatedAt: new Date().toISOString(),
+    }));
+    setRosterNotice(`${getReservationDisplayName(reservation) || reservation.name || "Reservation"} marked ${nextStatus}.`);
   };
 
   const selectScheduledTournament = (nextKey) => {
@@ -7524,15 +7554,26 @@ function ReservationsTab({
             className="border-t"
           >
             <td className="p-2 md:p-3">
-              <span
-                className={`rounded-full px-2 py-1 text-[10px] font-bold md:px-3 md:text-xs ${
-                  reservation.status === "Registered"
-                    ? "bg-green-100 text-green-800"
-                    : "bg-yellow-100 text-yellow-800"
-                }`}
-              >
-                {reservation.status}
-              </span>
+              {isEditing ? (
+                <select
+                  value={editingReservation?.status || "Registered"}
+                  onChange={(event) => updateEditingReservation("status", event.target.value)}
+                  className="h-9 rounded-xl border border-blue-200 bg-white px-2 text-xs font-bold text-blue-950 outline-none"
+                >
+                  <option value="Registered">Registered</option>
+                  <option value="Waitlisted">Waitlisted</option>
+                </select>
+              ) : (
+                <span
+                  className={`rounded-full px-2 py-1 text-[10px] font-bold md:px-3 md:text-xs ${
+                    reservation.status === "Registered"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }`}
+                >
+                  {reservation.status}
+                </span>
+              )}
             </td>
 
             <td className="p-2 font-black text-blue-950 md:p-3">
@@ -7625,6 +7666,17 @@ function ReservationsTab({
     onClick={() => startEditReservation(reservation)}
   >
     Edit
+  </Button>
+  <Button
+    variant="outline"
+    className={
+      reservation.status === "Registered"
+        ? "rounded-xl border-yellow-200 bg-yellow-50 px-2 py-1 text-xs text-yellow-800 hover:bg-yellow-100 md:px-3 md:py-2"
+        : "rounded-xl border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:bg-green-100 md:px-3 md:py-2"
+    }
+    onClick={() => toggleReservationStatus(reservation)}
+  >
+    {reservation.status === "Registered" ? "Waitlist" : "Register"}
   </Button>
   {hasNameMappingCandidate && !hasExistingNameMapping && (
     <Button
