@@ -750,6 +750,7 @@ const DEFAULT_BBTV_YOUTUBE_LINK = "https://www.youtube.com/@BBPSTV";
 const DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK = "";
 const TOURNAMENT_IMAGE_MAX_WIDTH = 1600;
 const TOURNAMENT_IMAGE_MAX_HEIGHT = 1200;
+const TOURNAMENT_IMAGE_BUCKET = "tournament-images";
 
 function compressTournamentImage(file) {
   return new Promise((resolve, reject) => {
@@ -850,6 +851,55 @@ function reservationKeyFromScheduleItem(item = {}) {
     date: item.startDate,
     center: item.center,
   });
+}
+
+async function dataUrlToBlob(dataUrl) {
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
+function safeStorageFileName(name = "tournament-image.jpg") {
+  const cleaned = String(name)
+    .toLowerCase()
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return `${cleaned || "tournament-image"}.jpg`;
+}
+
+async function uploadTournamentImageToStorage(image, folder = "announcements") {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  if (!image?.src) throw new Error("Image data was not available.");
+
+  const blob = await dataUrlToBlob(image.src);
+  const storagePath = `${folder}/${Date.now()}-${Math.random().toString(16).slice(2)}-${safeStorageFileName(image.name)}`;
+  const { error } = await supabase.storage
+    .from(TOURNAMENT_IMAGE_BUCKET)
+    .upload(storagePath, blob, {
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(TOURNAMENT_IMAGE_BUCKET).getPublicUrl(storagePath);
+  if (!data?.publicUrl) throw new Error("Supabase did not return a public image URL.");
+
+  return {
+    ...image,
+    src: data.publicUrl,
+    storagePath,
+  };
+}
+
+async function deleteTournamentImageFromStorage(image) {
+  if (!supabase || !image?.storagePath) return;
+  try {
+    await supabase.storage.from(TOURNAMENT_IMAGE_BUCKET).remove([image.storagePath]);
+  } catch (error) {
+    console.warn("Could not delete tournament image from storage", error);
+  }
 }
 
 function scheduleItemForReservationKey(scheduleItems = [], tournamentKey = "") {
@@ -4182,16 +4232,21 @@ function DashboardTab({
     if (!files.length) return;
 
     try {
-      const images = await Promise.all(files.map((file) => compressTournamentImage(file)));
+      const images = await Promise.all(files.map(async (file) => {
+        const compressed = await compressTournamentImage(file);
+        return uploadTournamentImageToStorage(compressed, "announcements");
+      }));
       setTournamentInfo((current) => ({
         ...current,
         announcementImages: [...(Array.isArray(current.announcementImages) ? current.announcementImages : []), ...images],
       }));
     } catch (error) {
-      window.alert("That image could not be imported. Try saving it as a JPG or PNG and uploading again.");
+      window.alert(`That image could not be uploaded to storage. ${error.message || "Try again, or check the Supabase storage bucket."}`);
     }
   };
-  const deleteAnnouncementImage = (imageId) => {
+  const deleteAnnouncementImage = async (imageId) => {
+    const image = (Array.isArray(tournamentInfo.announcementImages) ? tournamentInfo.announcementImages : []).find((item) => item.id === imageId);
+    await deleteTournamentImageFromStorage(image);
     setTournamentInfo((current) => ({
       ...current,
       announcementImages: (Array.isArray(current.announcementImages) ? current.announcementImages : []).filter((image) => image.id !== imageId),
@@ -4202,16 +4257,21 @@ function DashboardTab({
     if (!files.length) return;
 
     try {
-      const images = await Promise.all(files.map((file) => compressTournamentImage(file)));
+      const images = await Promise.all(files.map(async (file) => {
+        const compressed = await compressTournamentImage(file);
+        return uploadTournamentImageToStorage(compressed, "lane-patterns");
+      }));
       setTournamentInfo((current) => ({
         ...current,
         lanePatternImages: [...(Array.isArray(current.lanePatternImages) ? current.lanePatternImages : []), ...images],
       }));
     } catch (error) {
-      window.alert("That lane pattern image could not be imported. Try saving it as a JPG or PNG and uploading again.");
+      window.alert(`That lane pattern image could not be uploaded to storage. ${error.message || "Try again, or check the Supabase storage bucket."}`);
     }
   };
-  const deleteLanePatternImage = (imageId) => {
+  const deleteLanePatternImage = async (imageId) => {
+    const image = (Array.isArray(tournamentInfo.lanePatternImages) ? tournamentInfo.lanePatternImages : []).find((item) => item.id === imageId);
+    await deleteTournamentImageFromStorage(image);
     setTournamentInfo((current) => ({
       ...current,
       lanePatternImages: (Array.isArray(current.lanePatternImages) ? current.lanePatternImages : []).filter((image) => image.id !== imageId),
