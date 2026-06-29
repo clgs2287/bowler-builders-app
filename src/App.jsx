@@ -4147,6 +4147,7 @@ function DashboardTab({
   supabaseLoadStatus = "Not loaded",
   supabaseSaveStatus = "Not saved",
   onSyncSupabaseNow = () => {},
+  onSyncLiveScoresNow = () => {},
   isOwnerAdmin = false,
   savedTournamentDrafts = [],
   onSaveTournamentDraft = () => {},
@@ -4257,6 +4258,25 @@ function DashboardTab({
             onSyncSupabaseNow={onSyncSupabaseNow}
           />
         </>
+      )}
+      {supabaseAdminProfile && !isOwnerAdmin && (
+        <AppCard>
+          <CardContent className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:p-4">
+            <div>
+              <h2 className="text-lg font-semibold text-blue-900">Cloud Save</h2>
+              <p className="text-sm font-semibold text-blue-800">{String(supabaseSaveStatus || "Ready").replaceAll("Supabase", "cloud")}</p>
+              <p className="text-xs text-blue-700">Use live score save during games. Use setup save after roster, lane, reservation, or tournament setup changes.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncLiveScoresNow}>
+                Save Live Scores Now
+              </Button>
+              <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncSupabaseNow}>
+                Save Setup Now
+              </Button>
+            </div>
+          </CardContent>
+        </AppCard>
       )}
       <div className="grid gap-4 lg:grid-cols-12">
         <AppCard className="lg:col-span-7">
@@ -18714,6 +18734,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       onSyncSupabaseNow={() => {
         syncSupabaseCoreData().catch((error) => {
           setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save to Supabase."}`);
+        });
+      }}
+      onSyncLiveScoresNow={() => {
+        syncSupabaseLiveSnapshot().catch((error) => {
+          setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save live scores."}`);
         });
       }}
       setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
