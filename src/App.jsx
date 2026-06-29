@@ -545,37 +545,60 @@ const numberInputStyles = String.raw`
 
   .bb-public-side-detail-table th,
   .bb-public-side-detail-table td {
-    white-space: normal !important;
-    overflow-wrap: anywhere;
     line-height: 1.15 !important;
+  }
+
+  .bb-public-side-detail-table th {
+    font-size: 0.62rem !important;
+    white-space: nowrap !important;
+  }
+
+  .bb-public-side-detail-table td {
+    white-space: nowrap !important;
+    overflow-wrap: normal;
   }
 
   .bb-public-side-detail-table th:nth-child(1),
   .bb-public-side-detail-table td:nth-child(1) {
-    width: 4.4rem;
+    width: 4.8rem;
   }
 
   .bb-public-side-detail-table th:nth-child(2),
   .bb-public-side-detail-table td:nth-child(2) {
-    width: 2rem;
+    width: 2.15rem;
   }
 
   .bb-public-side-detail-table th:nth-child(3),
   .bb-public-side-detail-table td:nth-child(3),
   .bb-public-side-detail-table th:nth-child(5),
   .bb-public-side-detail-table td:nth-child(5) {
-    width: 2.85rem;
+    width: 3.05rem;
+    font-size: 0.62rem !important;
+    white-space: nowrap !important;
   }
 
   .bb-public-side-detail-table th:nth-child(4),
   .bb-public-side-detail-table td:nth-child(4) {
-    width: 4.2rem;
+    width: 3.95rem;
   }
 
-  .bb-side-round-cell,
-  .bb-side-opponent-cell {
+  .bb-side-round-cell {
     max-width: none !important;
     white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-side-opponent-cell {
+    max-width: none !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
+  }
+
+  .bb-public-side-detail-table td:nth-child(3) span,
+  .bb-public-side-detail-table td:nth-child(5) span {
+    gap: 0.2rem !important;
+    white-space: nowrap !important;
   }
 
   .bb-public-side-highgame-grid {
