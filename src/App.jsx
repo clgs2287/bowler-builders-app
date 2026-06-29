@@ -9026,7 +9026,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
               </tr>
             </thead>
             <tbody>
-              {displayedRows.slice(0, bigScreen ? 30 : 50).map((b, index) => {
+              {displayedRows.slice(0, bigScreen ? 30 : displayedRows.length).map((b, index) => {
                 const score = useHandicapScores ? b.handicap : b.scratch;
                 const earnedHandicap = useHandicapScores ? Math.max(0, Number(b.handicap || 0) - Number(b.scratch || 0)) : 0;
                 const gamesCompleted = b.isTeam
