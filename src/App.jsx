@@ -16565,6 +16565,11 @@ const teamHighGamePayoutPerGame = Math.floor(teamHighGamePot / gameCount);
 function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualifyingGames, tournamentInfo = {} }) {
   const [expandedSeed, setExpandedSeed] = useState(null);
   const [publicSideTab, setPublicSideTab] = useState("brackets");
+  const compactSideActionRoundLabel = (label = "") =>
+    String(label)
+      .replace(/^Handicap Games\s*/i, "HDCP G")
+      .replace(/^Scratch Games\s*/i, "SCR G")
+      .replace(/^Team Games\s*/i, "Team G");
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const teamEntries = getTournamentTeamEntries(bowlers, tournamentStyle);
   const bracketSetMeta = {
@@ -16812,7 +16817,7 @@ row.matches.push({
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:hidden"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-left">Bracket/Game</th><th className="p-1.5 text-right">Opp</th><th className="p-1.5 text-left">Opponent</th><th className="p-1.5 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-mobile-${row.seed}-${matchIndex}`} className="border-t"><td className="bb-side-round-cell p-1.5">{match.round}<span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></td><td className="p-1.5 text-right font-bold">
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:hidden"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-left">Bracket/Game</th><th className="p-1.5 text-right">Opp</th><th className="p-1.5 text-left">Opponent</th><th className="p-1.5 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-mobile-${row.seed}-${matchIndex}`} className="border-t"><td className="bb-side-round-cell p-1.5">{compactSideActionRoundLabel(match.round)}<span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></td><td className="p-1.5 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
