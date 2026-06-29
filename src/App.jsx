@@ -560,27 +560,24 @@ const numberInputStyles = String.raw`
 
   .bb-public-side-detail-table th:nth-child(1),
   .bb-public-side-detail-table td:nth-child(1) {
-    width: 5.4rem;
+    width: 3.4rem;
   }
 
   .bb-public-side-detail-table th:nth-child(2),
-  .bb-public-side-detail-table td:nth-child(2),
+  .bb-public-side-detail-table td:nth-child(2) {
+    width: auto;
+  }
+
   .bb-public-side-detail-table th:nth-child(3),
   .bb-public-side-detail-table td:nth-child(3) {
-    width: 3.35rem;
+    width: 3.4rem;
     font-size: 0.62rem !important;
     white-space: nowrap !important;
   }
 
-  .bb-public-side-detail-table th:nth-child(4),
-  .bb-public-side-detail-table td:nth-child(4) {
-    width: 3.6rem;
-  }
-
   .bb-side-round-cell {
     max-width: none !important;
-    white-space: normal !important;
-    overflow-wrap: anywhere;
+    white-space: nowrap !important;
   }
 
   .bb-side-opponent-cell {
@@ -590,15 +587,25 @@ const numberInputStyles = String.raw`
     white-space: nowrap !important;
   }
 
-  .bb-public-side-detail-table td:nth-child(2) span,
-  .bb-public-side-detail-table td:nth-child(4) span {
+  .bb-public-side-detail-table td:nth-child(1) span,
+  .bb-public-side-detail-table td:nth-child(3) span {
     gap: 0.2rem !important;
     white-space: nowrap !important;
   }
 
+  .bb-side-mobile-label-row {
+    background: #eff6ff;
+  }
+
+  .bb-side-mobile-match-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    white-space: nowrap !important;
+  }
+
   .bb-side-result-line {
-    display: block;
-    margin-top: 0.12rem;
     font-size: 0.7rem !important;
     line-height: 1 !important;
     white-space: nowrap !important;
@@ -16817,7 +16824,7 @@ row.matches.push({
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:hidden"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-left">Bracket/Game</th><th className="p-1.5 text-right">Opp</th><th className="p-1.5 text-left">Opponent</th><th className="p-1.5 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-mobile-${row.seed}-${matchIndex}`} className="border-t"><td className="bb-side-round-cell p-1.5">{compactSideActionRoundLabel(match.round)}<span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></td><td className="p-1.5 text-right font-bold">
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:hidden"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-right">Opp</th><th className="p-1.5 text-left">Opponent</th><th className="p-1.5 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <React.Fragment key={`public-side-match-mobile-${row.seed}-${matchIndex}`}><tr className="border-t bb-side-mobile-label-row"><td colSpan={3} className="bb-side-round-cell p-1.5"><span className="bb-side-mobile-match-label"><span>{compactSideActionRoundLabel(match.round)}</span><span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></span></td></tr><tr className="border-t"><td className="p-1.5 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
@@ -16843,7 +16850,7 @@ row.matches.push({
   ) : (
     match.playerScore
   )}
-</td></tr>)}</tbody></table><table className="hidden w-full min-w-[520px] text-sm md:table"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-desktop-${row.seed}-${matchIndex}`} className="border-t"><td className="max-w-[92px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
+</td></tr></React.Fragment>)}</tbody></table><table className="hidden w-full min-w-[520px] text-sm md:table"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-desktop-${row.seed}-${matchIndex}`} className="border-t"><td className="max-w-[92px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
