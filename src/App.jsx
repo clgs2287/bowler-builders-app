@@ -5369,6 +5369,10 @@ averageSource: archivedData?.eligible
         const nameDiff = String(a.bowler.name || "").localeCompare(String(b.bowler.name || ""));
         if (nameDiff !== 0) return nameDiff * direction;
       }
+      if (registrationSort.key === "paid") {
+        const paidDiff = Number(Boolean(a.bowler.paid)) - Number(Boolean(b.bowler.paid));
+        if (paidDiff !== 0) return paidDiff * direction;
+      }
       const entryDiff =
         Number(a.bowler.registrationNumber || a.index + 1) -
         Number(b.bowler.registrationNumber || b.index + 1);
@@ -5622,7 +5626,11 @@ averageSource: archivedData?.eligible
                     Lane{registrationSortLabel("lane")}
                   </button>
                 </th>
-                <th className="p-2 text-center md:p-2.5">Paid</th>
+                <th className="p-2 text-center md:p-2.5">
+                  <button type="button" className="font-bold" onClick={() => toggleRegistrationSort("paid")}>
+                    Paid{registrationSortLabel("paid")}
+                  </button>
+                </th>
                 <th className="p-2 text-center md:p-2.5">Scratch</th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp</th>}
                 {enabledBracketSets.middle && <th className="p-2 text-center md:p-2.5">2-4</th>}
