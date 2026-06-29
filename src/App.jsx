@@ -4301,6 +4301,20 @@ function DashboardTab({
   dashboardNetAfterLineage +
   Number(payoutState.ballRaffleAdded || 0) +
   Number(payoutState.otherAddedMoney || 0);
+  const cloudSaveStatusText = String(supabaseSaveStatus || "Ready").replaceAll("Supabase", "cloud");
+  const cloudSaveStatusLower = cloudSaveStatusText.toLowerCase();
+  const cloudSaveHasIssue = cloudSaveStatusLower.includes("issue") || cloudSaveStatusLower.includes("error") || cloudSaveStatusLower.includes("timed out") || cloudSaveStatusLower.includes("missing");
+  const cloudSaveIsBusy = !cloudSaveHasIssue && (cloudSaveStatusLower.includes("saving") || cloudSaveStatusLower.includes("waiting") || cloudSaveStatusLower.includes("queued"));
+  const cloudSaveIsGood = !cloudSaveHasIssue && !cloudSaveIsBusy && (cloudSaveStatusLower.includes("saved") || cloudSaveStatusLower.includes("ready"));
+  const cloudSaveCardClass = cloudSaveHasIssue
+    ? "border-red-300 bg-red-50"
+    : cloudSaveIsBusy
+      ? "border-amber-300 bg-amber-50"
+      : cloudSaveIsGood
+        ? "border-green-300 bg-green-50"
+        : "";
+  const cloudSaveTitleClass = cloudSaveHasIssue ? "text-red-900" : cloudSaveIsBusy ? "text-amber-900" : cloudSaveIsGood ? "text-green-900" : "text-blue-900";
+  const cloudSaveStatusClass = cloudSaveHasIssue ? "text-red-800" : cloudSaveIsBusy ? "text-amber-800" : cloudSaveIsGood ? "text-green-800" : "text-blue-800";
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -4320,12 +4334,18 @@ function DashboardTab({
         </>
       )}
       {supabaseAdminProfile && !isOwnerAdmin && (
-        <AppCard>
+        <AppCard className={cloudSaveCardClass}>
           <CardContent className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:p-4">
             <div>
-              <h2 className="text-lg font-semibold text-blue-900">Cloud Save</h2>
-              <p className="text-sm font-semibold text-blue-800">{String(supabaseSaveStatus || "Ready").replaceAll("Supabase", "cloud")}</p>
-              <p className="text-xs text-blue-700">Use live score save during games. Use setup save after roster, lane, reservation, or tournament setup changes.</p>
+              <h2 className={`text-lg font-semibold ${cloudSaveTitleClass}`}>Cloud Save</h2>
+              <p className={`text-sm font-black ${cloudSaveStatusClass}`}>{cloudSaveStatusText}</p>
+              {cloudSaveHasIssue ? (
+                <p className="text-xs font-bold text-red-700">Save did not finish. Check internet, then try Save Live Scores Now. Use Save Setup Now after roster/setup changes.</p>
+              ) : cloudSaveIsBusy ? (
+                <p className="text-xs font-bold text-amber-700">Save is still working. Wait for saved/ready before moving too far ahead.</p>
+              ) : (
+                <p className="text-xs text-blue-700">Use live score save during games. Use setup save after roster, lane, reservation, or tournament setup changes.</p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncLiveScoresNow}>
