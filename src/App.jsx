@@ -5089,6 +5089,15 @@ function buildLaneAssignments(lanesUsed, count, tournamentStyle = "singles") {
   return Array.from({ length: count }, (_, index) => assignments[index] || "");
 }
 
+function shuffleArray(values = []) {
+  const shuffled = [...values];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 function laneAssignmentSortValue(value) {
   const text = String(value || "").trim().toUpperCase();
   const lane = Number(text.match(/[0-9]+/)?.[0] || 9999);
@@ -5461,6 +5470,50 @@ const updateBowler = (index, field, value) => {
       },
     ];
   });
+  const randomFillBlankLanes = () => {
+    const allLanePositions = buildLanePositionOptions(tournamentInfo.lanesUsed || "", tournamentStyle);
+    if (!allLanePositions.length) {
+      window.alert("Add lanes in Tournament Setup first, then random fill blank lanes.");
+      return;
+    }
+
+    const usedLanePositions = new Set(
+      bowlers
+        .map((bowler) => String(bowler.lane || "").trim().toUpperCase())
+        .filter(Boolean)
+    );
+    const duplicateUsedLane = [...usedLanePositions].find((lane) =>
+      bowlers.filter((bowler) => String(bowler.lane || "").trim().toUpperCase() === lane).length > 1
+    );
+    if (duplicateUsedLane) {
+      window.alert(`${duplicateUsedLane} is assigned more than once. Fix duplicate manual lane assignments before random filling.`);
+      return;
+    }
+
+    const blankNamedIndexes = bowlers
+      .map((bowler, index) => ({ bowler, index }))
+      .filter(({ bowler }) => String(bowler.name || "").trim() && !String(bowler.lane || "").trim())
+      .map(({ index }) => index);
+    if (!blankNamedIndexes.length) {
+      window.alert("There are no named bowlers with blank lane spots to fill.");
+      return;
+    }
+
+    const openLanePositions = allLanePositions.filter((lane) => !usedLanePositions.has(String(lane).toUpperCase()));
+    if (openLanePositions.length < blankNamedIndexes.length) {
+      window.alert(`Only ${openLanePositions.length} open lane spots are available for ${blankNamedIndexes.length} unassigned bowlers.`);
+      return;
+    }
+
+    const confirmed = window.confirm(`Randomly assign ${blankNamedIndexes.length} unassigned bowler(s) into the remaining open lane spots? Manual lane assignments will stay unchanged.`);
+    if (!confirmed) return;
+
+    const randomizedIndexes = shuffleArray(blankNamedIndexes);
+    const randomizedLanes = shuffleArray(openLanePositions).slice(0, randomizedIndexes.length);
+    const laneByIndex = Object.fromEntries(randomizedIndexes.map((index, positionIndex) => [index, randomizedLanes[positionIndex]]));
+    setBowlers((current) => current.map((bowler, index) => laneByIndex[index] ? { ...bowler, lane: laneByIndex[index] } : bowler));
+    setRegistrationSort({ key: "lane", direction: "asc" });
+  };
   const paidCount = bowlers.filter((b) => b.paid).length;
   const setRosterSize = (value) => {
     const target = Math.max(0, Number(value || 0));
@@ -5846,6 +5899,16 @@ averageSource: archivedData?.eligible
             Lane draw matchplay keeps lane assignments blank until check-in. Add the roster, then use the Lane dropdown to place each bowler in the drawn spot.
           </div>
         )}
+
+        <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-blue-200 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-black text-blue-950">Lane Assignment</p>
+            <p className="text-xs font-semibold text-blue-800">Manual lane spots stay locked in. Random fill only assigns named bowlers with blank lane spots.</p>
+          </div>
+          <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={randomFillBlankLanes}>
+            Random Fill Blank Lanes
+          </Button>
+        </div>
 
         <div className="mb-4 grid gap-3 md:grid-cols-6 md:items-end">
           <div className="space-y-2"><Label>Bracket Price</Label><Input type="number" value={bracketPrice} onChange={(e) => updateBracketPrice(e.target.value)} /></div>
