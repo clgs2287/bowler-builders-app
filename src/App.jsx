@@ -611,6 +611,46 @@ const numberInputStyles = String.raw`
     white-space: nowrap !important;
   }
 
+  .bb-side-mobile-score-table td {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-side-mobile-opponent-row {
+    background: #ffffff;
+  }
+
+  .bb-side-mobile-score-cell {
+    width: 50%;
+    vertical-align: top;
+  }
+
+  .bb-side-mobile-score-label {
+    display: block;
+    margin-bottom: 0.16rem;
+    font-size: 0.6rem !important;
+    font-weight: 800;
+    color: #1d4ed8;
+    text-transform: uppercase;
+    letter-spacing: 0;
+  }
+
+  .bb-side-mobile-score-value {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.08rem;
+    font-size: 0.75rem !important;
+    line-height: 1.05 !important;
+    white-space: normal !important;
+  }
+
+  .bb-side-mobile-score-breakdown {
+    font-size: 0.62rem !important;
+    color: #1d4ed8;
+    white-space: normal !important;
+  }
+
   .bb-public-side-highgame-grid {
     display: grid !important;
     grid-template-columns: 1fr !important;
@@ -16824,10 +16864,10 @@ row.matches.push({
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table w-full text-[11px] md:hidden"><thead className="bg-blue-800 text-white"><tr><th className="p-1.5 text-right">Opp</th><th className="p-1.5 text-left">Opponent</th><th className="p-1.5 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <React.Fragment key={`public-side-match-mobile-${row.seed}-${matchIndex}`}><tr className="border-t bb-side-mobile-label-row"><td colSpan={3} className="bb-side-round-cell p-1.5"><span className="bb-side-mobile-match-label"><span>{compactSideActionRoundLabel(match.round)}</span><span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></span></td></tr><tr className="border-t"><td className="p-1.5 text-right font-bold">
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table bb-side-mobile-score-table w-full text-[11px] md:hidden"><tbody>{row.matches.map((match, matchIndex) => <React.Fragment key={`public-side-match-mobile-${row.seed}-${matchIndex}`}><tr className="border-t bb-side-mobile-label-row"><td colSpan={2} className="bb-side-round-cell p-1.5"><span className="bb-side-mobile-match-label"><span>{compactSideActionRoundLabel(match.round)}</span><span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></span></td></tr><tr className="border-t bb-side-mobile-opponent-row"><td colSpan={2} className="p-1.5 font-semibold text-blue-950">Opponent: {match.opponent}</td></tr><tr className="border-t"><td className="bb-side-mobile-score-cell p-1.5 text-right font-bold"><span className="bb-side-mobile-score-label">Opp Score</span>
     {match.opponentBreakdown ? (
-    <span className="inline-flex items-center gap-2 justify-end">
-      <span className="text-xs font-semibold text-blue-700">
+    <span className="bb-side-mobile-score-value">
+      <span className="bb-side-mobile-score-breakdown font-semibold">
         {match.opponentBreakdown}
       </span>
       <span>{match.opponentScore}</span>
@@ -16837,12 +16877,10 @@ row.matches.push({
   )}
 </td>
 
-<td className="bb-side-opponent-cell p-1.5 font-semibold md:max-w-[110px] md:truncate md:p-2">{match.opponent}</td>
-
-<td className="p-1.5 text-right font-bold md:p-2">
+<td className="bb-side-mobile-score-cell p-1.5 text-right font-bold md:p-2"><span className="bb-side-mobile-score-label">Score</span>
   {match.playerBreakdown ? (
-    <span className="inline-flex items-center gap-2 justify-end">
-      <span className="text-xs font-semibold text-blue-700">
+    <span className="bb-side-mobile-score-value">
+      <span className="bb-side-mobile-score-breakdown font-semibold">
         ({match.playerBreakdown})
       </span>
       <span>{match.playerScore}</span>
