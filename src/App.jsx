@@ -8103,12 +8103,15 @@ function PublicReservations({
   const currentReservationCount = Number(
     activeReservationState.reservationCount ?? currentReservations.length
   );
+  const currentRegisteredReservationCount = currentReservations.length
+    ? currentReservations.filter((reservation) => String(reservation.status || "Registered") === "Registered").length
+    : currentReservationCount;
   const formForcedToWaitlist = isReservationWaitlistOnly(form, activeReservationState);
 
 const registrationStatus =
   formForcedToWaitlist
     ? "Waitlisted"
-    : currentReservationCount <
+    : currentRegisteredReservationCount <
   Number(activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT)
     ? "Registered"
     : "Waitlisted";
@@ -8262,6 +8265,7 @@ const registrationStatus =
       id: Date.now(),
       ...pendingReservation,
       status: registrationStatus,
+      reservationLimit: Number(activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT),
       registrationNumber,
       confirmationNumber: registrationNumber,
       createdAt: new Date().toISOString(),

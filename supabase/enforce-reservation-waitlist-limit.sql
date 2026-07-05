@@ -1,0 +1,120 @@
+create or replace view public.reservation_public_counts as
+select
+  tournament_id,
+  count(*)::integer as reservation_count
+from public.reservations
+where coalesce(nullif(trim(data->>'status'), ''), 'Registered') = 'Registered'
+group by tournament_id;
+
+grant select on public.reservation_public_counts to anon, authenticated;
+
+create or replace function public.create_public_reservation(payload jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_id text := coalesce(nullif(payload->>'id', ''), gen_random_uuid()::text);
+  next_tournament_id text := coalesce(nullif(payload->>'tournamentKey', ''), nullif(payload->>'tournament', ''), '');
+  next_name text := lower(trim(coalesce(payload->>'name', '')));
+  next_nickname text := lower(trim(coalesce(payload->>'nickname', '')));
+  next_email text := lower(trim(coalesce(payload->>'email', '')));
+  current_max_number integer := 0;
+  next_number integer := 1;
+  registered_count integer := 0;
+  reservation_limit integer := 48;
+  next_status text := 'Registered';
+  next_data jsonb;
+begin
+  if next_tournament_id = '' then
+    raise exception 'Tournament is required.';
+  end if;
+
+  if next_name = '' and next_nickname = '' and next_email = '' then
+    raise exception 'Reservation name or email is required.';
+  end if;
+
+  if exists (
+    select 1
+    from public.reservations
+    where tournament_id = next_tournament_id
+      and (
+        (next_name <> '' and lower(trim(coalesce(name, ''))) = next_name)
+        or (next_name <> '' and lower(trim(coalesce(data->>'name', ''))) = next_name)
+        or (next_nickname <> '' and lower(trim(coalesce(data->>'nickname', ''))) = next_nickname)
+      )
+  ) then
+    raise exception 'This bowler is already on the reservation list.';
+  end if;
+
+  select coalesce(max(greatest(
+    case when coalesce(data->>'registrationNumber', '') ~ '^[0-9]+$' then (data->>'registrationNumber')::integer else 0 end,
+    case when coalesce(data->>'confirmationNumber', '') ~ '^[0-9]+$' then (data->>'confirmationNumber')::integer else 0 end
+  )), 0)
+  into current_max_number
+  from public.reservations
+  where tournament_id = next_tournament_id;
+
+  next_number := greatest(current_max_number + 1, 1);
+
+  select coalesce(
+    case
+      when coalesce(value->'reservationsByTournament'->next_tournament_id->>'reservationLimit', '') ~ '^[0-9]+$'
+        then (value->'reservationsByTournament'->next_tournament_id->>'reservationLimit')::integer
+      else null
+    end,
+    case
+      when coalesce(value->>'reservationLimit', '') ~ '^[0-9]+$'
+        then (value->>'reservationLimit')::integer
+      else null
+    end,
+    case
+      when coalesce(payload->>'reservationLimit', '') ~ '^[0-9]+$'
+        then (payload->>'reservationLimit')::integer
+      else null
+    end,
+    48
+  )
+  into reservation_limit
+  from public.app_settings
+  where id = 'reservation_state';
+
+  reservation_limit := coalesce(reservation_limit, 48);
+
+  select count(*)::integer
+  into registered_count
+  from public.reservations
+  where tournament_id = next_tournament_id
+    and coalesce(nullif(trim(data->>'status'), ''), 'Registered') = 'Registered';
+
+  next_status := case
+    when lower(coalesce(payload->>'status', '')) like 'wait%' then 'Waitlisted'
+    when reservation_limit > 0 and registered_count >= reservation_limit then 'Waitlisted'
+    else 'Registered'
+  end;
+
+  next_data := payload || jsonb_build_object(
+    'id', next_id,
+    'tournamentKey', next_tournament_id,
+    'status', next_status,
+    'registrationNumber', next_number,
+    'confirmationNumber', next_number
+  );
+
+  insert into public.reservations (id, data, tournament_id, name, email, phone, added_to_roster)
+  values (
+    next_id,
+    next_data,
+    next_tournament_id,
+    coalesce(nullif(payload->>'nickname', ''), nullif(payload->>'name', ''), ''),
+    coalesce(payload->>'email', ''),
+    coalesce(payload->>'phone', ''),
+    false
+  );
+
+  return next_data;
+end;
+$$;
+
+grant execute on function public.create_public_reservation(jsonb) to anon, authenticated;

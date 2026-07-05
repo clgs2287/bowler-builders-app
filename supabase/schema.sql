@@ -92,6 +92,7 @@ select
   tournament_id,
   count(*)::integer as reservation_count
 from public.reservations
+where coalesce(nullif(trim(data->>'status'), ''), 'Registered') = 'Registered'
 group by tournament_id;
 
 create or replace view public.reservation_public_roster as
@@ -277,6 +278,9 @@ declare
   next_email text := lower(trim(coalesce(payload->>'email', '')));
   current_max_number integer := 0;
   next_number integer := 1;
+  registered_count integer := 0;
+  reservation_limit integer := 48;
+  next_status text := 'Registered';
   next_data jsonb;
 begin
   if next_tournament_id = '' then
@@ -309,9 +313,47 @@ begin
   where tournament_id = next_tournament_id;
 
   next_number := greatest(current_max_number + 1, 1);
+
+  select coalesce(
+    case
+      when coalesce(value->'reservationsByTournament'->next_tournament_id->>'reservationLimit', '') ~ '^[0-9]+$'
+        then (value->'reservationsByTournament'->next_tournament_id->>'reservationLimit')::integer
+      else null
+    end,
+    case
+      when coalesce(value->>'reservationLimit', '') ~ '^[0-9]+$'
+        then (value->>'reservationLimit')::integer
+      else null
+    end,
+    case
+      when coalesce(payload->>'reservationLimit', '') ~ '^[0-9]+$'
+        then (payload->>'reservationLimit')::integer
+      else null
+    end,
+    48
+  )
+  into reservation_limit
+  from public.app_settings
+  where id = 'reservation_state';
+
+  reservation_limit := coalesce(reservation_limit, 48);
+
+  select count(*)::integer
+  into registered_count
+  from public.reservations
+  where tournament_id = next_tournament_id
+    and coalesce(nullif(trim(data->>'status'), ''), 'Registered') = 'Registered';
+
+  next_status := case
+    when lower(coalesce(payload->>'status', '')) like 'wait%' then 'Waitlisted'
+    when reservation_limit > 0 and registered_count >= reservation_limit then 'Waitlisted'
+    else 'Registered'
+  end;
+
   next_data := payload || jsonb_build_object(
     'id', next_id,
     'tournamentKey', next_tournament_id,
+    'status', next_status,
     'registrationNumber', next_number,
     'confirmationNumber', next_number
   );
