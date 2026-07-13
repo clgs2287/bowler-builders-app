@@ -3511,7 +3511,7 @@ function SeriesInfoButton({ className = "" }) {
         i
       </button>
       <span
-        className={`${open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"} absolute left-1/2 top-7 z-30 w-72 -translate-x-1/2 rounded-xl border border-blue-200 bg-white p-3 text-left text-xs font-semibold text-blue-950 shadow-xl transition-opacity`}
+        className={`${open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"} absolute left-0 top-7 z-30 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-blue-200 bg-white p-3 text-left text-xs font-semibold text-blue-950 shadow-xl transition-opacity`}
       >
         <span className="mb-2 block font-black">Series Key</span>
         <span className="grid gap-1">
