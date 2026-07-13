@@ -146,9 +146,38 @@ const numberInputStyles = String.raw`
     text-shadow: none !important;
   }
 
+  .bb-score-entry-print,
+  .bb-score-entry-print * {
+    background: white !important;
+    color: black !important;
+    filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .bb-score-entry-print {
+    width: 98% !important;
+    padding-top: 0.05in !important;
+  }
+
+  .bb-score-entry-print table {
+    table-layout: fixed !important;
+  }
+
+  .bb-finals-slip-grid {
+    gap: 0.09in !important;
+  }
+
   .bb-finals-slip-print {
-    transform: scale(0.95);
-    transform-origin: top left;
+    min-height: 0 !important;
+    padding: 0.12in !important;
+    transform: none !important;
+    zoom: 0.94;
+  }
+
+  .bb-finals-slip-print img {
+    height: 0.48in !important;
+    width: 0.48in !important;
   }
 }
 
@@ -6485,7 +6514,7 @@ const removeQualifyingAdjustment = (bowlerId) => {
           )}
         </div>
 
-<div className="mx-auto hidden w-[92%] pt-3 print:block">
+<div className="bb-score-entry-print mx-auto hidden w-[92%] pt-3 print:block">
   <h1 className="mb-1 text-xl font-black text-black">  {tournamentInfo.name || "Tournament"}
 </h1>
 
@@ -8781,11 +8810,11 @@ Lane {lanePairForGame(
 
 
 {printMode === "finals" && (
-  <div className={`grid grid-cols-2 gap-3 print:grid-cols-2 ${useHandicapScores ? "print:gap-4" : "print:gap-3"}`}>
+  <div className={`bb-finals-slip-grid grid grid-cols-2 gap-3 print:grid-cols-2 ${useHandicapScores ? "print:gap-4" : "print:gap-3"}`}>
     {Array.from({ length: useHandicapScores ? 4 : 6 }, (_, index) => (
       <div
         key={`finals-slip-${index}`}
-        className={`bb-finals-slip-print rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl ${useHandicapScores ? "print:min-h-[4.6in] print:p-5" : "print:p-4"}`}
+        className={`bb-finals-slip-print rounded-2xl border-2 border-slate-900 bg-white p-4 print:break-inside-avoid print:rounded-xl ${useHandicapScores ? "print:p-3" : "print:p-3"}`}
       >
         <div className="mb-3 flex items-start justify-between gap-2 border-b-2 border-slate-900 pb-2 print:mb-3 print:pb-2">
           <h2 className="max-h-12 min-w-0 flex-1 overflow-hidden text-lg font-black leading-tight print:max-h-10 print:text-[13px] print:leading-tight">
