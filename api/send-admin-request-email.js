@@ -8,17 +8,52 @@ const escapeHtml = (value = "") =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 
+const getPublicSiteUrl = () =>
+  (process.env.PUBLIC_SITE_URL || "https://tournaments.bowlerbuildersproshop.com").replace(/\/$/, "");
+
 const requestHtml = ({ email = "", createdAt = "" }) => `
-  <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
-    <h1 style="color:#0f3f86;margin-bottom:4px">Admin Account Request</h1>
-    <p>A new account requested Bowler Builders Tournament Hub admin access.</p>
-    <table style="border-collapse:collapse;margin-top:18px;width:100%;max-width:640px">
-      <tbody>
-        <tr><td style="padding:8px;border-bottom:1px solid #dbeafe"><strong>Email</strong></td><td style="padding:8px;border-bottom:1px solid #dbeafe">${escapeHtml(email)}</td></tr>
-        <tr><td style="padding:8px;border-bottom:1px solid #dbeafe"><strong>Requested</strong></td><td style="padding:8px;border-bottom:1px solid #dbeafe">${escapeHtml(createdAt || new Date().toLocaleString("en-US", { timeZone: "America/New_York" }))}</td></tr>
-      </tbody>
+  <div style="margin:0;padding:0;background:#e2effc;font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#e2effc">
+      <tr>
+        <td align="center" style="padding:24px 12px">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;max-width:680px;background:#ffffff;border:1px solid #bfdbfe">
+            <tr>
+              <td style="background:#08111f;padding:18px 22px;color:#ffffff">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">
+                  <tr>
+                    <td style="vertical-align:middle;width:92px">
+                      <img src="${getPublicSiteUrl()}/favicon.jpeg" alt="Bowler Builders" width="76" style="display:block;width:76px;height:auto;border:0">
+                    </td>
+                    <td style="vertical-align:middle">
+                      <div style="font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#93c5fd">Bowler Builders</div>
+                      <div style="font-size:24px;font-weight:900;line-height:1.15;color:#ffffff">Admin Account Request</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px">
+                <p style="margin:0 0 18px;font-size:16px;color:#334155">A new account requested Bowler Builders Tournament Hub admin access.</p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-top:1px solid #dbeafe;background:#f8fbff">
+                  <tbody>
+                    <tr>
+                      <td style="padding:11px 12px;border-bottom:1px solid #dbeafe;color:#475569;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;width:34%">Email</td>
+                      <td style="padding:11px 12px;border-bottom:1px solid #dbeafe;color:#0f172a;font-size:15px;font-weight:700">${escapeHtml(email)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:11px 12px;border-bottom:1px solid #dbeafe;color:#475569;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;width:34%">Requested</td>
+                      <td style="padding:11px 12px;border-bottom:1px solid #dbeafe;color:#0f172a;font-size:15px;font-weight:700">${escapeHtml(createdAt || new Date().toLocaleString("en-US", { timeZone: "America/New_York" }))}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p style="margin:18px 0 0;color:#475569;font-size:14px">Approve this user by adding their email to <strong>public.admin_profiles</strong> in Supabase.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
     </table>
-    <p style="margin-top:18px">Approve this user by adding their email to <strong>public.admin_profiles</strong> in Supabase.</p>
   </div>
 `;
 
