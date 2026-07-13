@@ -109,7 +109,7 @@ const loadUnsubscribedEmails = async (accessToken = "") => {
   return new Set(rows.map((row) => String(row.email || "").trim().toLowerCase()).filter(Boolean));
 };
 
-const announcementHtml = ({ subject, message, tournament = {}, recipientName = "", recipientEmail = "", flyer = null }) => {
+const announcementHtml = ({ subject, message, tournament = {}, recipientEmail = "", flyer = null }) => {
   const siteUrl = getPublicSiteUrl();
   const reservationUrl = `${siteUrl}/?view=public&tab=publicreservations`;
   const unsubscribeUrl = `${siteUrl}/api/unsubscribe-announcements?email=${encodeURIComponent(recipientEmail)}&token=${signEmail(recipientEmail)}`;
@@ -147,7 +147,6 @@ const announcementHtml = ({ subject, message, tournament = {}, recipientName = "
                 <td style="padding:24px 24px 10px">
                   <div style="font-size:14px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#0f3f86">${escapeHtml(tournamentName)}</div>
                   <h1 style="margin:6px 0 8px;color:#0f172a;font-size:28px;line-height:1.15">${escapeHtml(subject)}</h1>
-                  ${recipientName ? `<p style="margin:0 0 16px;font-size:16px;color:#334155">Hi ${escapeHtml(recipientName)},</p>` : ""}
                   ${paragraphs.map((paragraph) => `<p style="margin:0 0 16px;font-size:16px;color:#334155">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`).join("")}
                 </td>
               </tr>
@@ -230,7 +229,7 @@ export default async function handler(request, response) {
         from,
         to: [recipient.email],
         subject: isTest ? `[Test] ${subject}` : subject,
-        html: announcementHtml({ subject, message, tournament, recipientName: recipient.name, recipientEmail: recipient.email, flyer }),
+        html: announcementHtml({ subject, message, tournament, recipientEmail: recipient.email, flyer }),
         replyTo,
       });
 

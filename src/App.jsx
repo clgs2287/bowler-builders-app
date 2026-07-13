@@ -7483,7 +7483,7 @@ function ReservationsTab({
   }, [reservationState]);
   const defaultAnnouncementSubject = `Entries are open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}`;
   const defaultAnnouncementMessage = [
-    `Entries are now open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}.`,
+    `Tournament entries are now open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}.`,
     "Reserve your spot on the Bowler Builders Tournament Hub.",
   ].join("\n\n");
   const announcementTournament = {
