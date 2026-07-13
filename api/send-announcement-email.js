@@ -95,6 +95,7 @@ const verifyOwner = async (request) => {
 
 const announcementHtml = ({ subject, message, tournament = {}, recipientName = "", flyer = null }) => {
   const siteUrl = getPublicSiteUrl();
+  const reservationUrl = `${siteUrl}/?view=public&tab=publicreservations`;
   const logoUrl = `${siteUrl}/favicon.jpeg`;
   const tournamentName = tournament.name || "Bowler Builders Tournament";
   const eventDate = tournament.date || "";
@@ -156,7 +157,7 @@ const announcementHtml = ({ subject, message, tournament = {}, recipientName = "
               </tr>
               <tr>
                 <td style="padding:0 24px 24px">
-                  <a href="${siteUrl}" style="display:inline-block;background:#0f3f86;color:#ffffff;text-decoration:none;font-weight:900;padding:12px 16px;border:1px solid #0f3f86">Reserve or View Tournament Hub</a>
+                  <a href="${reservationUrl}" style="display:inline-block;background:#0f3f86;color:#ffffff;text-decoration:none;font-weight:900;padding:12px 16px;border:1px solid #0f3f86">Reserve Your Spot</a>
                   <p style="margin:16px 0 0;color:#64748b;font-size:12px">You received this because you previously reserved a Bowler Builders tournament entry.</p>
                 </td>
               </tr>
