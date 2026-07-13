@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
 import { useLayoutEffect, useRef } from "react";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
+import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
@@ -3226,6 +3227,8 @@ function PublicHomeTab({
   const featuredTime = primaryEventInfo?.startTime || primaryOpenReservation?.state?.tournamentStartTime || nextEvent?.startTime || tournamentInfo.startTime || "";
   const featuredCenter = primaryEventInfo?.center || primaryOpenReservation?.state?.tournamentCenter || nextEvent?.center || tournamentInfo.center || "";
   const featuredAddress = primaryEventInfo?.location || primaryOpenReservation?.state?.tournamentAddress || nextEvent?.address || tournamentInfo.location || "";
+  const featuredSeries = primaryEventInfo?.series || primaryOpenReservation?.state?.tournamentSeries || nextEvent?.series || tournamentInfo.series || DEFAULT_TOURNAMENT_SERIES;
+  const showFbetBrand = String(featuredSeries || "").toLowerCase().replace(/[^a-z]/g, "") === "fbet";
   const latestArchive = [...(tournamentHistory || [])]
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
@@ -3279,6 +3282,17 @@ function PublicHomeTab({
             </div>
           </div>
         </section>
+
+        {showFbetBrand && (
+          <section className="mt-5 overflow-hidden rounded-2xl border border-red-900/60 bg-slate-950 shadow-sm">
+            <img
+              src={fbetLogo}
+              alt="Frankie's Bowling Emporium Tour"
+              className="h-auto max-h-[360px] w-full object-contain"
+              loading="lazy"
+            />
+          </section>
+        )}
 
         {publicReservationOptions.length > 0 && (
           <section className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4">
