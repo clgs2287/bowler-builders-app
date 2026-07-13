@@ -3229,6 +3229,18 @@ function PublicHomeTab({
   const featuredAddress = primaryEventInfo?.location || primaryOpenReservation?.state?.tournamentAddress || nextEvent?.address || tournamentInfo.location || "";
   const featuredSeries = primaryEventInfo?.series || primaryOpenReservation?.state?.tournamentSeries || nextEvent?.series || tournamentInfo.series || "";
   const showFbetBrand = String(featuredSeries || "").toLowerCase().replace(/[^a-z]/g, "") === "fbet";
+  const featuredLinkInfo = { ...(tournamentInfo || {}), ...(primaryEventInfo || {}) };
+  const extraWatchLinks = String(featuredLinkInfo.videoLinks || "")
+    .split(/\n|,/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const homeWatchLinks = [
+    ...(featuredLinkInfo.streamLink ? [{ label: "Current Livestream", href: featuredLinkInfo.streamLink }] : []),
+    { label: "BBTV YouTube", href: featuredLinkInfo.bbtvYoutubeLink || DEFAULT_BBTV_YOUTUBE_LINK },
+    ...(featuredLinkInfo.facebookLink ? [{ label: "Bowler Builders Facebook", href: featuredLinkInfo.facebookLink }] : []),
+    ...(featuredLinkInfo.recentVideoLink ? [{ label: "Recent Video", href: featuredLinkInfo.recentVideoLink }] : []),
+    ...extraWatchLinks.map((href, index) => ({ label: `Social Link ${index + 1}`, href })),
+  ].filter((item) => item.href);
   const latestArchive = [...(tournamentHistory || [])]
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
@@ -3359,21 +3371,43 @@ function PublicHomeTab({
           </section>
         </div>
 
-        <section className="mt-5 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Stats & History</p>
-              <h3 className="mt-1 text-lg font-black text-blue-950">Visit our stats page for:</h3>
-              <ul className="mt-3 grid gap-2 text-sm font-semibold text-slate-700 sm:grid-cols-2">
-                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Historic bowler statistics</li>
-                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Archived tournaments</li>
-                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Title history</li>
-                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Hall of Fame members</li>
-              </ul>
+        <section className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.8fr]">
+          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-blue-700">Stats & History</p>
+                <h3 className="mt-1 text-lg font-black text-blue-950">Visit our stats page for:</h3>
+              </div>
+              <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" onClick={() => onNavigate("publicstats")}>
+                View Stats
+              </Button>
             </div>
-            <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" onClick={() => onNavigate("publicstats")}>
-              View Stats
-            </Button>
+            <ul className="mt-3 grid gap-2 text-sm font-semibold text-slate-700 sm:grid-cols-2">
+              <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Historic bowler statistics</li>
+              <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Archived tournaments</li>
+              <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Title history</li>
+              <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Hall of Fame members</li>
+            </ul>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Watch & Follow</p>
+              <h3 className="mt-1 text-lg font-black text-blue-950">Watch & Follow</h3>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {homeWatchLinks.map((link) => (
+                <a
+                  key={`${link.label}-${link.href}`}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 transition hover:bg-blue-100"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </div>
           </div>
         </section>
 
