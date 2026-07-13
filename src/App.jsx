@@ -14715,13 +14715,36 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     window.alert(`Archived "${archived.name}". The active tournament workspace is still open until you use Reset Active Tournament.`);
   };
 
-  const deleteTournament = (id) => {
+  const deleteTournament = async (id) => {
     if (!isOwnerAdmin) {
       window.alert("Only the owner account can delete archived tournaments.");
       return;
     }
     const confirmed = window.confirm("Delete this archived tournament from stats history? This can affect public archives, stats, and titles connected to the archive.");
     if (!confirmed) return;
+    const accessToken = supabaseSession?.access_token;
+    if (supabase && !accessToken) {
+      window.alert("Sign in again before deleting an archived tournament from Supabase.");
+      return;
+    }
+    if (supabase && accessToken) {
+      try {
+        setSupabaseSaveStatus("Deleting archived tournament...");
+        await withTimeout(
+          supabaseRestRequest("archived_tournaments", `?id=eq.${postgrestEq(id)}`, {
+            method: "DELETE",
+            accessToken,
+            prefer: "return=minimal",
+          }),
+          "Deleting archived tournament"
+        );
+        setSupabaseSaveStatus("Archived tournament deleted.");
+      } catch (error) {
+        setSupabaseSaveStatus(`Delete issue: ${error?.message || error}`);
+        window.alert(`Could not delete the archived tournament from Supabase: ${error?.message || error}`);
+        return;
+      }
+    }
     if (selectedArchivedTournamentId === id) setSelectedArchivedTournamentId(null);
     setTournamentHistory((current) => current.filter((t) => t.id !== id));
   };
@@ -17820,7 +17843,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     await syncTable("manual_titles", titleRecords);
     await syncTable("bowler_identities", identityRecords);
     await syncTable("reservations", reservationRecords, { removeStale: false });
-    await syncTable("archived_tournaments", archiveRecords);
+    await syncTable("archived_tournaments", archiveRecords, { removeStale: false });
     await syncTable("active_tournament_snapshots", [activeSnapshotRecord]);
     await syncTable("tournament_drafts", draftRecords);
 
