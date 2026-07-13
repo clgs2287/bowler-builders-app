@@ -5255,6 +5255,7 @@ function RosterSizeInput({ entries, onSave }) {
 
 function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, bowlerIdentities = [], setReservationState = null }) {
   const [registrationSort, setRegistrationSort] = useState({ key: "entry", direction: "asc" });
+  const [paidSortSnapshot, setPaidSortSnapshot] = useState({});
   const [showRegistrationEmails, setShowRegistrationEmails] = useState(true);
   const [showRegistrationPhones, setShowRegistrationPhones] = useState(true);
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
@@ -5667,6 +5668,8 @@ averageSource: archivedData?.eligible
 
     } : b));
   };
+  const registrationBowlerSortKey = (bowler, index) =>
+    String(bowler?.seed || bowler?.registrationNumber || bowler?.reservationId || `row-${index}`);
   const sortedRegistrationRows = bowlers
     .map((bowler, index) => ({ bowler, index }))
     .sort((a, b) => {
@@ -5680,7 +5683,11 @@ averageSource: archivedData?.eligible
         if (nameDiff !== 0) return nameDiff * direction;
       }
       if (registrationSort.key === "paid") {
-        const paidDiff = Number(Boolean(a.bowler.paid)) - Number(Boolean(b.bowler.paid));
+        const aSnapshot = paidSortSnapshot[registrationBowlerSortKey(a.bowler, a.index)];
+        const bSnapshot = paidSortSnapshot[registrationBowlerSortKey(b.bowler, b.index)];
+        const paidDiff =
+          Number(Boolean(aSnapshot ?? a.bowler.paid)) -
+          Number(Boolean(bSnapshot ?? b.bowler.paid));
         if (paidDiff !== 0) return paidDiff * direction;
       }
       const entryDiff =
@@ -5690,6 +5697,11 @@ averageSource: archivedData?.eligible
       return (a.index - b.index) * direction;
     });
   const toggleRegistrationSort = (key) => {
+    if (key === "paid") {
+      setPaidSortSnapshot(Object.fromEntries(
+        bowlers.map((bowler, index) => [registrationBowlerSortKey(bowler, index), Boolean(bowler.paid)])
+      ));
+    }
     setRegistrationSort((current) => ({
       key,
       direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
