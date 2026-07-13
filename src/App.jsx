@@ -3229,18 +3229,10 @@ function PublicHomeTab({
   const featuredAddress = primaryEventInfo?.location || primaryOpenReservation?.state?.tournamentAddress || nextEvent?.address || tournamentInfo.location || "";
   const featuredSeries = primaryEventInfo?.series || primaryOpenReservation?.state?.tournamentSeries || nextEvent?.series || tournamentInfo.series || "";
   const showFbetBrand = String(featuredSeries || "").toLowerCase().replace(/[^a-z]/g, "") === "fbet";
-  const featuredLinkInfo = { ...(tournamentInfo || {}), ...(primaryEventInfo || {}) };
-  const extraWatchLinks = String(featuredLinkInfo.videoLinks || "")
-    .split(/\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
   const homeWatchLinks = [
-    ...(featuredLinkInfo.streamLink ? [{ label: "Current Livestream", href: featuredLinkInfo.streamLink }] : []),
-    { label: "BBTV YouTube", href: featuredLinkInfo.bbtvYoutubeLink || DEFAULT_BBTV_YOUTUBE_LINK },
-    ...(featuredLinkInfo.facebookLink ? [{ label: "Bowler Builders Facebook", href: featuredLinkInfo.facebookLink }] : []),
-    ...(featuredLinkInfo.recentVideoLink ? [{ label: "Recent Video", href: featuredLinkInfo.recentVideoLink }] : []),
-    ...extraWatchLinks.map((href, index) => ({ label: `Social Link ${index + 1}`, href })),
-  ].filter((item) => item.href);
+    { label: "Bowler Builders Facebook", href: "https://www.facebook.com/bowlerbuildersproshops", type: "facebook" },
+    { label: "BBTV YouTube", href: DEFAULT_BBTV_YOUTUBE_LINK, type: "youtube" },
+  ];
   const latestArchive = [...(tournamentHistory || [])]
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
@@ -3402,9 +3394,14 @@ function PublicHomeTab({
                   href={link.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 transition hover:bg-blue-100"
+                  className="flex min-h-[72px] min-w-[150px] flex-1 items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-black text-blue-900 transition hover:bg-blue-100"
                 >
-                  {link.label}
+                  {link.type === "facebook" ? (
+                    <img src={bowlerBuildersLogo} alt="" className="h-12 w-12 rounded-xl bg-white object-contain p-1" />
+                  ) : (
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-950 text-base font-black text-white">BBTV</span>
+                  )}
+                  <span>{link.label}</span>
                 </a>
               ))}
             </div>
