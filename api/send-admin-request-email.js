@@ -1,10 +1,4 @@
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-
-const splitEmails = (value = "") =>
-  String(value)
-    .split(",")
-    .map((email) => email.trim())
-    .filter(Boolean);
+import { getReplyToAddress, getSenderAddress, sendEmail, splitEmails } from "./email-provider.js";
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -13,20 +7,6 @@ const escapeHtml = (value = "") =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-
-const getSenderAddress = () => {
-  const configuredSender = process.env.RESERVATION_EMAIL_FROM || "";
-  const unverifiedPublicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "icloud.com"];
-  const usesPublicDomain = unverifiedPublicDomains.some((domain) => configuredSender.toLowerCase().includes(`@${domain}`));
-  return configuredSender && !usesPublicDomain
-    ? configuredSender
-    : "Bowler Builders <onboarding@resend.dev>";
-};
-
-const getReplyToAddress = () => {
-  const configuredReplyTo = process.env.RESERVATION_REPLY_TO || "";
-  return configuredReplyTo.trim() || undefined;
-};
 
 const requestHtml = ({ email = "", createdAt = "" }) => `
   <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
@@ -48,11 +28,6 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return response.status(200).json({ sent: false, skipped: true, reason: "RESEND_API_KEY is not configured" });
-  }
-
   try {
     const body = request.body || {};
     const email = String(body.email || "").trim();
@@ -69,27 +44,27 @@ export default async function handler(request, response) {
     }
 
     const replyTo = getReplyToAddress();
-    const sent = await fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: getSenderAddress(),
-        to: notificationEmails,
-        subject: `Admin access request - ${email}`,
-        html: requestHtml({ email, createdAt: body.createdAt || "" }),
-        ...(replyTo ? { reply_to: replyTo } : {}),
-      }),
+    const sent = await sendEmail({
+      from: getSenderAddress(),
+      to: notificationEmails,
+      subject: `Admin access request - ${email}`,
+      html: requestHtml({ email, createdAt: body.createdAt || "" }),
+      replyTo,
     });
 
-    const result = await sent.json().catch(() => ({}));
-    if (!sent.ok) {
-      return response.status(sent.status).json({ error: result.message || "Admin request email could not be sent.", details: result });
+    if (sent.skipped) {
+      return response.status(200).json({ sent: false, skipped: true, reason: sent.reason });
     }
 
-    return response.status(200).json({ sent: true, result });
+    if (!sent.response.ok) {
+      return response.status(sent.response.status).json({
+        error: sent.result?.Messages?.[0]?.Errors?.[0]?.ErrorMessage || sent.result?.message || "Admin request email could not be sent.",
+        details: sent.result,
+        provider: sent.provider,
+      });
+    }
+
+    return response.status(200).json({ sent: true, provider: sent.provider, result: sent.result });
   } catch (error) {
     return response.status(500).json({ error: error.message || "Admin request email could not be sent." });
   }

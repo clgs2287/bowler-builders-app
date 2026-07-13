@@ -7,10 +7,13 @@ This template provides a minimal setup to get React working in Vite with HMR and
 Reservation confirmation emails are sent through the Vercel API route at `/api/send-reservation-email`.
 To enable delivery in production, add these environment variables in Vercel:
 
-- `RESEND_API_KEY`: API key from Resend.
-- `RESERVATION_EMAIL_FROM`: Verified sender address, for example `Bowler Builders <reservations@yourdomain.com>`.
+- `MAILJET_API_KEY`: API key from Mailjet.
+- `MAILJET_SECRET_KEY`: Secret key from Mailjet.
+- `RESERVATION_EMAIL_FROM`: Verified sender address, for example `Bowler Builders <reservations@bowlerbuildersproshop.com>`.
 - `RESERVATION_REPLY_TO`: Optional reply address, for example `bowlerbuildersproshop@yahoo.com`.
 - `RESERVATION_NOTIFICATION_EMAILS`: Optional comma-separated admin/director copy list.
+- `ADMIN_APPROVAL_EMAILS`: Optional comma-separated list for admin account request notices.
+- `RESEND_API_KEY`: Optional fallback while moving from Resend to Mailjet.
 
 The Reservations admin page also has a "Confirmation Email Copies" box for tournament-specific copy recipients.
 

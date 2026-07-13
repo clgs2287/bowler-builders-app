@@ -1,10 +1,4 @@
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-
-const splitEmails = (value = "") =>
-  String(value)
-    .split(",")
-    .map((email) => email.trim())
-    .filter(Boolean);
+import { getReplyToAddress, getSenderAddress, sendEmail, splitEmails } from "./email-provider.js";
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -22,20 +16,6 @@ const formatStartTime = (time = "") => {
   const suffix = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${minuteText.padStart(2, "0")} ${suffix}`;
-};
-
-const getSenderAddress = () => {
-  const configuredSender = process.env.RESERVATION_EMAIL_FROM || "";
-  const unverifiedPublicDomains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "icloud.com"];
-  const usesPublicDomain = unverifiedPublicDomains.some((domain) => configuredSender.toLowerCase().includes(`@${domain}`));
-  return configuredSender && !usesPublicDomain
-    ? configuredSender
-    : "Bowler Builders <onboarding@resend.dev>";
-};
-
-const getReplyToAddress = () => {
-  const configuredReplyTo = process.env.RESERVATION_REPLY_TO || "";
-  return configuredReplyTo.trim() || undefined;
 };
 
 const reservationHtml = ({ reservation = {}, tournament = {} }) => {
@@ -77,11 +57,6 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: "Method not allowed" });
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return response.status(200).json({ sent: false, skipped: true, reason: "RESEND_API_KEY is not configured" });
-  }
-
   try {
     const body = request.body || {};
     const reservation = body.reservation || {};
@@ -100,36 +75,43 @@ export default async function handler(request, response) {
     const subject = `Reservation ${confirmationNumber ? `#${confirmationNumber} ` : ""}${reservation.status || "Confirmed"} - ${tournament.name || reservation.tournament || "Tournament"}`;
     const from = getSenderAddress();
     const replyTo = getReplyToAddress();
-    const sendEmail = async ({ recipients, emailSubject }) => fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const html = reservationHtml({ reservation, tournament });
+    const sendProviderEmail = async ({ recipients, emailSubject }) =>
+      sendEmail({
         from,
         to: recipients,
         subject: emailSubject,
-        html: reservationHtml({ reservation, tournament }),
-        ...(replyTo ? { reply_to: replyTo } : {}),
-      }),
-    });
+        html,
+        replyTo,
+      });
 
     const sends = [];
-    if (to.length) sends.push({ kind: "entrant", response: await sendEmail({ recipients: to, emailSubject: subject }) });
-    if (notificationEmails.length) sends.push({ kind: "copy", response: await sendEmail({ recipients: notificationEmails, emailSubject: `Copy: ${subject}` }) });
+    if (to.length) sends.push({ kind: "entrant", result: await sendProviderEmail({ recipients: to, emailSubject: subject }) });
+    if (notificationEmails.length) sends.push({ kind: "copy", result: await sendProviderEmail({ recipients: notificationEmails, emailSubject: `Copy: ${subject}` }) });
 
-    const results = [];
-    for (const sentEmail of sends) {
-      const result = await sentEmail.response.json().catch(() => ({}));
-      results.push({ kind: sentEmail.kind, ok: sentEmail.response.ok, status: sentEmail.response.status, result });
+    const skipped = sends.find((item) => item.result?.skipped);
+    if (skipped) {
+      return response.status(200).json({ sent: false, skipped: true, reason: skipped.result.reason, results: sends });
     }
+
+    const results = sends.map(({ kind, result }) => ({
+      kind,
+      provider: result.provider,
+      ok: result.response.ok,
+      status: result.response.status,
+      result: result.result,
+    }));
     const failed = results.find((item) => !item.ok);
     if (failed) {
-      return response.status(failed.status).json({ error: failed.result.message || `${failed.kind} email could not be sent.`, details: failed.result, results });
+      return response.status(failed.status).json({
+        error: failed.result?.Messages?.[0]?.Errors?.[0]?.ErrorMessage || failed.result?.message || `${failed.kind} email could not be sent.`,
+        details: failed.result,
+        provider: failed.provider,
+        results,
+      });
     }
 
-    return response.status(200).json({ sent: true, results });
+    return response.status(200).json({ sent: true, provider: results[0]?.provider || "none", results });
   } catch (error) {
     return response.status(500).json({ error: error.message || "Email could not be sent." });
   }
