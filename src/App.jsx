@@ -1314,6 +1314,29 @@ async function sendReservationConfirmationEmail({ reservation, reservationState 
   return result;
 }
 
+async function sendPastReservationAnnouncementEmail({ accessToken = "", recipients = [], testEmail = "", subject = "", message = "", tournament = {} }) {
+  const response = await fetch("/api/send-announcement-email", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify({
+      recipients,
+      testEmail,
+      subject,
+      message,
+      tournament,
+    }),
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok && response.status !== 207) {
+    throw new Error(result.error || "Announcement email could not be sent.");
+  }
+  return result;
+}
+
 function getTournamentStartDateTime(date, startTime) {
   if (!date || !startTime) return null;
   const parsed = new Date(`${date}T${startTime}`);
@@ -7424,6 +7447,7 @@ function ReservationsTab({
   bowlerIdentities = [],
   setBowlerIdentities = () => {},
   isOwnerAdmin = false,
+  supabaseSession = null,
   onAddReservationToRegistration = () => {},
   onDeleteReservation = () => Promise.resolve(),
   onRemoveHiddenReservation = () => Promise.resolve(0),
@@ -7432,11 +7456,40 @@ function ReservationsTab({
   const [deletingReservationId, setDeletingReservationId] = useState(null);
   const [editingReservationId, setEditingReservationId] = useState(null);
   const [editingReservation, setEditingReservation] = useState(null);
+  const [announcementSubject, setAnnouncementSubject] = useState("");
+  const [announcementMessage, setAnnouncementMessage] = useState("");
+  const [announcementTestEmail, setAnnouncementTestEmail] = useState("");
+  const [announcementSending, setAnnouncementSending] = useState("");
   const currentScheduledTournamentKey = reservationKeyFromState(reservationState);
   const selectedScheduledTournament = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentScheduledTournamentKey);
   const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
+  const announcementRecipients = useMemo(() => {
+    const byEmail = new Map();
+    allReservationItemsFromState(reservationState).forEach((reservation) => {
+      const email = String(reservation.email || "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+      if (!byEmail.has(email)) {
+        byEmail.set(email, {
+          email,
+          name: getReservationDisplayName(reservation) || reservation.name || "",
+        });
+      }
+    });
+    return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email));
+  }, [reservationState]);
+  const defaultAnnouncementSubject = `Entries are open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}`;
+  const defaultAnnouncementMessage = [
+    `Entries are now open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}.`,
+    "Reserve your spot on the Bowler Builders Tournament Hub.",
+  ].join("\n\n");
+  const announcementTournament = {
+    name: reservationState.tournamentName || tournamentInfo.name || "",
+    date: reservationState.tournamentDate || tournamentInfo.date || "",
+    startTime: reservationState.tournamentStartTime ? formatStartTime(reservationState.tournamentStartTime) : formatStartTime(tournamentInfo.startTime || ""),
+    center: reservationState.tournamentCenter || tournamentInfo.center || "",
+  };
 
   const saveReservationNameMapping = (reservation) => {
     const nickname = String(reservation.nickname || "").trim();
@@ -7786,6 +7839,74 @@ function ReservationsTab({
     }
   };
 
+  const sendAnnouncementTest = async () => {
+    const testEmail = announcementTestEmail.trim();
+    if (!testEmail) {
+      window.alert("Enter a test email address first.");
+      return;
+    }
+    if (!supabaseSession?.access_token) {
+      window.alert("Sign in as owner before sending announcement emails.");
+      return;
+    }
+
+    try {
+      setAnnouncementSending("test");
+      const result = await sendPastReservationAnnouncementEmail({
+        accessToken: supabaseSession.access_token,
+        testEmail,
+        subject: announcementSubject.trim() || defaultAnnouncementSubject,
+        message: announcementMessage.trim() || defaultAnnouncementMessage,
+        tournament: announcementTournament,
+      });
+      setRosterNotice(`Test announcement sent to ${testEmail}. Provider: ${result.provider || "email service"}.`);
+    } catch (error) {
+      window.alert(error.message || "Test announcement could not be sent.");
+    } finally {
+      setAnnouncementSending("");
+    }
+  };
+
+  const sendAnnouncementToPastBowlers = async () => {
+    if (!supabaseSession?.access_token) {
+      window.alert("Sign in as owner before sending announcement emails.");
+      return;
+    }
+    if (!announcementRecipients.length) {
+      window.alert("No past reservation emails were found.");
+      return;
+    }
+    if (announcementRecipients.length > 200) {
+      window.alert("This tool is currently limited to 200 recipients per send.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Send this announcement to ${announcementRecipients.length} past reservation email${announcementRecipients.length === 1 ? "" : "s"}?\n\nSend a test first if you have not already reviewed it.`
+    );
+    if (!confirmed) return;
+
+    const finalConfirm = window.prompt('Type SEND to confirm this live email send.');
+    if (finalConfirm !== "SEND") return;
+
+    try {
+      setAnnouncementSending("live");
+      const result = await sendPastReservationAnnouncementEmail({
+        accessToken: supabaseSession.access_token,
+        recipients: announcementRecipients,
+        subject: announcementSubject.trim() || defaultAnnouncementSubject,
+        message: announcementMessage.trim() || defaultAnnouncementMessage,
+        tournament: announcementTournament,
+      });
+      const failedCount = Array.isArray(result.failed) ? result.failed.length : 0;
+      setRosterNotice(`Announcement sent to ${result.sent || 0} recipient${Number(result.sent || 0) === 1 ? "" : "s"}${failedCount ? `; ${failedCount} failed.` : "."}`);
+    } catch (error) {
+      window.alert(error.message || "Announcement email could not be sent.");
+    } finally {
+      setAnnouncementSending("");
+    }
+  };
+
   return (
     <AppCard>
       <CardContent className="p-3 md:p-5">
@@ -8000,6 +8121,76 @@ function ReservationsTab({
               : "CLOSED"}
           </p>
         </div>
+
+        {isOwnerAdmin && (
+          <div className="mt-5 rounded-2xl border border-blue-200 bg-white p-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h3 className="text-lg font-black text-blue-950">Email Past Bowlers</h3>
+                <p className="text-sm font-semibold text-blue-700">
+                  Send a tournament announcement to de-duplicated emails from past reservations. Current list: {announcementRecipients.length} recipient{announcementRecipients.length === 1 ? "" : "s"}.
+                </p>
+              </div>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
+                Owner only
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Subject</Label>
+                <Input
+                  value={announcementSubject}
+                  onChange={(event) => setAnnouncementSubject(event.target.value)}
+                  placeholder={defaultAnnouncementSubject}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <Label>Message</Label>
+                <textarea
+                  className="min-h-[130px] w-full rounded-2xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  value={announcementMessage}
+                  onChange={(event) => setAnnouncementMessage(event.target.value)}
+                  placeholder={defaultAnnouncementMessage}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Test Email</Label>
+                <Input
+                  value={announcementTestEmail}
+                  onChange={(event) => setAnnouncementTestEmail(event.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-end gap-2">
+                <Button
+                  variant="outline"
+                  className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+                  disabled={announcementSending === "test"}
+                  onClick={sendAnnouncementTest}
+                >
+                  {announcementSending === "test" ? "Sending Test..." : "Send Test"}
+                </Button>
+                <Button
+                  className="rounded-2xl bg-blue-800 text-white hover:bg-blue-900"
+                  disabled={announcementSending === "live" || !announcementRecipients.length || announcementRecipients.length > 200}
+                  onClick={sendAnnouncementToPastBowlers}
+                >
+                  {announcementSending === "live" ? "Sending..." : "Send to Past Bowlers"}
+                </Button>
+              </div>
+            </div>
+
+            {announcementRecipients.length > 200 && (
+              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                This list is over 200 recipients. Split sends are not enabled yet because Mailjet free is capped at 200 emails per day.
+              </p>
+            )}
+          </div>
+        )}
         <div className="mt-6 overflow-auto rounded-2xl border border-blue-200 bg-white">
   <table className="w-full min-w-[760px] text-xs md:text-sm">
     <thead className="bg-blue-800 text-white">
@@ -19276,6 +19467,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   bowlerIdentities={bowlerIdentities}
   setBowlerIdentities={setBowlerIdentities}
   isOwnerAdmin={isOwnerAdmin}
+  supabaseSession={supabaseSession}
   onAddReservationToRegistration={addReservationToRegistration}
   onDeleteReservation={deleteReservationFromSupabase}
   onRemoveHiddenReservation={removeHiddenReservationFromSupabase}

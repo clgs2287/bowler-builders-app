@@ -17,6 +17,10 @@ To enable delivery in production, add these environment variables in Vercel:
 
 The Reservations admin page also has a "Confirmation Email Copies" box for tournament-specific copy recipients.
 
+The owner-only Reservations admin page can also send announcement emails to de-duplicated past reservation emails. That route verifies the current Supabase admin session before sending. Optional:
+
+- `OWNER_ADMIN_EMAILS`: Comma-separated owner email fallback list. Defaults to `cory.lagner@gmail.com`.
+
 ## Local Staging Supabase
 
 Local development reads Supabase settings from `.env.local`. That file is ignored by Git, so it is safe to use a separate staging Supabase project locally without affecting the live Vercel site.
