@@ -21,6 +21,7 @@ The owner-only Reservations admin page can also send announcement emails to de-d
 
 - `OWNER_ADMIN_EMAILS`: Comma-separated owner email fallback list. Defaults to `cory.lagner@gmail.com`.
 - `ANNOUNCEMENT_EMAIL_LIMIT`: Maximum recipients per announcement send. Defaults to `500`.
+- `UNSUBSCRIBE_SECRET`: Optional secret used to sign announcement unsubscribe links. Defaults to the Mailjet secret key when omitted.
 
 ## Local Staging Supabase
 

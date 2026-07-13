@@ -87,6 +87,11 @@ create table if not exists public.admin_profiles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.announcement_unsubscribes (
+  email text primary key,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.public_app_settings (
   id text primary key,
   value jsonb not null default '{}'::jsonb,
@@ -172,6 +177,7 @@ alter table public.reservations enable row level security;
 alter table public.active_tournament_snapshots enable row level security;
 alter table public.tournament_drafts enable row level security;
 alter table public.admin_profiles enable row level security;
+alter table public.announcement_unsubscribes enable row level security;
 alter table public.public_app_settings enable row level security;
 alter table public.reservation_public_counts enable row level security;
 alter table public.reservation_public_roster enable row level security;
@@ -196,6 +202,7 @@ revoke select on public.reservations from anon;
 revoke insert on public.reservations from anon;
 grant select, insert on public.reservations to authenticated;
 grant select on public.admin_profiles to authenticated;
+grant select on public.announcement_unsubscribes to authenticated;
 grant insert, update, delete on public.app_settings to authenticated;
 grant insert, update, delete on public.schedule_events to authenticated;
 grant insert, update, delete on public.manual_titles to authenticated;
@@ -204,6 +211,27 @@ grant insert, update, delete on public.archived_tournaments to authenticated;
 grant insert, update, delete on public.active_tournament_snapshots to authenticated;
 grant insert, update, delete on public.tournament_drafts to authenticated;
 grant update, delete on public.reservations to authenticated;
+
+create or replace function public.unsubscribe_announcement_email(target_email text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  normalized_email text := lower(trim(coalesce(target_email, '')));
+begin
+  if normalized_email = '' then
+    raise exception 'Email is required.';
+  end if;
+
+  insert into public.announcement_unsubscribes (email)
+  values (normalized_email)
+  on conflict (email) do nothing;
+end;
+$$;
+
+grant execute on function public.unsubscribe_announcement_email(text) to anon, authenticated;
 
 create or replace function public.is_admin()
 returns boolean
@@ -562,6 +590,12 @@ create policy "Admins read admin profiles"
 on public.admin_profiles for select
 to authenticated
 using (public.is_admin() or user_id = auth.uid());
+
+drop policy if exists "Admins read announcement unsubscribes" on public.announcement_unsubscribes;
+create policy "Admins read announcement unsubscribes"
+on public.announcement_unsubscribes for select
+to authenticated
+using (public.is_admin());
 
 drop policy if exists "Admins write app settings" on public.app_settings;
 create policy "Admins write app settings"

@@ -7904,7 +7904,8 @@ function ReservationsTab({
         flyer: announcementIncludeFlyer ? announcementFlyer : null,
       });
       const failedCount = Array.isArray(result.failed) ? result.failed.length : 0;
-      setRosterNotice(`Announcement sent to ${result.sent || 0} recipient${Number(result.sent || 0) === 1 ? "" : "s"}${failedCount ? `; ${failedCount} failed.` : "."}`);
+      const skippedCount = Number(result.skippedUnsubscribed || 0);
+      setRosterNotice(`Announcement sent to ${result.sent || 0} recipient${Number(result.sent || 0) === 1 ? "" : "s"}${skippedCount ? `; ${skippedCount} unsubscribed skipped` : ""}${failedCount ? `; ${failedCount} failed.` : "."}`);
     } catch (error) {
       window.alert(error.message || "Announcement email could not be sent.");
     } finally {

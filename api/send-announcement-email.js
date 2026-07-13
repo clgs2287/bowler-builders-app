@@ -1,4 +1,5 @@
 import { getReplyToAddress, getSenderAddress, sendEmail } from "./email-provider.js";
+import { signEmail } from "./unsubscribe-announcements.js";
 
 const getAnnouncementRecipientLimit = () => {
   const configured = Number(process.env.ANNOUNCEMENT_EMAIL_LIMIT || 500);
@@ -90,12 +91,28 @@ const verifyOwner = async (request) => {
   const isOwner = String(profile.role || "").toLowerCase() === "owner" || ownerEmails.includes(String(profile.email || user.email || "").toLowerCase());
   if (!isOwner) return { ok: false, status: 403, error: "Owner access is required." };
 
-  return { ok: true, profile, user };
+  return { ok: true, profile, user, token };
 };
 
-const announcementHtml = ({ subject, message, tournament = {}, recipientName = "", flyer = null }) => {
+const loadUnsubscribedEmails = async (accessToken = "") => {
+  const { url, key } = getSupabaseConfig();
+  if (!url || !key || !accessToken) return new Set();
+
+  const unsubscribeResponse = await fetch(`${url.replace(/\/$/, "")}/rest/v1/announcement_unsubscribes?select=email`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const rows = await unsubscribeResponse.json().catch(() => []);
+  if (!unsubscribeResponse.ok || !Array.isArray(rows)) return new Set();
+  return new Set(rows.map((row) => String(row.email || "").trim().toLowerCase()).filter(Boolean));
+};
+
+const announcementHtml = ({ subject, message, tournament = {}, recipientName = "", recipientEmail = "", flyer = null }) => {
   const siteUrl = getPublicSiteUrl();
   const reservationUrl = `${siteUrl}/?view=public&tab=publicreservations`;
+  const unsubscribeUrl = `${siteUrl}/api/unsubscribe-announcements?email=${encodeURIComponent(recipientEmail)}&token=${signEmail(recipientEmail)}`;
   const logoUrl = `${siteUrl}/favicon.jpeg`;
   const tournamentName = tournament.name || "Bowler Builders Tournament";
   const eventDate = tournament.date || "";
@@ -158,7 +175,7 @@ const announcementHtml = ({ subject, message, tournament = {}, recipientName = "
               <tr>
                 <td style="padding:0 24px 24px">
                   <a href="${reservationUrl}" style="display:inline-block;background:#0f3f86;color:#ffffff;text-decoration:none;font-weight:900;padding:12px 16px;border:1px solid #0f3f86">Reserve Your Spot</a>
-                  <p style="margin:16px 0 0;color:#64748b;font-size:12px">You received this because you previously reserved a Bowler Builders tournament entry.</p>
+                  <p style="margin:16px 0 0;color:#64748b;font-size:12px"><a href="${unsubscribeUrl}" style="color:#64748b;text-decoration:underline">Unsubscribe from tournament announcement emails</a></p>
                 </td>
               </tr>
             </table>
@@ -193,8 +210,13 @@ export default async function handler(request, response) {
     if (!subject) return response.status(400).json({ error: "Subject is required." });
     if (!message) return response.status(400).json({ error: "Message is required." });
     if (!recipients.length) return response.status(400).json({ error: "No valid recipients were provided." });
+    const unsubscribedEmails = await loadUnsubscribedEmails(owner.token);
+    const sendableRecipients = isTest
+      ? recipients
+      : recipients.filter((recipient) => !unsubscribedEmails.has(recipient.email));
+    if (!sendableRecipients.length) return response.status(400).json({ error: "All selected recipients have unsubscribed from announcement emails." });
     const recipientLimit = getAnnouncementRecipientLimit();
-    if (recipients.length > recipientLimit) {
+    if (sendableRecipients.length > recipientLimit) {
       return response.status(400).json({ error: `Recipient list is limited to ${recipientLimit} emails per send.` });
     }
 
@@ -203,12 +225,12 @@ export default async function handler(request, response) {
     const sent = [];
     const failed = [];
 
-    for (const recipient of recipients) {
+    for (const recipient of sendableRecipients) {
       const result = await sendEmail({
         from,
         to: [recipient.email],
         subject: isTest ? `[Test] ${subject}` : subject,
-        html: announcementHtml({ subject, message, tournament, recipientName: recipient.name, flyer }),
+        html: announcementHtml({ subject, message, tournament, recipientName: recipient.name, recipientEmail: recipient.email, flyer }),
         replyTo,
       });
 
@@ -231,10 +253,10 @@ export default async function handler(request, response) {
     }
 
     if (failed.length) {
-      return response.status(sent.length ? 207 : 500).json({ sent: sent.length, failed, provider: sent[0]?.provider || failed[0]?.provider || "none" });
+      return response.status(sent.length ? 207 : 500).json({ sent: sent.length, skippedUnsubscribed: recipients.length - sendableRecipients.length, failed, provider: sent[0]?.provider || failed[0]?.provider || "none" });
     }
 
-    return response.status(200).json({ sent: sent.length, failed: [], provider: sent[0]?.provider || "none" });
+    return response.status(200).json({ sent: sent.length, skippedUnsubscribed: recipients.length - sendableRecipients.length, failed: [], provider: sent[0]?.provider || "none" });
   } catch (error) {
     return response.status(500).json({ error: error.message || "Announcement email could not be sent." });
   }
