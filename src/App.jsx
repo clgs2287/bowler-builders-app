@@ -3313,24 +3313,6 @@ function PublicHomeTab({
           </section>
         )}
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Season</p>
-            <h3 className="mt-1 text-lg font-black text-blue-950">Schedule</h3>
-            <p className="mt-2 text-sm font-semibold text-slate-600">See upcoming events, locations, and registration status.</p>
-          </div>
-          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Entries</p>
-            <h3 className="mt-1 text-lg font-black text-blue-950">Reservations</h3>
-            <p className="mt-2 text-sm font-semibold text-slate-600">{primaryOpenReservation ? `Open now for ${primaryOpenReservation.state.tournamentName || "the selected event"}.` : "No tournament entries are currently open."}</p>
-          </div>
-          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-wide text-blue-700">History</p>
-            <h3 className="mt-1 text-lg font-black text-blue-950">Stats & Titles</h3>
-            <p className="mt-2 text-sm font-semibold text-slate-600">View bowler stats, archived tournaments, title history, and Hall of Fame records.</p>
-          </div>
-        </div>
-
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.85fr]">
           <section className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
@@ -3369,9 +3351,31 @@ function PublicHomeTab({
                 <p className="font-black text-blue-950">Finals brackets</p>
                 <p className="mt-1">Follow matchups, lanes, and winners once finals begin.</p>
               </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="font-black text-blue-950">Side action</p>
+                <p className="mt-1">Track brackets, high game results, and side pot payouts.</p>
+              </div>
             </div>
           </section>
         </div>
+
+        <section className="mt-5 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Stats & History</p>
+              <h3 className="mt-1 text-lg font-black text-blue-950">Visit our stats page for:</h3>
+              <ul className="mt-3 grid gap-2 text-sm font-semibold text-slate-700 sm:grid-cols-2">
+                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Historic bowler statistics</li>
+                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Archived tournaments</li>
+                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Title history</li>
+                <li className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">Hall of Fame members</li>
+              </ul>
+            </div>
+            <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" onClick={() => onNavigate("publicstats")}>
+              View Stats
+            </Button>
+          </div>
+        </section>
 
         {latestArchive && (
           <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:flex-row md:items-center md:justify-between">
