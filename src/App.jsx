@@ -8889,6 +8889,10 @@ Lane {lanePairForGame(
             </div>
           ))}
         </div>
+
+        <div className="mt-3 border-t border-slate-900 pt-2 text-[10px] font-semibold text-slate-900 print:mt-2 print:pt-1.5 print:text-[9px]">
+          Winner advances to lanes: __________________
+        </div>
       </div>
     ))}
   </div>
