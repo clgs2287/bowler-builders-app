@@ -8573,6 +8573,111 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
   const publicFinalsUrl = `${window.location.origin}${window.location.pathname}?view=public&tab=publicfinals`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(publicUrl)}`;
   const finalsQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(publicFinalsUrl)}`;
+  const loadImageDataUrl = async (url) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Could not load QR image.");
+    const blob = await response.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+  const downloadFinalsSlipsPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+    const pageWidth = 8.5;
+    const pageHeight = 11;
+    const margin = 0.24;
+    const gapX = 0.12;
+    const gapY = 0.1;
+    const slipWidth = (pageWidth - margin * 2 - gapX) / 2;
+    const slipHeight = (pageHeight - margin * 2 - gapY * 2) / 3;
+    const title = tournamentInfo.name || "Tournament";
+    let qrDataUrl = "";
+
+    try {
+      qrDataUrl = await loadImageDataUrl(finalsQrUrl);
+    } catch (error) {
+      console.warn("Could not add finals QR to PDF", error);
+    }
+
+    const drawLine = (x1, y1, x2, y2) => {
+      doc.setLineWidth(0.01);
+      doc.line(x1, y1, x2, y2);
+    };
+
+    const drawSlip = (x, y, index) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setTextColor(0, 0, 0);
+      doc.setLineWidth(0.015);
+      doc.roundedRect(x, y, slipWidth, slipHeight, 0.08, 0.08);
+
+      const pad = 0.13;
+      const right = x + slipWidth - pad;
+      const top = y + pad;
+      const qrSize = 0.5;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(title.length > 34 ? 8 : 9.5);
+      const titleLines = doc.splitTextToSize(title, slipWidth - qrSize - 0.45);
+      doc.text(titleLines.slice(0, 2), x + pad, top + 0.08);
+
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, "PNG", right - qrSize, top - 0.03, qrSize, qrSize);
+      }
+      doc.setFontSize(6.5);
+      doc.text("Public Finals", right - qrSize / 2, top + qrSize + 0.08, { align: "center" });
+
+      drawLine(x + pad, y + 0.72, x + slipWidth - pad, y + 0.72);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.2);
+      doc.text("Round:", x + pad, y + 0.98);
+      drawLine(x + 0.72, y + 1.0, x + 1.85, y + 1.0);
+      doc.text("Match #:", x + 2.05, y + 0.98);
+      drawLine(x + 2.82, y + 1.0, x + 3.55, y + 1.0);
+
+      doc.text("Lane Pair:", x + pad, y + 1.27);
+      drawLine(x + 0.95, y + 1.29, x + 2.25, y + 1.29);
+
+      const bowlerY = [y + 1.75, y + 2.45];
+      bowlerY.forEach((lineY, bowlerIndex) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(`Bowler ${bowlerIndex + 1}:`, x + pad, lineY);
+        drawLine(x + 1.02, lineY + 0.02, x + 2.55, lineY + 0.02);
+
+        if (useHandicapScores) {
+          doc.setFont("helvetica", "normal");
+          doc.text("Scratch:", x + pad, lineY + 0.32);
+          drawLine(x + 0.82, lineY + 0.34, x + 1.48, lineY + 0.34);
+          doc.text("Hdcp:", x + 1.65, lineY + 0.32);
+          drawLine(x + 2.15, lineY + 0.34, x + 2.75, lineY + 0.34);
+          doc.text("Total:", x + 2.93, lineY + 0.32);
+          drawLine(x + 3.43, lineY + 0.34, right, lineY + 0.34);
+        } else {
+          doc.text("Score:", x + 2.72, lineY);
+          drawLine(x + 3.27, lineY + 0.02, right, lineY + 0.02);
+        }
+      });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      drawLine(x + pad, y + slipHeight - 0.42, x + slipWidth - pad, y + slipHeight - 0.42);
+      doc.text("Winner advances to lanes:", x + pad, y + slipHeight - 0.2);
+      drawLine(x + 1.85, y + slipHeight - 0.18, right, y + slipHeight - 0.18);
+    };
+
+    Array.from({ length: 6 }, (_, index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      drawSlip(margin + col * (slipWidth + gapX), margin + row * (slipHeight + gapY), index);
+    });
+
+    const safeName = safeStorageFileName(`${title}-finals-slips`).replace(/\.jpg$/, ".pdf");
+    doc.save(safeName);
+  };
 const printableSheets =
   tournamentInfo?.movementMode === "customSplit"
     ? sortedPairs.flatMap((pair) => pair.split("-"))
@@ -8859,6 +8964,14 @@ Lane {lanePairForGame(
 
 <Button
   className="rounded-2xl bg-green-700 hover:bg-green-800"
+  onClick={downloadFinalsSlipsPdf}
+>
+  Download Finals Slips PDF
+</Button>
+
+<Button
+  variant="outline"
+  className="rounded-2xl"
   onClick={() => {
     setPrintMode("finals");
     setTimeout(() => window.print(), 100);
