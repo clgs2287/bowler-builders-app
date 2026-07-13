@@ -3354,10 +3354,6 @@ function PublicHomeTab({
                 <p className="font-black text-blue-950">Finals brackets</p>
                 <p className="mt-1">Follow matchups, lanes, and winners once finals begin.</p>
               </div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-                <p className="font-black text-blue-950">Tournament history</p>
-                <p className="mt-1">Archives, stats, titles, and Hall of Fame records stay available after each event.</p>
-              </div>
             </div>
           </section>
         </div>
