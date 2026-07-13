@@ -200,6 +200,28 @@ const numberInputStyles = String.raw`
     height: 0.48in !important;
     width: 0.48in !important;
   }
+
+  @media (max-width: 700px) {
+    .bb-finals-slip-grid {
+      gap: 0.05in !important;
+    }
+
+    .bb-finals-slip-print {
+      padding: 0.07in !important;
+      zoom: 0.82;
+    }
+
+    .bb-finals-slip-print img {
+      height: 0.38in !important;
+      width: 0.38in !important;
+    }
+
+    .bb-finals-slip-print h2 {
+      max-height: 0.34in !important;
+      font-size: 10px !important;
+      line-height: 1.05 !important;
+    }
+  }
 }
 
 .bb-stage {
