@@ -1165,6 +1165,7 @@ function openReservationOptions(reservationState = {}, scheduleItems = []) {
     })
     .filter((option) => {
       if (!option.state.entriesOpen || !option.state.tournamentName) return false;
+      if (isTournamentDayOrLater(option.state.tournamentDate || option.scheduleItem?.startDate)) return false;
       const identity = reservationTournamentKey({
         name: option.state.tournamentName,
         date: option.state.tournamentDate,
@@ -7450,7 +7451,13 @@ function ReservationsTab({
             : current.publicTournamentInfo || null,
         });
         if (checked) openTournamentKeys.add(currentKey);
-        else openTournamentKeys.delete(currentKey);
+        else {
+          openTournamentKeys.delete(currentKey);
+          reservationsByTournament[currentKey] = {
+            ...reservationsByTournament[currentKey],
+            entriesOpen: false,
+          };
+        }
       }
 
       return {
