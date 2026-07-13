@@ -187,13 +187,18 @@ const numberInputStyles = String.raw`
 
   .bb-finals-slip-grid {
     gap: 0.09in !important;
+    grid-template-rows: repeat(3, 3.08in) !important;
   }
 
   .bb-finals-slip-print {
+    height: 3.08in !important;
     min-height: 0 !important;
+    overflow: hidden !important;
     padding: 0.12in !important;
     transform: none !important;
-    zoom: 0.94;
+    zoom: 1;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .bb-finals-slip-print img {
@@ -206,9 +211,11 @@ const numberInputStyles = String.raw`
 @media print and (max-width: 700px) {
   .bb-finals-slip-grid {
     gap: 0.04in !important;
+    grid-template-rows: repeat(3, 3.02in) !important;
   }
 
   .bb-finals-slip-print {
+    height: 3.02in !important;
     min-height: 0 !important;
     padding: 0.05in !important;
     border-width: 1px !important;
