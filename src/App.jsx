@@ -3211,6 +3211,16 @@ function PublicHomeTab({
   const nextEvent = nextUpcomingScheduleItem(scheduleItems);
   const primaryOpenReservation = publicReservationOptions[0] || null;
   const primaryEventInfo = primaryOpenReservation?.state?.publicTournamentInfo || null;
+  const upcomingEvents = [...(scheduleItems || [])]
+    .filter((item) => item?.name && item?.startDate && scheduleDateTimeValue(item) !== Number.POSITIVE_INFINITY)
+    .filter((item) => {
+      const eventDate = new Date(`${item.startDate}T00:00`);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return eventDate.getTime() >= today.getTime();
+    })
+    .sort((a, b) => scheduleDateTimeValue(a) - scheduleDateTimeValue(b))
+    .slice(0, 4);
   const featuredName = primaryEventInfo?.name || primaryOpenReservation?.state?.tournamentName || nextEvent?.name || tournamentInfo.name || "Next Bowler Builders Event";
   const featuredDate = primaryEventInfo?.date || primaryOpenReservation?.state?.tournamentDate || nextEvent?.startDate || tournamentInfo.date || "";
   const featuredTime = primaryEventInfo?.startTime || primaryOpenReservation?.state?.tournamentStartTime || nextEvent?.startTime || tournamentInfo.startTime || "";
@@ -3269,22 +3279,87 @@ function PublicHomeTab({
           </div>
         </section>
 
+        {publicReservationOptions.length > 0 && (
+          <section className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-green-700">Open For Entries</p>
+                <h3 className="mt-1 text-xl font-black text-green-950">
+                  {publicReservationOptions.length === 1 ? "1 tournament is accepting reservations" : `${publicReservationOptions.length} tournaments are accepting reservations`}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-green-800">
+                  Select Reservations above to choose the tournament and submit an entry.
+                </p>
+              </div>
+              <Button className="rounded-2xl bg-green-700 text-white hover:bg-green-800" onClick={() => onReserve(primaryOpenReservation?.key || "")}>
+                Reserve Now
+              </Button>
+            </div>
+          </section>
+        )}
+
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <button type="button" onClick={() => onNavigate("publicschedule")} className="rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50">
+          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-wide text-blue-700">Season</p>
             <h3 className="mt-1 text-lg font-black text-blue-950">Schedule</h3>
             <p className="mt-2 text-sm font-semibold text-slate-600">See upcoming events, locations, and registration status.</p>
-          </button>
-          <button type="button" onClick={() => primaryOpenReservation ? onReserve(primaryOpenReservation.key) : onNavigate("publicreservations")} className="rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50">
+          </div>
+          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-wide text-blue-700">Entries</p>
             <h3 className="mt-1 text-lg font-black text-blue-950">Reservations</h3>
             <p className="mt-2 text-sm font-semibold text-slate-600">{primaryOpenReservation ? `Open now for ${primaryOpenReservation.state.tournamentName || "the selected event"}.` : "No tournament entries are currently open."}</p>
-          </button>
-          <button type="button" onClick={() => onNavigate("publicstats")} className="rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50">
+          </div>
+          <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-wide text-blue-700">History</p>
             <h3 className="mt-1 text-lg font-black text-blue-950">Stats & Titles</h3>
             <p className="mt-2 text-sm font-semibold text-slate-600">View bowler stats, archived tournaments, title history, and Hall of Fame records.</p>
-          </button>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.85fr]">
+          <section className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-blue-700">Upcoming</p>
+                <h3 className="mt-1 text-lg font-black text-blue-950">Next Events</h3>
+              </div>
+              <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" onClick={() => onNavigate("publicschedule")}>
+                Full Schedule
+              </Button>
+            </div>
+            <div className="mt-4 divide-y divide-blue-100">
+              {upcomingEvents.length ? upcomingEvents.map((item, index) => (
+                <div key={`home-upcoming-${index}`} className="py-3 first:pt-0 last:pb-0">
+                  <p className="font-black text-blue-950">{item.name}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    {item.startDate || "Date TBD"}{item.startTime ? ` • ${formatStartTime(item.startTime)}` : ""}
+                    {item.center ? ` • ${item.center}` : ""}
+                  </p>
+                </div>
+              )) : (
+                <p className="py-3 text-sm font-semibold text-slate-600">No upcoming events are listed yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Follow Along</p>
+            <h3 className="mt-1 text-lg font-black text-blue-950">Tournament Day</h3>
+            <div className="mt-4 space-y-3 text-sm font-semibold text-slate-700">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="font-black text-blue-950">Live leaderboard</p>
+                <p className="mt-1">Scores update as games are saved during qualifying.</p>
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="font-black text-blue-950">Finals brackets</p>
+                <p className="mt-1">Follow matchups, lanes, and winners once finals begin.</p>
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="font-black text-blue-950">Tournament history</p>
+                <p className="mt-1">Archives, stats, titles, and Hall of Fame records stay available after each event.</p>
+              </div>
+            </div>
+          </section>
         </div>
 
         {latestArchive && (
