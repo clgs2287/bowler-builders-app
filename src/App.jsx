@@ -2089,6 +2089,24 @@ function rolloffScoreText(matchId, rolloffScores = {}) {
   return `${left || 0}-${right || 0}`;
 }
 
+function BracketSeedBadge({ player, className = "" }) {
+  if (!player || player.name === "BYE" || !Number.isFinite(Number(player.rank))) return null;
+  return (
+    <span className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-900 px-1.5 text-[10px] font-black leading-none text-white ring-1 ring-blue-200 ${className}`}>
+      {Number(player.rank)}
+    </span>
+  );
+}
+
+function BracketPlayerLabel({ player, children, className = "" }) {
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-1 ${className}`}>
+      <BracketSeedBadge player={player} />
+      <span className="min-w-0 truncate">{children}</span>
+    </span>
+  );
+}
+
 function winnerFromBestOfThreeMatch(left, right, scores = {}, matchId, advanceByes = true) {
   const leftMissing = !left;
   const rightMissing = !right;
@@ -9097,13 +9115,17 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
         </div>
         <div className="grid gap-2">
           <div className={rowClass(leftWon)}>
-            <div className="truncate text-xl font-black md:text-3xl">{playerName(match.left)}</div>
+            <div className="min-w-0 text-xl font-black md:text-3xl">
+              <BracketPlayerLabel player={match.left}>{playerName(match.left)}</BracketPlayerLabel>
+            </div>
             <div className="rounded-xl bg-white px-3 py-2 text-center text-xl font-black text-blue-950 md:text-3xl">
               {scoreFor(match.left, scores[leftKey], scratchScores[leftKey], match.right, usesAverageAdvantage)}
             </div>
           </div>
           <div className={rowClass(rightWon)}>
-            <div className="truncate text-xl font-black md:text-3xl">{playerName(match.right)}</div>
+            <div className="min-w-0 text-xl font-black md:text-3xl">
+              <BracketPlayerLabel player={match.right}>{playerName(match.right)}</BracketPlayerLabel>
+            </div>
             <div className="rounded-xl bg-white px-3 py-2 text-center text-xl font-black text-blue-950 md:text-3xl">
               {scoreFor(match.right, scores[rightKey], scratchScores[rightKey], match.left, usesAverageAdvantage)}
             </div>
@@ -9149,12 +9171,16 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
         </div>
         <div className="grid gap-2">
           <div className={`${rowClass(leftWon)} grid grid-cols-[minmax(0,1fr)_96px_96px_96px_86px] items-center gap-2`}>
-            <div className="truncate text-xl font-black md:text-2xl">{playerName(match.left)}</div>
+            <div className="min-w-0 text-xl font-black md:text-2xl">
+              <BracketPlayerLabel player={match.left}>{playerName(match.left)}</BracketPlayerLabel>
+            </div>
             {[1, 2, 3].map((gameNumber) => <div key={`${match.id}-left-g${gameNumber}`} className="rounded-xl bg-white px-2 py-1.5 text-center text-xl font-black text-blue-950">{gameScore("l", gameNumber)}</div>)}
             <div className="rounded-xl bg-blue-700 px-2 py-1.5 text-center text-2xl font-black text-white">{record.left}</div>
           </div>
           <div className={`${rowClass(rightWon)} grid grid-cols-[minmax(0,1fr)_96px_96px_96px_86px] items-center gap-2`}>
-            <div className="truncate text-xl font-black md:text-2xl">{playerName(match.right)}</div>
+            <div className="min-w-0 text-xl font-black md:text-2xl">
+              <BracketPlayerLabel player={match.right}>{playerName(match.right)}</BracketPlayerLabel>
+            </div>
             {[1, 2, 3].map((gameNumber) => <div key={`${match.id}-right-g${gameNumber}`} className="rounded-xl bg-white px-2 py-1.5 text-center text-xl font-black text-blue-950">{gameScore("r", gameNumber)}</div>)}
             <div className="rounded-xl bg-blue-700 px-2 py-1.5 text-center text-2xl font-black text-white">{record.right}</div>
           </div>
@@ -9709,9 +9735,13 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
           Match {matchNumber}
         </div>
         <div className="mb-2 grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
-          <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+          <span className={playerClass(leftWon)}>
+            <BracketPlayerLabel player={match.left}>{renderPlayerName(match.left)}</BracketPlayerLabel>
+          </span>
           <span className="min-w-[32px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{seriesRecord.left}</span>
-          <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+          <span className={playerClass(rightWon)}>
+            <BracketPlayerLabel player={match.right}>{renderPlayerName(match.right)}</BracketPlayerLabel>
+          </span>
           <span className="min-w-[32px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{seriesRecord.right}</span>
         </div>
         <div className="space-y-1 border-t border-blue-100 pt-2 text-[11px]">
@@ -9773,12 +9803,16 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
         Match {matchNumber}
       </div>
       <div className="grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
-        <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+        <span className={playerClass(leftWon)}>
+          <BracketPlayerLabel player={match.left}>{renderPlayerName(match.left)}</BracketPlayerLabel>
+        </span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
           {usesAverageAdvantage ? renderAverageAdvantageScore(match.left, match.right, leftScore) : renderScore(match.left, leftScore, leftScratchScore)}
         </span>
 
-        <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+        <span className={playerClass(rightWon)}>
+          <BracketPlayerLabel player={match.right}>{renderPlayerName(match.right)}</BracketPlayerLabel>
+        </span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
           {usesAverageAdvantage ? renderAverageAdvantageScore(match.right, match.left, rightScore) : renderScore(match.right, rightScore, rightScratchScore)}
         </span>
@@ -12138,9 +12172,13 @@ const renderPlayerName = (player) => {
         </div>
         {renderPlayerOverrideControls()}
         <div className="mb-2 grid grid-cols-[1fr_auto] items-center gap-2 text-xs">
-          <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+          <span className={playerClass(leftWon)}>
+            <BracketPlayerLabel player={match.left}>{renderPlayerName(match.left)}</BracketPlayerLabel>
+          </span>
           <span className="rounded-xl bg-white px-2 py-1 text-center font-black text-blue-950 ring-1 ring-blue-100">{seriesRecord.left}</span>
-          <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+          <span className={playerClass(rightWon)}>
+            <BracketPlayerLabel player={match.right}>{renderPlayerName(match.right)}</BracketPlayerLabel>
+          </span>
           <span className="rounded-xl bg-white px-2 py-1 text-center font-black text-blue-950 ring-1 ring-blue-100">{seriesRecord.right}</span>
         </div>
         <div className="space-y-2 border-t border-blue-100 pt-2">
@@ -12212,7 +12250,9 @@ const renderPlayerName = (player) => {
       </div>
       {renderPlayerOverrideControls()}
       <div className="grid grid-cols-[1fr_auto] items-center gap-1 text-xs">
-        <span className={playerClass(leftWon)}>{renderPlayerName(match.left)}</span>
+        <span className={playerClass(leftWon)}>
+          <BracketPlayerLabel player={match.left}>{renderPlayerName(match.left)}</BracketPlayerLabel>
+        </span>
         <TeamFinalsScoreInput
           scoreKey={leftKey}
           player={match.left}
@@ -12224,7 +12264,9 @@ const renderPlayerName = (player) => {
           memberScores={memberScores}
           onMemberScoreChange={onMemberScoreChange}
         />
-        <span className={playerClass(rightWon)}>{renderPlayerName(match.right)}</span>
+        <span className={playerClass(rightWon)}>
+          <BracketPlayerLabel player={match.right}>{renderPlayerName(match.right)}</BracketPlayerLabel>
+        </span>
         <TeamFinalsScoreInput
           scoreKey={rightKey}
           player={match.right}
