@@ -3360,13 +3360,20 @@ function PublicHomeTab({
         </div>
 
         {latestArchive && (
-          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
-            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
-            <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
-            <p className="mt-1 text-sm font-semibold text-blue-800">
-              {latestArchive.date || "Date TBD"}{latestArchive.center ? ` • ${latestArchive.center}` : ""}
-              {latestArchiveWinner ? ` • Winner: ${latestArchiveWinner}` : ""}
-            </p>
+          <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
+              <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
+              <p className="mt-1 text-sm font-semibold text-blue-800">
+                {latestArchive.date || "Date TBD"}{latestArchive.center ? ` • ${latestArchive.center}` : ""}
+              </p>
+            </div>
+            {latestArchiveWinner && (
+              <div className="rounded-2xl border border-green-200 bg-white px-4 py-3 text-left shadow-sm md:min-w-[220px] md:text-right">
+                <p className="text-xs font-black uppercase tracking-wide text-green-700">Winner</p>
+                <p className="mt-1 text-xl font-black text-green-900">{latestArchiveWinner}</p>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
