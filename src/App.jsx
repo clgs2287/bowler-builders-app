@@ -3491,6 +3491,39 @@ function SeriesLegend({ className = "" }) {
   );
 }
 
+function SeriesInfoButton({ className = "" }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span className={`group relative inline-flex ${className}`}>
+      <button
+        type="button"
+        aria-label="Show series abbreviation key"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-300 bg-blue-50 text-[11px] font-black leading-none text-blue-900 shadow-sm hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-200"
+      >
+        i
+      </button>
+      <span
+        className={`${open ? "opacity-100" : "pointer-events-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"} absolute left-1/2 top-7 z-30 w-72 -translate-x-1/2 rounded-xl border border-blue-200 bg-white p-3 text-left text-xs font-semibold text-blue-950 shadow-xl transition-opacity`}
+      >
+        <span className="mb-2 block font-black">Series Key</span>
+        <span className="grid gap-1">
+          {Object.entries(TOURNAMENT_SERIES_LABELS).map(([abbr, label]) => (
+            <span key={abbr} className="block">
+              <span className="font-black">{abbr}</span>
+              {" = "}
+              {label}
+            </span>
+          ))}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 function LockedTextField({ label, value, onChange, type = "text", placeholder = "", listId = "", commitOnChange = false }) {
   const isBlank = !String(value || "").trim();
   const [editing, setEditing] = useState(isBlank);
@@ -4678,8 +4711,9 @@ function DashboardTab({
   </select>
 </div>
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-  <Label className="text-left text-sm font-bold text-blue-900">
+  <Label className="flex items-center gap-1 text-left text-sm font-bold text-blue-900">
     Series
+    <SeriesInfoButton />
   </Label>
 
   <select
