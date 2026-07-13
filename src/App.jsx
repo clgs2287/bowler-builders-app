@@ -1314,7 +1314,7 @@ async function sendReservationConfirmationEmail({ reservation, reservationState 
   return result;
 }
 
-async function sendPastReservationAnnouncementEmail({ accessToken = "", recipients = [], testEmail = "", subject = "", message = "", tournament = {} }) {
+async function sendPastReservationAnnouncementEmail({ accessToken = "", recipients = [], testEmail = "", subject = "", message = "", tournament = {}, flyer = null }) {
   const response = await fetch("/api/send-announcement-email", {
     method: "POST",
     headers: {
@@ -1327,6 +1327,7 @@ async function sendPastReservationAnnouncementEmail({ accessToken = "", recipien
       subject,
       message,
       tournament,
+      flyer,
     }),
   });
 
@@ -7460,6 +7461,7 @@ function ReservationsTab({
   const [announcementMessage, setAnnouncementMessage] = useState("");
   const [announcementTestEmail, setAnnouncementTestEmail] = useState("");
   const [announcementSending, setAnnouncementSending] = useState("");
+  const [announcementIncludeFlyer, setAnnouncementIncludeFlyer] = useState(true);
   const currentScheduledTournamentKey = reservationKeyFromState(reservationState);
   const selectedScheduledTournament = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentScheduledTournamentKey);
   const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
@@ -7490,6 +7492,12 @@ function ReservationsTab({
     startTime: reservationState.tournamentStartTime ? formatStartTime(reservationState.tournamentStartTime) : formatStartTime(tournamentInfo.startTime || ""),
     center: reservationState.tournamentCenter || tournamentInfo.center || "",
   };
+  const selectedAnnouncementImages = Array.isArray(reservationState.publicTournamentInfo?.announcementImages)
+    ? reservationState.publicTournamentInfo.announcementImages
+    : Array.isArray(tournamentInfo.announcementImages)
+      ? tournamentInfo.announcementImages
+      : [];
+  const announcementFlyer = selectedAnnouncementImages.find((image) => image?.src) || null;
 
   const saveReservationNameMapping = (reservation) => {
     const nickname = String(reservation.nickname || "").trim();
@@ -7858,6 +7866,7 @@ function ReservationsTab({
         subject: announcementSubject.trim() || defaultAnnouncementSubject,
         message: announcementMessage.trim() || defaultAnnouncementMessage,
         tournament: announcementTournament,
+        flyer: announcementIncludeFlyer ? announcementFlyer : null,
       });
       setRosterNotice(`Test announcement sent to ${testEmail}. Provider: ${result.provider || "email service"}.`);
     } catch (error) {
@@ -7876,11 +7885,6 @@ function ReservationsTab({
       window.alert("No past reservation emails were found.");
       return;
     }
-    if (announcementRecipients.length > 200) {
-      window.alert("This tool is currently limited to 200 recipients per send.");
-      return;
-    }
-
     const confirmed = window.confirm(
       `Send this announcement to ${announcementRecipients.length} past reservation email${announcementRecipients.length === 1 ? "" : "s"}?\n\nSend a test first if you have not already reviewed it.`
     );
@@ -7897,6 +7901,7 @@ function ReservationsTab({
         subject: announcementSubject.trim() || defaultAnnouncementSubject,
         message: announcementMessage.trim() || defaultAnnouncementMessage,
         tournament: announcementTournament,
+        flyer: announcementIncludeFlyer ? announcementFlyer : null,
       });
       const failedCount = Array.isArray(result.failed) ? result.failed.length : 0;
       setRosterNotice(`Announcement sent to ${result.sent || 0} recipient${Number(result.sent || 0) === 1 ? "" : "s"}${failedCount ? `; ${failedCount} failed.` : "."}`);
@@ -8156,6 +8161,34 @@ function ReservationsTab({
                 />
               </div>
 
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                  <div>
+                    <Label>Include Tournament Flyer</Label>
+                    <p className="text-xs font-semibold text-blue-700">
+                      Uses the first uploaded announcement image saved with the selected tournament.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={announcementIncludeFlyer && Boolean(announcementFlyer)}
+                    onCheckedChange={setAnnouncementIncludeFlyer}
+                  />
+                </div>
+                {announcementFlyer ? (
+                  <div className="rounded-2xl border border-blue-100 bg-slate-950 p-3">
+                    <img
+                      src={announcementFlyer.src}
+                      alt={announcementFlyer.name || "Tournament flyer"}
+                      className="mx-auto max-h-72 w-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                    No uploaded flyer was found for the selected tournament.
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <Label>Test Email</Label>
                 <Input
@@ -8176,19 +8209,13 @@ function ReservationsTab({
                 </Button>
                 <Button
                   className="rounded-2xl bg-blue-800 text-white hover:bg-blue-900"
-                  disabled={announcementSending === "live" || !announcementRecipients.length || announcementRecipients.length > 200}
+                  disabled={announcementSending === "live" || !announcementRecipients.length}
                   onClick={sendAnnouncementToPastBowlers}
                 >
                   {announcementSending === "live" ? "Sending..." : "Send to Past Bowlers"}
                 </Button>
               </div>
             </div>
-
-            {announcementRecipients.length > 200 && (
-              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-                This list is over 200 recipients. Split sends are not enabled yet because Mailjet free is capped at 200 emails per day.
-              </p>
-            )}
           </div>
         )}
         <div className="mt-6 overflow-auto rounded-2xl border border-blue-200 bg-white">

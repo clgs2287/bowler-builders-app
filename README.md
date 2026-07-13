@@ -20,6 +20,7 @@ The Reservations admin page also has a "Confirmation Email Copies" box for tourn
 The owner-only Reservations admin page can also send announcement emails to de-duplicated past reservation emails. That route verifies the current Supabase admin session before sending. Optional:
 
 - `OWNER_ADMIN_EMAILS`: Comma-separated owner email fallback list. Defaults to `cory.lagner@gmail.com`.
+- `ANNOUNCEMENT_EMAIL_LIMIT`: Maximum recipients per announcement send. Defaults to `500`.
 
 ## Local Staging Supabase
 

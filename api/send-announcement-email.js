@@ -1,6 +1,9 @@
 import { getReplyToAddress, getSenderAddress, sendEmail } from "./email-provider.js";
 
-const MAX_ANNOUNCEMENT_RECIPIENTS = 200;
+const getAnnouncementRecipientLimit = () => {
+  const configured = Number(process.env.ANNOUNCEMENT_EMAIL_LIMIT || 500);
+  return Number.isFinite(configured) && configured > 0 ? configured : 500;
+};
 
 const escapeHtml = (value = "") =>
   String(value)
@@ -90,7 +93,7 @@ const verifyOwner = async (request) => {
   return { ok: true, profile, user };
 };
 
-const announcementHtml = ({ subject, message, tournament = {}, recipientName = "" }) => {
+const announcementHtml = ({ subject, message, tournament = {}, recipientName = "", flyer = null }) => {
   const siteUrl = getPublicSiteUrl();
   const logoUrl = `${siteUrl}/favicon.jpeg`;
   const tournamentName = tournament.name || "Bowler Builders Tournament";
@@ -98,6 +101,8 @@ const announcementHtml = ({ subject, message, tournament = {}, recipientName = "
   const eventTime = tournament.startTime || "";
   const center = tournament.center || "";
   const paragraphs = splitLines(message);
+  const flyerSrc = String(flyer?.src || "").trim();
+  const flyerAlt = flyer?.name || `${tournamentName} flyer`;
 
   return `
     <div style="margin:0;padding:0;background:#e2effc;font-family:Arial,sans-serif;color:#0f172a;line-height:1.5">
@@ -128,6 +133,15 @@ const announcementHtml = ({ subject, message, tournament = {}, recipientName = "
                   ${paragraphs.map((paragraph) => `<p style="margin:0 0 16px;font-size:16px;color:#334155">${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`).join("")}
                 </td>
               </tr>
+              ${flyerSrc ? `
+              <tr>
+                <td style="padding:0 24px 22px">
+                  <div style="background:#08111f;border:1px solid #bfdbfe;padding:10px;text-align:center">
+                    <img src="${escapeHtml(flyerSrc)}" alt="${escapeHtml(flyerAlt)}" style="display:block;width:100%;max-width:620px;height:auto;margin:0 auto;border:0">
+                  </div>
+                </td>
+              </tr>
+              ` : ""}
               <tr>
                 <td style="padding:0 24px 22px">
                   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border-top:1px solid #dbeafe;background:#f8fbff">
@@ -168,6 +182,7 @@ export default async function handler(request, response) {
     const subject = String(body.subject || "").trim();
     const message = String(body.message || "").trim();
     const tournament = body.tournament || {};
+    const flyer = body.flyer || null;
     const testEmail = String(body.testEmail || "").trim();
     const isTest = Boolean(testEmail);
     const recipients = isTest
@@ -177,8 +192,9 @@ export default async function handler(request, response) {
     if (!subject) return response.status(400).json({ error: "Subject is required." });
     if (!message) return response.status(400).json({ error: "Message is required." });
     if (!recipients.length) return response.status(400).json({ error: "No valid recipients were provided." });
-    if (recipients.length > MAX_ANNOUNCEMENT_RECIPIENTS) {
-      return response.status(400).json({ error: `Recipient list is limited to ${MAX_ANNOUNCEMENT_RECIPIENTS} emails per send.` });
+    const recipientLimit = getAnnouncementRecipientLimit();
+    if (recipients.length > recipientLimit) {
+      return response.status(400).json({ error: `Recipient list is limited to ${recipientLimit} emails per send.` });
     }
 
     const from = getSenderAddress();
@@ -191,7 +207,7 @@ export default async function handler(request, response) {
         from,
         to: [recipient.email],
         subject: isTest ? `[Test] ${subject}` : subject,
-        html: announcementHtml({ subject, message, tournament, recipientName: recipient.name }),
+        html: announcementHtml({ subject, message, tournament, recipientName: recipient.name, flyer }),
         replyTo,
       });
 
