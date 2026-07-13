@@ -156,12 +156,33 @@ const numberInputStyles = String.raw`
   }
 
   .bb-score-entry-print {
-    width: 98% !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    outline: 0 !important;
     padding-top: 0.05in !important;
   }
 
   .bb-score-entry-print table {
     table-layout: fixed !important;
+  }
+
+  .bb-score-entry-print > div {
+    border: 0 !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .bb-score-entry-print table,
+  .bb-score-entry-print thead,
+  .bb-score-entry-print tbody,
+  .bb-score-entry-print tr,
+  .bb-score-entry-print th,
+  .bb-score-entry-print td {
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 
   .bb-finals-slip-grid {
