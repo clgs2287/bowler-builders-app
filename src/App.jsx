@@ -3229,6 +3229,7 @@ function PublicHomeTab({
   const latestArchive = [...(tournamentHistory || [])]
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
+  const latestArchiveWinner = latestArchive ? getArchivedWinnerName(latestArchive) : "";
   const reservationCount = Number(primaryOpenReservation?.state?.reservationCount || primaryOpenReservation?.state?.reservations?.length || 0);
   const reservationLimit = Number(primaryOpenReservation?.state?.reservationLimit || 0);
   const reservationSummary = primaryOpenReservation
@@ -3364,7 +3365,7 @@ function PublicHomeTab({
             <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
             <p className="mt-1 text-sm font-semibold text-blue-800">
               {latestArchive.date || "Date TBD"}{latestArchive.center ? ` • ${latestArchive.center}` : ""}
-              {latestArchive.winner ? ` • Winner: ${latestArchive.winner}` : ""}
+              {latestArchiveWinner ? ` • Winner: ${latestArchiveWinner}` : ""}
             </p>
           </div>
         )}
