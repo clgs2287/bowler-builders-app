@@ -201,26 +201,54 @@ const numberInputStyles = String.raw`
     width: 0.48in !important;
   }
 
-  @media (max-width: 700px) {
-    .bb-finals-slip-grid {
-      gap: 0.05in !important;
-    }
+}
 
-    .bb-finals-slip-print {
-      padding: 0.07in !important;
-      zoom: 0.82;
-    }
+@media print and (max-width: 700px) {
+  .bb-finals-slip-grid {
+    gap: 0.04in !important;
+  }
 
-    .bb-finals-slip-print img {
-      height: 0.38in !important;
-      width: 0.38in !important;
-    }
+  .bb-finals-slip-print {
+    min-height: 0 !important;
+    padding: 0.05in !important;
+    border-width: 1px !important;
+    border-radius: 0.08in !important;
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+    zoom: 0.8;
+  }
 
-    .bb-finals-slip-print h2 {
-      max-height: 0.34in !important;
-      font-size: 10px !important;
-      line-height: 1.05 !important;
-    }
+  .bb-finals-slip-print img {
+    height: 0.32in !important;
+    width: 0.32in !important;
+  }
+
+  .bb-finals-slip-print h2 {
+    max-height: 0.26in !important;
+    font-size: 8.5px !important;
+    line-height: 1.05 !important;
+  }
+
+  .bb-finals-slip-print .print\\:mb-3,
+  .bb-finals-slip-print .mb-3 {
+    margin-bottom: 0.04in !important;
+  }
+
+  .bb-finals-slip-print .print\\:space-y-4 > :not([hidden]) ~ :not([hidden]),
+  .bb-finals-slip-print .print\\:space-y-5 > :not([hidden]) ~ :not([hidden]),
+  .bb-finals-slip-print .space-y-3 > :not([hidden]) ~ :not([hidden]),
+  .bb-finals-slip-print .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.05in !important;
+  }
+
+  .bb-finals-slip-print .print\\:text-base,
+  .bb-finals-slip-print .text-sm {
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+  }
+
+  .bb-finals-slip-print .mt-5 {
+    margin-top: 0.12in !important;
   }
 }
 
