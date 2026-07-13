@@ -2922,7 +2922,7 @@ const appSections = [
     id: "leaderboard",
     label: "Tournament Home",
 tabs: [
-  { id: "tournamentInfo", label: "Tournament Info" },
+  { id: "tournamentInfo", label: "Home" },
   { id: "public", label: "Leaderboard" },
   { id: "publicfinals", label: "Finals", hideForSweeper: true },
   { id: "publicsideaction", label: "Side Action" },
@@ -3181,6 +3181,124 @@ function ImageLightbox({ image, onClose }) {
         />
       </div>
     </div>
+  );
+}
+
+function scheduleDateTimeValue(item = {}) {
+  if (!item?.startDate) return Number.POSITIVE_INFINITY;
+  const time = item.startTime || "00:00";
+  const parsed = new Date(`${item.startDate}T${time}`);
+  return Number.isNaN(parsed.getTime()) ? Number.POSITIVE_INFINITY : parsed.getTime();
+}
+
+function nextUpcomingScheduleItem(scheduleItems = []) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return [...(scheduleItems || [])]
+    .filter((item) => item?.name && item?.startDate && scheduleDateTimeValue(item) >= today.getTime())
+    .sort((a, b) => scheduleDateTimeValue(a) - scheduleDateTimeValue(b))[0] || null;
+}
+
+function PublicHomeTab({
+  tournamentInfo = {},
+  reservationState = {},
+  scheduleItems = [],
+  tournamentHistory = [],
+  onNavigate = () => {},
+  onReserve = () => {},
+}) {
+  const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
+  const nextEvent = nextUpcomingScheduleItem(scheduleItems);
+  const primaryOpenReservation = publicReservationOptions[0] || null;
+  const primaryEventInfo = primaryOpenReservation?.state?.publicTournamentInfo || null;
+  const featuredName = primaryEventInfo?.name || primaryOpenReservation?.state?.tournamentName || nextEvent?.name || tournamentInfo.name || "Next Bowler Builders Event";
+  const featuredDate = primaryEventInfo?.date || primaryOpenReservation?.state?.tournamentDate || nextEvent?.startDate || tournamentInfo.date || "";
+  const featuredTime = primaryEventInfo?.startTime || primaryOpenReservation?.state?.tournamentStartTime || nextEvent?.startTime || tournamentInfo.startTime || "";
+  const featuredCenter = primaryEventInfo?.center || primaryOpenReservation?.state?.tournamentCenter || nextEvent?.center || tournamentInfo.center || "";
+  const featuredAddress = primaryEventInfo?.location || primaryOpenReservation?.state?.tournamentAddress || nextEvent?.address || tournamentInfo.location || "";
+  const latestArchive = [...(tournamentHistory || [])]
+    .filter((event) => event?.name)
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
+  const reservationCount = Number(primaryOpenReservation?.state?.reservationCount || primaryOpenReservation?.state?.reservations?.length || 0);
+  const reservationLimit = Number(primaryOpenReservation?.state?.reservationLimit || 0);
+  const reservationSummary = primaryOpenReservation
+    ? reservationLimit
+      ? `${reservationCount}/${reservationLimit} reserved`
+      : `${reservationCount} reserved`
+    : "Entries closed";
+
+  return (
+    <AppCard>
+      <CardContent className="p-3 md:p-6">
+        <section className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 p-4 text-white shadow-sm md:p-6">
+          <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-200">Maine Bowling Tournaments</p>
+              <h2 className="mt-2 text-3xl font-black md:text-4xl">Bowler Builders Tournament Hub</h2>
+              <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-blue-100 md:text-base">
+                Reserve tournament entries, follow season schedules, view live scores, track finals, and browse tournament history.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={() => onNavigate("publicschedule")}>
+                  View Schedule
+                </Button>
+                <Button
+                  variant="outline"
+                  className="rounded-2xl border-blue-300 bg-blue-800 text-white hover:bg-blue-700"
+                  onClick={() => primaryOpenReservation ? onReserve(primaryOpenReservation.key) : onNavigate("publicreservations")}
+                >
+                  Reservations
+                </Button>
+                <Button variant="outline" className="rounded-2xl border-blue-300 bg-blue-950 text-white hover:bg-blue-900" onClick={() => onNavigate("public")}>
+                  Live Scores
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-blue-700 bg-slate-950/50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-200">{primaryOpenReservation ? "Entries Open" : "Upcoming Event"}</p>
+              <h3 className="mt-2 text-2xl font-black text-white">{featuredName}</h3>
+              <div className="mt-3 space-y-1 text-sm font-semibold text-blue-100">
+                <p>{featuredDate || "Date TBD"}{featuredTime ? ` • ${formatStartTime(featuredTime)}` : ""}</p>
+                <p>{featuredCenter || "Center TBD"}</p>
+                {featuredAddress && <p className="text-blue-200">{featuredAddress}</p>}
+              </div>
+              <div className="mt-4 rounded-xl border border-blue-700 bg-blue-950/70 px-3 py-2 text-sm font-black text-blue-100">
+                {reservationSummary}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <button type="button" onClick={() => onNavigate("publicschedule")} className="rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Season</p>
+            <h3 className="mt-1 text-lg font-black text-blue-950">Schedule</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-600">See upcoming events, locations, and registration status.</p>
+          </button>
+          <button type="button" onClick={() => primaryOpenReservation ? onReserve(primaryOpenReservation.key) : onNavigate("publicreservations")} className="rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Entries</p>
+            <h3 className="mt-1 text-lg font-black text-blue-950">Reservations</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-600">{primaryOpenReservation ? `Open now for ${primaryOpenReservation.state.tournamentName || "the selected event"}.` : "No tournament entries are currently open."}</p>
+          </button>
+          <button type="button" onClick={() => onNavigate("publicstats")} className="rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-700">History</p>
+            <h3 className="mt-1 text-lg font-black text-blue-950">Stats & Titles</h3>
+            <p className="mt-2 text-sm font-semibold text-slate-600">View bowler stats, archived tournaments, title history, and Hall of Fame records.</p>
+          </button>
+        </div>
+
+        {latestArchive && (
+          <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
+            <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
+            <p className="mt-1 text-sm font-semibold text-blue-800">
+              {latestArchive.date || "Date TBD"}{latestArchive.center ? ` • ${latestArchive.center}` : ""}
+              {latestArchive.winner ? ` • Winner: ${latestArchive.winner}` : ""}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </AppCard>
   );
 }
 
@@ -19583,24 +19701,16 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} qualifyingAdjustments={qualifyingAdjustments} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} isOwnerAdmin={isOwnerAdmin} supabaseSession={supabaseSession} setSupabaseSaveStatus={setSupabaseSaveStatus} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
-<TournamentInfoTab
+<PublicHomeTab
   tournamentInfo={tournamentInfo}
   reservationState={reservationState}
   scheduleItems={scheduleItems}
-  savedTournamentDrafts={savedTournamentDrafts}
-  selectedReservationKey={selectedPublicReservationKey}
-  onSelectedReservationKeyChange={setSelectedPublicReservationKey}
-  qualifyingGames={qualifyingGames}
-  tournamentFormat={tournamentFormat}
-  payoutState={payoutState}
-  savedScoreGames={savedScoreGames}
-  savedFinalsRounds={savedFinalsRounds}
-  bowlers={bowlers}
-  eliminatorState={eliminatorState}
-  useHandicapScores={useHandicapScores}
-  bracketState={bracketState}
-  laneEliminatorState={laneEliminatorState}
-  matchplayState={matchplayState}
+  tournamentHistory={tournamentHistory}
+  onNavigate={setActiveTab}
+  onReserve={(reservationKey) => {
+    setSelectedPublicReservationKey(reservationKey || "");
+    setActiveTab("publicreservations");
+  }}
 />
 )}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} allowLeaderboardBigScreen={isAdminMode} qualifyingAdjustments={qualifyingAdjustments} /></AppErrorBoundary>}
