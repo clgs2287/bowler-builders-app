@@ -8589,8 +8589,8 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
     const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
     const pageWidth = 8.5;
     const pageHeight = 11;
-    const margin = 0.24;
-    const gapX = 0.12;
+    const margin = 0.38;
+    const gapX = 0.16;
     const gapY = 0.1;
     const slipWidth = (pageWidth - margin * 2 - gapX) / 2;
     const slipHeight = (pageHeight - margin * 2 - gapY * 2) / 3;
