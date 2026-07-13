@@ -3254,6 +3254,7 @@ const infoRows = [
 {infoRows.map(([label, value]) => {
   const isCurrentStage = label === "Current Stage";
   const isField = label === "Field";
+  const isSeries = label === "Series";
 
   return (
     <React.Fragment key={label}>
@@ -3275,7 +3276,10 @@ const infoRows = [
             : "text-sm font-semibold text-blue-900 md:text-base"
         }
       >
-        {label}
+        <span className="inline-flex items-center gap-1">
+          {label}
+          {isSeries && <SeriesInfoButton />}
+        </span>
       </span>
 
       <span
