@@ -3227,7 +3227,7 @@ function PublicHomeTab({
   const featuredTime = primaryEventInfo?.startTime || primaryOpenReservation?.state?.tournamentStartTime || nextEvent?.startTime || tournamentInfo.startTime || "";
   const featuredCenter = primaryEventInfo?.center || primaryOpenReservation?.state?.tournamentCenter || nextEvent?.center || tournamentInfo.center || "";
   const featuredAddress = primaryEventInfo?.location || primaryOpenReservation?.state?.tournamentAddress || nextEvent?.address || tournamentInfo.location || "";
-  const featuredSeries = primaryEventInfo?.series || primaryOpenReservation?.state?.tournamentSeries || nextEvent?.series || tournamentInfo.series || DEFAULT_TOURNAMENT_SERIES;
+  const featuredSeries = primaryEventInfo?.series || primaryOpenReservation?.state?.tournamentSeries || nextEvent?.series || tournamentInfo.series || "";
   const showFbetBrand = String(featuredSeries || "").toLowerCase().replace(/[^a-z]/g, "") === "fbet";
   const latestArchive = [...(tournamentHistory || [])]
     .filter((event) => event?.name)
