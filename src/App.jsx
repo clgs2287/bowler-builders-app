@@ -3549,7 +3549,7 @@ function TournamentInfoTab({
     ...(displayedTournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: displayedTournamentInfo.recentVideoLink }] : []),
     ...displayedVideoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href })),
   ].filter((item) => item.href);
-  const reservationsMatchCurrentTournament = Boolean(matchingReservationState);
+  const reservationsMatchCurrentTournament = Boolean(matchingReservationState?.entriesOpen);
   const publicReservationEntries = matchingReservationState
     ? (matchingReservationState.reservations?.length
         ? matchingReservationState.reservations
