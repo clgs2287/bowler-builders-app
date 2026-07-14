@@ -1443,6 +1443,16 @@ function isMatchplayTournament(tournamentFormat, tournamentInfo = {}) {
   return (tournamentInfo.tournamentStyle || "singles") === "laneDrawMatchplay";
 }
 
+function formatTournamentFormatLabel(tournamentFormat = "") {
+  if (tournamentFormat === "tbd") return "TBD";
+  if (tournamentFormat === "sweeper") return "Sweeper";
+  if (tournamentFormat === "bracket") return "Bracket";
+  if (tournamentFormat === "laneEliminator") return "Lane Pair Eliminator";
+  if (tournamentFormat === "eliminator") return "Eliminator";
+  if (tournamentFormat === "matchplay") return "Matchplay";
+  return "TBD";
+}
+
 function isEliminatorTournamentStyle(style) {
   return style === "eliminatorTournament";
 }
@@ -3640,13 +3650,7 @@ const infoRows = [
     : []),
   [
     "Finals Format",
-    detailTournamentFormat === "sweeper"
-      ? "Sweeper"
-      : detailTournamentFormat === "bracket"
-        ? "Bracket"
-        : detailTournamentFormat === "laneEliminator"
-          ? "Lane Pair Eliminator"
-          : "Eliminator",
+    formatTournamentFormatLabel(detailTournamentFormat),
   ],
   ["Series", displayedTournamentInfo.series || DEFAULT_TOURNAMENT_SERIES],
   ["FKM Eligible", displayedTournamentInfo.titleEligible ?? true ? "Yes" : "No"],
@@ -5161,6 +5165,7 @@ function DashboardTab({
     onChange={(e) => setTournamentFormat(e.target.value)}
     className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
   >
+    <option value="tbd">TBD</option>
     <option value="eliminator">Eliminator</option>
     <option value="bracket">Bracket</option>
     <option value="laneEliminator">Lane Pair Eliminator</option>
@@ -5364,7 +5369,7 @@ function DashboardTab({
             <StatCard label="Leader" value={leader?.name || "TBD"} />
             <StatCard label="Cut Line" value={`Top ${financials.cashers}`} />
             <StatCard label="Scoring Mode" value={useHandicapScores ? "Handicap" : "Scratch"} />
-            <StatCard label="Format" value={tournamentFormat === "bracket" ? "Bracket" : tournamentFormat === "sweeper" ? "Sweeper" : "Eliminator"} />
+            <StatCard label="Format" value={formatTournamentFormatLabel(tournamentFormat)} />
 
           </div>
 
@@ -10039,7 +10044,9 @@ function FinalsDisplayView({
         ? "Lane Pair Eliminator"
         : tournamentFormat === "eliminator"
           ? "Eliminator + Stepladder"
-          : "Bracket Finals";
+          : tournamentFormat === "bracket"
+            ? "Bracket Finals"
+            : "Finals Format TBD";
 
   if (!isMatchplay && !isEliminatorTournament && tournamentFormat === "bracket") {
     return (
@@ -10098,6 +10105,11 @@ function FinalsDisplayView({
           {!isMatchplay && !isEliminatorTournament && tournamentFormat === "sweeper" && (
             <p className="rounded-2xl bg-blue-50 p-6 text-center text-xl font-black text-blue-900">
               Sweeper format has no finals bracket.
+            </p>
+          )}
+          {!isMatchplay && !isEliminatorTournament && tournamentFormat === "tbd" && (
+            <p className="rounded-2xl bg-blue-50 p-6 text-center text-xl font-black text-blue-900">
+              Finals format is TBD.
             </p>
           )}
         </div>
@@ -11022,6 +11034,11 @@ function PublicViewTab({
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "bracket" && <PublicBracketView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} bracketState={bracketState} tournamentInfo={tournamentInfo} bigScreen={publicFinalsBigScreen} />}
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "eliminator" && <PublicEliminatorView entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} eliminatorState={eliminatorState} tournamentInfo={tournamentInfo} />}
       {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={entries} bowlers={bowlers} useHandicapScores={useHandicapScores} laneEliminatorState={laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={tournamentInfo} readOnly />}
+      {publicMode === "finals" && !publicIsMatchplay && !publicIsEliminatorTournament && tournamentFormat === "tbd" && (
+        <p className="rounded-2xl bg-blue-50 p-4 text-center text-sm font-black text-blue-900 md:text-lg">
+          Finals format is TBD.
+        </p>
+      )}
     </div>
   );
 }
