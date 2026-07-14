@@ -1209,12 +1209,20 @@ function getNextReservationNumber(reservationState = {}) {
 }
 
 function getOpenReservationKeys(reservationState = {}) {
+  const currentKey = reservationKeyFromState(reservationState);
+  const reservationBuckets = reservationState.reservationsByTournament || {};
+  const explicitOpenKeys = (Array.isArray(reservationState.openTournamentKeys) ? reservationState.openTournamentKeys : [])
+    .filter((key) => {
+      if (!key) return false;
+      if (key === currentKey) return Boolean(reservationState.entriesOpen);
+      return Boolean(reservationBuckets[key]?.entriesOpen);
+    });
   return Array.from(new Set([
-    ...(Array.isArray(reservationState.openTournamentKeys) ? reservationState.openTournamentKeys : []),
-    ...Object.entries(reservationState.reservationsByTournament || {})
+    ...explicitOpenKeys,
+    ...Object.entries(reservationBuckets)
       .filter(([, bucket]) => Boolean(bucket?.entriesOpen))
       .map(([key]) => key),
-    ...(reservationState.entriesOpen && reservationKeyFromState(reservationState) ? [reservationKeyFromState(reservationState)] : []),
+    ...(reservationState.entriesOpen && currentKey ? [currentKey] : []),
   ].filter(Boolean)));
 }
 
