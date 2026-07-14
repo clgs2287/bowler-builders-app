@@ -1214,8 +1214,10 @@ function getOpenReservationKeys(reservationState = {}) {
   const explicitOpenKeys = (Array.isArray(reservationState.openTournamentKeys) ? reservationState.openTournamentKeys : [])
     .filter((key) => {
       if (!key) return false;
-      if (key === currentKey) return Boolean(reservationState.entriesOpen);
-      return Boolean(reservationBuckets[key]?.entriesOpen);
+      const bucket = reservationBuckets[key];
+      if (bucket && bucket.entriesOpen === false) return false;
+      if (key === currentKey) return Boolean(reservationState.entriesOpen || bucket?.entriesOpen || !bucket);
+      return Boolean(bucket?.entriesOpen || !bucket);
     });
   return Array.from(new Set([
     ...explicitOpenKeys,
@@ -8297,13 +8299,25 @@ function ReservationsTab({
       type="number"
       value={reservationState.reservationLimit}
       onChange={(e) =>
-        setReservationState((current) => ({
-          ...current,
-          reservationLimit: Number(
-            e.target.value || 0
-          ),
-          reservationLimitUpdatedAt: new Date().toISOString(),
-        }))
+        setReservationState((current) => {
+          const nextLimit = Number(e.target.value || 0);
+          const nextUpdatedAt = new Date().toISOString();
+          const currentKey = reservationKeyFromState(current);
+          const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+          if (currentKey) {
+            reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
+              ...reservationBucketFromState(current),
+              reservationLimit: nextLimit,
+              reservationLimitUpdatedAt: nextUpdatedAt,
+            });
+          }
+          return {
+            ...current,
+            reservationLimit: nextLimit,
+            reservationLimitUpdatedAt: nextUpdatedAt,
+            reservationsByTournament,
+          };
+        })
       }
       placeholder="Reservation Limit"
     />
