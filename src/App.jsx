@@ -3211,8 +3211,10 @@ function PublicHomeTab({
 }) {
   const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
   const nextEvent = nextUpcomingScheduleItem(scheduleItems);
+  const nextEventKey = nextEvent ? reservationKeyFromScheduleItem(nextEvent) : "";
   const primaryOpenReservation = publicReservationOptions[0] || null;
-  const primaryEventInfo = primaryOpenReservation?.state?.publicTournamentInfo || null;
+  const nextEventReservation = nextEventKey ? publicReservationOptions.find((option) => option.key === nextEventKey) || null : null;
+  const nextEventInfo = nextEventReservation?.state?.publicTournamentInfo || null;
   const upcomingEvents = [...(scheduleItems || [])]
     .filter((item) => item?.name && item?.startDate && scheduleDateTimeValue(item) !== Number.POSITIVE_INFINITY)
     .filter((item) => {
@@ -3223,12 +3225,13 @@ function PublicHomeTab({
     })
     .sort((a, b) => scheduleDateTimeValue(a) - scheduleDateTimeValue(b))
     .slice(0, 4);
-  const featuredName = primaryEventInfo?.name || primaryOpenReservation?.state?.tournamentName || nextEvent?.name || tournamentInfo.name || "Next Bowler Builders Event";
-  const featuredDate = primaryEventInfo?.date || primaryOpenReservation?.state?.tournamentDate || nextEvent?.startDate || tournamentInfo.date || "";
-  const featuredTime = primaryEventInfo?.startTime || primaryOpenReservation?.state?.tournamentStartTime || nextEvent?.startTime || tournamentInfo.startTime || "";
-  const featuredCenter = primaryEventInfo?.center || primaryOpenReservation?.state?.tournamentCenter || nextEvent?.center || tournamentInfo.center || "";
-  const featuredAddress = primaryEventInfo?.location || primaryOpenReservation?.state?.tournamentAddress || nextEvent?.address || tournamentInfo.location || "";
-  const featuredSeries = primaryEventInfo?.series || primaryOpenReservation?.state?.tournamentSeries || nextEvent?.series || tournamentInfo.series || "";
+  const fallbackHomeInfo = nextEvent ? {} : tournamentInfo;
+  const featuredName = nextEventInfo?.name || nextEvent?.name || fallbackHomeInfo.name || "Next Bowler Builders Event";
+  const featuredDate = nextEventInfo?.date || nextEvent?.startDate || fallbackHomeInfo.date || "";
+  const featuredTime = nextEventInfo?.startTime || nextEvent?.startTime || fallbackHomeInfo.startTime || "";
+  const featuredCenter = nextEventInfo?.center || nextEvent?.center || fallbackHomeInfo.center || "";
+  const featuredAddress = nextEventInfo?.location || nextEvent?.address || fallbackHomeInfo.location || "";
+  const featuredSeries = nextEventInfo?.series || nextEvent?.series || fallbackHomeInfo.series || "";
   const showFbetBrand = String(featuredSeries || "").toLowerCase().replace(/[^a-z]/g, "") === "fbet";
   const homeWatchLinks = [
     { label: "Bowler Builders Facebook", href: "https://www.facebook.com/bowlerbuildersproshops", type: "facebook" },
@@ -3238,9 +3241,9 @@ function PublicHomeTab({
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
   const latestArchiveWinner = latestArchive ? getArchivedWinnerName(latestArchive) : "";
-  const reservationCount = Number(primaryOpenReservation?.state?.reservationCount || primaryOpenReservation?.state?.reservations?.length || 0);
-  const reservationLimit = Number(primaryOpenReservation?.state?.reservationLimit || 0);
-  const reservationSummary = primaryOpenReservation
+  const reservationCount = Number(nextEventReservation?.state?.reservationCount || nextEventReservation?.state?.reservations?.length || 0);
+  const reservationLimit = Number(nextEventReservation?.state?.reservationLimit || 0);
+  const reservationSummary = nextEventReservation
     ? reservationLimit
       ? `${reservationCount}/${reservationLimit} reserved`
       : `${reservationCount} reserved`
@@ -3274,7 +3277,7 @@ function PublicHomeTab({
               </div>
             </div>
             <div className="rounded-2xl border border-blue-700 bg-slate-950/50 p-4">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-200">{primaryOpenReservation ? "Entries Open" : "Upcoming Event"}</p>
+              <p className="text-xs font-black uppercase tracking-wide text-blue-200">{nextEventReservation ? "Entries Open" : "Upcoming Event"}</p>
               <h3 className="mt-2 text-2xl font-black text-white">{featuredName}</h3>
               <div className="mt-3 space-y-1 text-sm font-semibold text-blue-100">
                 <p>{featuredDate || "Date TBD"}{featuredTime ? ` • ${formatStartTime(featuredTime)}` : ""}</p>
