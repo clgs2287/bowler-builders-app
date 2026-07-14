@@ -3308,7 +3308,7 @@ function PublicHomeTab({
                   {publicReservationOptions.length === 1 ? "1 tournament is accepting reservations" : `${publicReservationOptions.length} tournaments are accepting reservations`}
                 </h3>
                 <p className="mt-1 text-sm font-semibold text-green-800">
-                  Select Reservations above to choose the tournament and submit an entry.
+                  Select Reserve Now to enter an upcoming tournament.
                 </p>
               </div>
               <Button className="rounded-2xl bg-green-700 text-white hover:bg-green-800" onClick={() => onReserve(primaryOpenReservation?.key || "")}>
