@@ -3207,6 +3207,7 @@ function PublicHomeTab({
   tournamentHistory = [],
   onNavigate = () => {},
   onReserve = () => {},
+  onEventDetails = () => {},
 }) {
   const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
   const nextEvent = nextUpcomingScheduleItem(scheduleItems);
@@ -3331,7 +3332,13 @@ function PublicHomeTab({
             <div className="mt-4 divide-y divide-blue-100">
               {upcomingEvents.length ? upcomingEvents.map((item, index) => (
                 <div key={`home-upcoming-${index}`} className="py-3 first:pt-0 last:pb-0">
-                  <p className="font-black text-blue-950">{item.name}</p>
+                  <button
+                    type="button"
+                    className="text-left font-black text-blue-950 underline-offset-2 hover:underline"
+                    onClick={() => onEventDetails(reservationKeyFromScheduleItem(item))}
+                  >
+                    {item.name}
+                  </button>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
                     {item.startDate || "Date TBD"}{item.startTime ? ` • ${formatStartTime(item.startTime)}` : ""}
                     {item.center ? ` • ${item.center}` : ""}
@@ -3435,8 +3442,10 @@ function TournamentInfoTab({
   reservationState = {},
   scheduleItems = [],
   savedTournamentDrafts = [],
+  selectedEventKey = "",
   selectedReservationKey = "",
   onSelectedReservationKeyChange = () => {},
+  onBackHome = null,
   qualifyingGames,
   tournamentFormat,
   payoutState,
@@ -3453,6 +3462,30 @@ function TournamentInfoTab({
   const [showReservationRoster, setShowReservationRoster] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
+  const selectedEventScheduleItem = selectedEventKey ? scheduleItemForReservationKey(scheduleItems, selectedEventKey) : null;
+  const selectedEventDraftSnapshot = selectedEventKey ? findTournamentDraftForReservationKey(savedTournamentDrafts, selectedEventKey)?.snapshot || null : null;
+  const selectedEventReservationState = selectedEventKey ? reservationStateForKey(reservationState, selectedEventKey, scheduleItems) : null;
+  const selectedEventCurrentReservationKey = reservationKeyFromState(reservationState);
+  const selectedEventBucket = selectedEventKey
+    ? selectedEventKey === selectedEventCurrentReservationKey
+      ? reservationBucketFromState(reservationState)
+      : reservationState.reservationsByTournament?.[selectedEventKey] || null
+    : null;
+  const selectedEventHasReservationData = Boolean(
+    selectedEventBucket?.publicTournamentInfo ||
+    selectedEventBucket?.entriesOpen ||
+    selectedEventBucket?.reservationCount ||
+    selectedEventBucket?.reservations?.length ||
+    selectedEventBucket?.publicReservations?.length
+  );
+  const selectedEventInfo = selectedEventKey
+    ? buildReservationTournamentInfoSnapshot({
+        tournamentInfo: selectedEventDraftSnapshot?.tournamentInfo || selectedEventBucket?.publicTournamentInfo || {},
+        scheduleItem: selectedEventScheduleItem,
+        reservationState: selectedEventHasReservationData ? selectedEventReservationState || {} : {},
+        payoutState: selectedEventDraftSnapshot?.payoutState || {},
+      })
+    : null;
   const selectedReservationOption = publicReservationOptions.find((option) => option.key === selectedReservationKey);
   const dashboardReservationOption = publicReservationOptions.length <= 1
     ? publicReservationOptions.find(({ state }) => (
@@ -3464,11 +3497,14 @@ function TournamentInfoTab({
         )
       ))
     : null;
-  const matchingReservationOption = selectedReservationOption || dashboardReservationOption || publicReservationOptions[0] || null;
+  const selectedEventReservationOption = selectedEventKey
+    ? { key: selectedEventKey, state: selectedEventHasReservationData ? selectedEventReservationState : null, scheduleItem: selectedEventScheduleItem }
+    : null;
+  const matchingReservationOption = selectedEventReservationOption || selectedReservationOption || dashboardReservationOption || publicReservationOptions[0] || null;
   const matchingReservationState = matchingReservationOption?.state || null;
   const reservationTournamentInfo = matchingReservationState?.publicTournamentInfo || null;
   const matchingScheduleItem = matchingReservationOption?.scheduleItem || null;
-  const displayedTournamentInfoBase = reservationTournamentInfo || (
+  const displayedTournamentInfoBase = selectedEventInfo || reservationTournamentInfo || (
     matchingReservationState
       ? buildReservationTournamentInfoSnapshot({
           tournamentInfo: {},
@@ -3533,14 +3569,16 @@ function TournamentInfoTab({
     ? Math.max(0, publicReservationLimit - publicReservationCount)
     : 0;
   const showPublicFieldInfo = Boolean(matchingReservationState && publicReservationLimit);
+  const detailQualifyingGames = selectedEventDraftSnapshot?.qualifyingGames || qualifyingGames || 4;
+  const detailTournamentFormat = selectedEventDraftSnapshot?.tournamentFormat || tournamentFormat;
   const normalStage = getTournamentStage({
-    bowlers,
+    bowlers: selectedEventDraftSnapshot?.bowlers || bowlers,
     eliminatorState,
-    useHandicapScores,
-    qualifyingGames,
-    savedScoreGames,
-    tournamentFormat,
-    savedFinalsRounds,
+    useHandicapScores: selectedEventDraftSnapshot ? Boolean(selectedEventDraftSnapshot.useHandicapScores) : useHandicapScores,
+    qualifyingGames: detailQualifyingGames,
+    savedScoreGames: selectedEventDraftSnapshot?.savedScoreGames || savedScoreGames,
+    tournamentFormat: detailTournamentFormat,
+    savedFinalsRounds: selectedEventDraftSnapshot?.savedFinalsRounds || savedFinalsRounds,
     bracketState,
     laneEliminatorState,
     matchplayState,
@@ -3548,8 +3586,8 @@ function TournamentInfoTab({
   });
   const tournamentStartDate = displayedTournamentInfo.date || reservationState.tournamentDate || "";
   const tournamentStartTime = displayedTournamentInfo.startTime || reservationState.tournamentStartTime || "";
-  const hasSavedQualifyingGame = Object.values(savedScoreGames || {}).some(Boolean);
-  const hasMatchplayActivity = isMatchplayTournament(tournamentFormat, displayedTournamentInfo) && countMatchplayLineageGames(matchplayState) > 0;
+  const hasSavedQualifyingGame = Object.values(selectedEventDraftSnapshot?.savedScoreGames || savedScoreGames || {}).some(Boolean);
+  const hasMatchplayActivity = isMatchplayTournament(detailTournamentFormat, displayedTournamentInfo) && countMatchplayLineageGames(selectedEventDraftSnapshot?.matchplayState || matchplayState) > 0;
   const tournamentStartDateTime = getTournamentStartDateTime(tournamentStartDate, tournamentStartTime);
   const isBeforeTournamentStart = tournamentStartDateTime
     ? Date.now() < tournamentStartDateTime.getTime()
@@ -3582,18 +3620,18 @@ const infoRows = [
         `${publicReservationCount}/${publicReservationLimit} reserved (${publicReservationRemaining} spots remaining)`,
       ]]
     : []),
-  ["Qualifying Games", qualifyingGames || 4],
+  ["Qualifying Games", detailQualifyingGames],
   ["Tournament Style", getTournamentStyleConfig(displayedTournamentInfo.tournamentStyle || "singles").label],
   ...(getTournamentTeamSize(displayedTournamentInfo.tournamentStyle || "singles") > 1
     ? [["Team Finals", getFinalsScoreMode(displayedTournamentInfo) === "baker" ? "Baker Team Game" : "Full Games Per Bowler"]]
     : []),
   [
     "Finals Format",
-    tournamentFormat === "sweeper"
+    detailTournamentFormat === "sweeper"
       ? "Sweeper"
-      : tournamentFormat === "bracket"
+      : detailTournamentFormat === "bracket"
         ? "Bracket"
-        : tournamentFormat === "laneEliminator"
+        : detailTournamentFormat === "laneEliminator"
           ? "Lane Pair Eliminator"
           : "Eliminator",
   ],
@@ -3605,6 +3643,13 @@ const infoRows = [
   return (
     <AppCard>
       <CardContent className="p-3 md:p-6">
+        {selectedEventKey && onBackHome && (
+          <div className="mb-3">
+            <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100" onClick={onBackHome}>
+              Back to Home
+            </Button>
+          </div>
+        )}
         <h2 className="mb-3 text-center text-xl font-bold text-blue-900 md:mb-5 md:text-2xl">
           Tournament Info
         </h2>
@@ -3629,7 +3674,7 @@ const infoRows = [
 
         <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-5">
           <div className="space-y-2.5 md:space-y-4">
-            {publicReservationOptions.length > 1 && (
+            {!selectedEventKey && publicReservationOptions.length > 1 && (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 md:p-4">
                 <Label className="mb-2 block">Open Tournament</Label>
                 <select
@@ -10955,7 +11000,7 @@ function PublicViewTab({
     </div>
   );
 }
-function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservationState = {}, onRegisterClick = () => {} }) {
+function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservationState = {}, onRegisterClick = () => {}, onEventDetails = () => {} }) {
   const [selectedArchiveId, setSelectedArchiveId] = useState(null);
   const [selectedArchiveView, setSelectedArchiveView] = useState("archive");
   const [selectedArchiveSection, setSelectedArchiveSection] = useState("results");
@@ -11301,6 +11346,18 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
                     <div className="rounded-full bg-green-200 px-3 py-1 text-xs font-black text-green-900">
                       View Details
                     </div>
+                  )}
+                  {!isCompleted && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEventDetails(reservationKeyFromScheduleItem(item));
+                      }}
+                      className="rounded-full bg-blue-700 px-3 py-1 text-xs font-black text-white shadow-sm hover:bg-blue-800"
+                    >
+                      View Details
+                    </button>
                   )}
                   {registrationOpen && (
                     <button
@@ -18283,6 +18340,7 @@ const [reservationState, setReservationState] = useState({
   openTournamentKeys: [],
 });
 const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
+const [selectedPublicEventKey, setSelectedPublicEventKey] = useState("");
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
   const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
@@ -19653,8 +19711,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                   </div>
                 )}
               </div>
-              <MobileTabSelect activeTab={activeTab} setActiveTab={setActiveTab} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} publicResultsUnlocked={publicResultsUnlocked} />
-              <DesktopTabs activeTab={activeTab} setActiveTab={setActiveTab} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} isOwnerAdmin={isOwnerAdmin} publicResultsUnlocked={publicResultsUnlocked} />
+              <MobileTabSelect activeTab={activeTab} setActiveTab={(tabId) => { if (tabId === "tournamentInfo") setSelectedPublicEventKey(""); setActiveTab(tabId); }} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} publicResultsUnlocked={publicResultsUnlocked} />
+              <DesktopTabs activeTab={activeTab} setActiveTab={(tabId) => { if (tabId === "tournamentInfo") setSelectedPublicEventKey(""); setActiveTab(tabId); }} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} isOwnerAdmin={isOwnerAdmin} publicResultsUnlocked={publicResultsUnlocked} />
             </div>
           </div>
         </div>
@@ -19829,17 +19887,45 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} qualifyingAdjustments={qualifyingAdjustments} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} isOwnerAdmin={isOwnerAdmin} supabaseSession={supabaseSession} setSupabaseSaveStatus={setSupabaseSaveStatus} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
-<PublicHomeTab
-  tournamentInfo={tournamentInfo}
-  reservationState={reservationState}
-  scheduleItems={scheduleItems}
-  tournamentHistory={tournamentHistory}
-  onNavigate={setActiveTab}
-  onReserve={(reservationKey) => {
-    setSelectedPublicReservationKey(reservationKey || "");
-    setActiveTab("publicreservations");
-  }}
-/>
+  selectedPublicEventKey ? (
+    <TournamentInfoTab
+      tournamentInfo={tournamentInfo}
+      reservationState={reservationState}
+      scheduleItems={scheduleItems}
+      savedTournamentDrafts={savedTournamentDrafts}
+      selectedEventKey={selectedPublicEventKey}
+      selectedReservationKey={selectedPublicReservationKey}
+      onSelectedReservationKeyChange={setSelectedPublicReservationKey}
+      onBackHome={() => setSelectedPublicEventKey("")}
+      qualifyingGames={qualifyingGames}
+      tournamentFormat={tournamentFormat}
+      payoutState={payoutState}
+      savedScoreGames={savedScoreGames}
+      savedFinalsRounds={savedFinalsRounds}
+      bowlers={bowlers}
+      eliminatorState={eliminatorState}
+      useHandicapScores={useHandicapScores}
+      bracketState={bracketState}
+      laneEliminatorState={laneEliminatorState}
+      matchplayState={matchplayState}
+    />
+  ) : (
+    <PublicHomeTab
+      tournamentInfo={tournamentInfo}
+      reservationState={reservationState}
+      scheduleItems={scheduleItems}
+      tournamentHistory={tournamentHistory}
+      onNavigate={setActiveTab}
+      onReserve={(reservationKey) => {
+        setSelectedPublicReservationKey(reservationKey || "");
+        setActiveTab("publicreservations");
+      }}
+      onEventDetails={(eventKey) => {
+        setSelectedPublicEventKey(eventKey || "");
+        setActiveTab("tournamentInfo");
+      }}
+    />
+  )
 )}
         {activeTab === "public" && <AppErrorBoundary key="publicleaderboard"><PublicViewTab publicMode="leaderboard" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} scheduleItems={scheduleItems} allowLeaderboardBigScreen={isAdminMode} qualifyingAdjustments={qualifyingAdjustments} /></AppErrorBoundary>}
         {activeTab === "publicfinals" && tournamentFormat !== "sweeper" && <AppErrorBoundary key="publicfinals"><PublicViewTab publicMode="finals" entries={entries} tournamentInfo={tournamentInfo} bowlers={bowlers} financials={financials} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} /></AppErrorBoundary>}
@@ -19885,6 +19971,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       onRegisterClick={(reservationKey) => {
         setSelectedPublicReservationKey(reservationKey || "");
         setActiveTab("publicreservations");
+      }}
+      onEventDetails={(eventKey) => {
+        setSelectedPublicEventKey(eventKey || "");
+        setActiveTab("tournamentInfo");
       }}
     />
   </AppErrorBoundary>
