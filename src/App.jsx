@@ -3210,11 +3210,7 @@ function PublicHomeTab({
   onEventDetails = () => {},
 }) {
   const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
-  const nextEvent = nextUpcomingScheduleItem(scheduleItems);
-  const nextEventKey = nextEvent ? reservationKeyFromScheduleItem(nextEvent) : "";
   const primaryOpenReservation = publicReservationOptions[0] || null;
-  const nextEventReservation = nextEventKey ? publicReservationOptions.find((option) => option.key === nextEventKey) || null : null;
-  const nextEventInfo = nextEventReservation?.state?.publicTournamentInfo || null;
   const upcomingEvents = [...(scheduleItems || [])]
     .filter((item) => item?.name && item?.startDate && scheduleDateTimeValue(item) !== Number.POSITIVE_INFINITY)
     .filter((item) => {
@@ -3225,6 +3221,10 @@ function PublicHomeTab({
     })
     .sort((a, b) => scheduleDateTimeValue(a) - scheduleDateTimeValue(b))
     .slice(0, 4);
+  const nextEvent = upcomingEvents[0] || null;
+  const nextEventKey = nextEvent ? reservationKeyFromScheduleItem(nextEvent) : "";
+  const nextEventReservation = nextEventKey ? publicReservationOptions.find((option) => option.key === nextEventKey) || null : null;
+  const nextEventInfo = nextEventReservation?.state?.publicTournamentInfo || null;
   const fallbackHomeInfo = nextEvent ? {} : tournamentInfo;
   const featuredName = nextEventInfo?.name || nextEvent?.name || fallbackHomeInfo.name || "Next Bowler Builders Event";
   const featuredDate = nextEventInfo?.date || nextEvent?.startDate || fallbackHomeInfo.date || "";
