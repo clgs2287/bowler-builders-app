@@ -7927,27 +7927,29 @@ function ReservationsTab({
         ? buildReservationTournamentInfoSnapshot({
             tournamentInfo: matchingDraftSnapshot.tournamentInfo || {},
             payoutState: matchingDraftSnapshot.payoutState || {},
-            scheduleItem: item || null,
-            reservationState: {
-              ...current,
-              tournamentName: name,
-              tournamentDate: item?.startDate || savedBucket.tournamentDate || keyDate || "",
-              tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
-              tournamentCenter: item?.center || savedBucket.tournamentCenter || keyCenter || "",
-              tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
+          scheduleItem: item || null,
+          reservationState: {
+            ...current,
+            ...savedBucket,
+            tournamentName: name,
+            tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
+            tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
+            tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
+            tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
             },
           })
         : savedBucket.publicTournamentInfo || buildReservationTournamentInfoSnapshot({
             tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
             payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
-            scheduleItem: item || null,
-            reservationState: {
-              ...current,
-              tournamentName: name,
-              tournamentDate: item?.startDate || savedBucket.tournamentDate || keyDate || "",
-              tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
-              tournamentCenter: item?.center || savedBucket.tournamentCenter || keyCenter || "",
-              tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
+          scheduleItem: item || null,
+          reservationState: {
+            ...current,
+            ...savedBucket,
+            tournamentName: name,
+            tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
+            tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
+            tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
+            tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
             },
           });
 
@@ -7957,11 +7959,11 @@ function ReservationsTab({
         openTournamentKeys,
         entriesOpen: nextEntriesOpen,
         tournamentName: name,
-        tournamentDate: item?.startDate || savedBucket.tournamentDate || keyDate || "",
-        tournamentStartTime: item?.startTime || savedBucket.tournamentStartTime || "",
-        tournamentCenter: item?.center || savedBucket.tournamentCenter || keyCenter || "",
-        tournamentAddress: item?.address || savedBucket.tournamentAddress || "",
-        reservationLimit: Number(savedBucket.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+        tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
+        tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
+        tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
+        tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
+        reservationLimit: Number(savedBucket.reservationLimit || current.reservationLimit || DEFAULT_RESERVATION_LIMIT),
         reservationLimitUpdatedAt: savedBucket.reservationLimitUpdatedAt || "",
         reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
         waitlistOnlyNames: savedBucket.waitlistOnlyNames || "",
@@ -18688,11 +18690,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           reservationState: {
             ...reservationState,
             ...bucket,
-            tournamentName: snapshot.tournamentInfo?.name || bucket.tournamentName,
-            tournamentDate: snapshot.tournamentInfo?.date || bucket.tournamentDate,
-            tournamentStartTime: snapshot.tournamentInfo?.startTime || bucket.tournamentStartTime,
-            tournamentCenter: snapshot.tournamentInfo?.center || bucket.tournamentCenter,
-            tournamentAddress: snapshot.tournamentInfo?.location || bucket.tournamentAddress,
+            tournamentName: bucket.tournamentName || snapshot.tournamentInfo?.name,
+            tournamentDate: bucket.tournamentDate || snapshot.tournamentInfo?.date,
+            tournamentStartTime: bucket.tournamentStartTime || snapshot.tournamentInfo?.startTime,
+            tournamentCenter: bucket.tournamentCenter || snapshot.tournamentInfo?.center,
+            tournamentAddress: bucket.tournamentAddress || snapshot.tournamentInfo?.location,
           },
         }),
       };
@@ -18951,6 +18953,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
               ? reservationsByTournament[tournamentKey].publicReservations
               : publicRosterByTournament[tournamentKey] || [];
           });
+          const currentBucket = reservationsByTournament[currentReservationKey] || {};
           const currentTournamentReservations = nextReservations.filter((reservation) => (reservation.tournamentKey || "") === currentReservationKey);
           const currentReservationCount = Number(
             reservationCountByTournament[currentReservationKey] ??
@@ -18963,6 +18966,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             ...current,
             ...reservationSettings,
             reservationsByTournament,
+            entriesOpen: currentBucket.entriesOpen ?? reservationSettings.entriesOpen ?? false,
+            reservationLimit: Number(currentBucket.reservationLimit || reservationSettings.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+            reservationLimitUpdatedAt: currentBucket.reservationLimitUpdatedAt || reservationSettings.reservationLimitUpdatedAt || "",
+            reservationNextNumber: Number(currentBucket.reservationNextNumber || reservationSettings.reservationNextNumber || 1),
+            waitlistOnlyNames: currentBucket.waitlistOnlyNames || reservationSettings.waitlistOnlyNames || "",
             reservationCount: nextReservations.length
               ? currentTournamentReservations.length
               : currentReservationCount,
