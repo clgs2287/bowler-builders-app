@@ -5063,7 +5063,7 @@ function DashboardTab({
                 </div>
                 <LockedTextField key={`dashboard-address-${tournamentInfo.location || "blank"}`} label="Address" value={tournamentInfo.location} onChange={(value) => update("location", value)} />
                 <LockedTextField label="Season" value={tournamentInfo.season || ""} onChange={(value) => update("season", value)} />
-                  <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} placeholder="Example: 1-8, 11-18" />
+                  <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} placeholder="Example: 1-8, 11-18" commitOnChange />
 
 <LockedTextField
   label="Current Stage"
@@ -5146,6 +5146,7 @@ function DashboardTab({
     value={tournamentInfo.customRotation || ""}
     onChange={(value) => update("customRotation", value)}
     placeholder="Example: 9,17,13,19,15,11"
+    commitOnChange
   />
 )}
 {(tournamentInfo.movementMode || "custom") === "customSplit" && (
@@ -5154,6 +5155,7 @@ function DashboardTab({
     value={tournamentInfo.evenCustomRotation || ""}
     onChange={(value) => update("evenCustomRotation", value)}
     placeholder="Example: 10,14,18,12,16,20"
+    commitOnChange
   />
 )}
 
@@ -19656,7 +19658,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
 
     window.setTimeout(() => {
-      const snapshot = activeTournamentSnapshotRef.current || buildActiveTournamentSnapshot();
+      const snapshot = buildActiveTournamentSnapshot();
       const defaultName = snapshot.tournamentInfo?.name || "Saved Tournament";
       const name = window.prompt("Save this tournament as:", defaultName);
       if (!name) return;
