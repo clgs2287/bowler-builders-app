@@ -946,6 +946,7 @@ function reservationTournamentKey({ name = "", date = "", center = "" } = {}) {
 }
 
 function reservationKeyFromState(reservationState = {}) {
+  if (reservationState.tournamentKey) return String(reservationState.tournamentKey);
   return reservationTournamentKey({
     name: reservationState.tournamentName,
     date: reservationState.tournamentDate,
@@ -953,12 +954,50 @@ function reservationKeyFromState(reservationState = {}) {
   });
 }
 
-function reservationKeyFromScheduleItem(item = {}) {
+function scheduleEventDateId(value = "") {
+  const dateText = String(value || "").trim().slice(0, 10);
+  const match = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match ? `${match[1]}${match[2]}${match[3]}` : "";
+}
+
+function scheduleEventSlug(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+}
+
+function legacyReservationKeyFromScheduleItem(item = {}) {
   return reservationTournamentKey({
     name: item.name,
     date: item.startDate,
     center: item.center,
   });
+}
+
+function generateScheduleEventId(item = {}, allItems = []) {
+  if (item.eventId) return String(item.eventId);
+  const dateId = scheduleEventDateId(item.startDate || item.date);
+  const fallback = scheduleEventSlug(item.name || "event") || "event";
+  const baseId = dateId || fallback;
+  const matchingDateCount = (allItems || []).filter((other) =>
+    scheduleEventDateId(other?.startDate || other?.date) === dateId
+  ).length;
+  if (dateId && matchingDateCount <= 1) return dateId;
+  const slug = scheduleEventSlug(item.name || item.format || item.series || "event");
+  return [baseId, slug].filter(Boolean).join("-");
+}
+
+function ensureScheduleEventIds(items = []) {
+  return (items || []).map((item) => ({
+    ...item,
+    eventId: generateScheduleEventId(item, items),
+  }));
+}
+
+function reservationKeyFromScheduleItem(item = {}) {
+  return String(item.eventId || legacyReservationKeyFromScheduleItem(item));
 }
 
 async function dataUrlToBlob(dataUrl) {
@@ -1012,7 +1051,15 @@ async function deleteTournamentImageFromStorage(image) {
 
 function scheduleItemForReservationKey(scheduleItems = [], tournamentKey = "") {
   if (!tournamentKey) return null;
-  return (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === tournamentKey) || null;
+  return (scheduleItems || []).find((item) =>
+    reservationKeyFromScheduleItem(item) === tournamentKey ||
+    legacyReservationKeyFromScheduleItem(item) === tournamentKey
+  ) || null;
+}
+
+function canonicalScheduleReservationKey(scheduleItems = [], tournamentKey = "") {
+  const item = scheduleItemForReservationKey(scheduleItems, tournamentKey);
+  return item ? reservationKeyFromScheduleItem(item) : tournamentKey;
 }
 
 function getScheduleEventReservationSettings(item = {}) {
@@ -1102,6 +1149,7 @@ function findScheduleItemByName(scheduleItems = [], name = "") {
 
 function reservationBucketFromState(reservationState = {}) {
   return {
+    tournamentKey: reservationState.tournamentKey || reservationKeyFromState(reservationState),
     entriesOpen: Boolean(reservationState.entriesOpen),
     tournamentName: reservationState.tournamentName || "",
     tournamentDate: reservationState.tournamentDate || "",
@@ -1144,6 +1192,7 @@ function sanitizeReservationsByTournament(reservationsByTournament = {}) {
       key,
       {
         entriesOpen: Boolean(bucket?.entriesOpen),
+        tournamentKey: bucket?.tournamentKey || key,
         tournamentName: bucket?.tournamentName || "",
         tournamentDate: bucket?.tournamentDate || "",
         tournamentStartTime: bucket?.tournamentStartTime || "",
@@ -4587,7 +4636,7 @@ function dateForSupabase(value) {
 
 function scheduleRecordFromItem(item, index) {
   const id = String(item?.id || `schedule-${index + 1}`);
-  const data = { ...(item || {}), id };
+  const data = { ...(item || {}), id, eventId: item?.eventId || generateScheduleEventId(item, [item]) };
   return {
     id,
     data,
@@ -4808,6 +4857,7 @@ function DashboardTab({
     setTournamentInfo((current) => ({
       ...current,
       ...(savedSetup.tournamentInfo || {}),
+      scheduleEventId: scheduledItem.eventId || reservationKeyFromScheduleItem(scheduledItem),
       name: scheduledItem.name || name,
       date: scheduledItem.startDate || current.date || "",
       startTime: scheduledItem.startTime || current.startTime || "",
@@ -7417,9 +7467,15 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
   const updateItem = (index, field, value) => {
     if (scheduleLocked) return;
     setScheduleItems((current) =>
-      current.map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      )
+      current.map((item, i) => {
+        if (i !== index) return item;
+        const nextItem = { ...item, [field]: value };
+        if (!nextItem.eventId && (field === "name" || field === "startDate")) {
+          const nextItems = current.map((candidate, candidateIndex) => candidateIndex === index ? nextItem : candidate);
+          nextItem.eventId = generateScheduleEventId(nextItem, nextItems);
+        }
+        return nextItem;
+      })
     );
   };
 
@@ -7452,6 +7508,7 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
         center: "",
         address: "",
         fkmTitle: false,
+        eventId: "",
         reservationSettings: {
           entriesOpen: false,
           reservationLimit: DEFAULT_RESERVATION_LIMIT,
@@ -7501,7 +7558,7 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
           {scheduleItems.map((item, index) => (
             <div
               key={`schedule-${index}`}
-              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-11"
+              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-12"
             >
               <Input
                 value={item.name}
@@ -7509,6 +7566,10 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                 onChange={(e) => updateItem(index, "name", e.target.value)}
                 placeholder="Tournament Name"
               />
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
+                ID: {item.eventId || generateScheduleEventId(item, scheduleItems) || "set date"}
+              </div>
 
               <Input
                 value={item.format}
@@ -7905,7 +7966,7 @@ function ReservationsTab({
   const [announcementSending, setAnnouncementSending] = useState("");
   const [announcementIncludeFlyer, setAnnouncementIncludeFlyer] = useState(true);
   const currentScheduledTournamentKey = reservationKeyFromState(reservationState);
-  const selectedScheduledTournament = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentScheduledTournamentKey);
+  const selectedScheduledTournament = scheduleItemForReservationKey(scheduleItems, currentScheduledTournamentKey);
   const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
@@ -8092,6 +8153,7 @@ function ReservationsTab({
         ...current,
         reservationsByTournament,
         openTournamentKeys,
+        tournamentKey: nextKey,
         entriesOpen: nextEntriesOpen,
         tournamentName: name,
         tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
@@ -8117,7 +8179,7 @@ function ReservationsTab({
       const openTournamentKeys = new Set(getOpenReservationKeys(current));
 
       if (currentKey) {
-        const currentScheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentKey);
+        const currentScheduleItem = scheduleItemForReservationKey(scheduleItems, currentKey);
         const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
         const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, currentKey)?.snapshot || null;
         reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
@@ -8155,7 +8217,7 @@ function ReservationsTab({
     const currentKey = reservationKeyFromState(reservationState);
     if (currentKey) {
       setScheduleItems((current) => (current || []).map((item) => (
-        reservationKeyFromScheduleItem(item) === currentKey
+        reservationKeyFromScheduleItem(item) === currentKey || legacyReservationKeyFromScheduleItem(item) === currentKey
           ? {
               ...item,
               reservationSettings: {
@@ -8179,7 +8241,7 @@ function ReservationsTab({
       const currentKey = reservationKeyFromState(current);
       if (!currentKey) return current;
       const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
-      const currentScheduleItem = (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === currentKey);
+      const currentScheduleItem = scheduleItemForReservationKey(scheduleItems, currentKey);
       const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
       const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, currentKey)?.snapshot || null;
       const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
@@ -8203,7 +8265,7 @@ function ReservationsTab({
     });
     if (nextKey && nextPublicInfo) {
       setScheduleItems((current) => (current || []).map((item) => (
-        reservationKeyFromScheduleItem(item) === nextKey
+        reservationKeyFromScheduleItem(item) === nextKey || legacyReservationKeyFromScheduleItem(item) === nextKey
           ? {
               ...item,
               publicInfo: nextPublicInfo,
@@ -8485,7 +8547,7 @@ function ReservationsTab({
         const selectedKey = reservationKeyFromState(reservationState);
         if (selectedKey) {
           setScheduleItems((current) => (current || []).map((item) => (
-            reservationKeyFromScheduleItem(item) === selectedKey
+            reservationKeyFromScheduleItem(item) === selectedKey || legacyReservationKeyFromScheduleItem(item) === selectedKey
               ? {
                   ...item,
                   reservationSettings: {
@@ -8579,6 +8641,7 @@ function ReservationsTab({
                 }
               : {}),
           },
+          tournamentKey: "",
           tournamentName: e.target.value,
           tournamentDate: "",
           tournamentStartTime: "",
@@ -18795,7 +18858,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
     setSupabaseSaveStatus("Saving...");
 
-    const scheduleRecords = (scheduleItems || []).map(scheduleRecordFromItem);
+    const normalizedScheduleItems = ensureScheduleEventIds(scheduleItems || []);
+    const scheduleRecords = normalizedScheduleItems.map(scheduleRecordFromItem);
     const titleRecords = (manualTitles || []).map(manualTitleRecordFromItem);
     const identityRecords = (bowlerIdentities || []).map(bowlerIdentityRecordFromItem);
     const reservationRecords = allReservationItemsFromState(reservationState).map(reservationRecordFromItem);
@@ -19066,7 +19130,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
         if (cancelled) return;
 
-        const nextSchedule = (scheduleRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
+        const nextSchedule = ensureScheduleEventIds((scheduleRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) })));
         const nextTitles = (titleRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
         const nextIdentities = (identityRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
         const settings = Array.isArray(settingsRows) ? settingsRows : [];
@@ -19102,28 +19166,40 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         if (adminAccessToken) setSavedTournamentDrafts(nextDrafts);
         if (Object.keys(nextActiveSnapshot).length) applyActiveTournamentSnapshot(nextActiveSnapshot);
         if (reservationSettings && typeof reservationSettings === "object") {
-          const currentReservationKey = reservationKeyFromState(reservationSettings);
-          const reservationsByTournament = { ...(reservationSettings.reservationsByTournament || {}) };
+          const currentReservationKey = canonicalScheduleReservationKey(nextSchedule, reservationKeyFromState(reservationSettings));
+          const reservationsByTournament = Object.entries(reservationSettings.reservationsByTournament || {}).reduce((groups, [bucketKey, bucket]) => {
+            const canonicalKey = canonicalScheduleReservationKey(nextSchedule, bucketKey);
+            groups[canonicalKey] = mergeReservationBucket(groups[canonicalKey], {
+              ...(bucket || {}),
+              tournamentKey: canonicalKey,
+            });
+            return groups;
+          }, {});
           Object.entries(reservationCountByTournament).forEach(([tournamentKey, count]) => {
             if (!tournamentKey) return;
-            reservationsByTournament[tournamentKey] = mergeReservationBucket(reservationsByTournament[tournamentKey], {
+            const canonicalKey = canonicalScheduleReservationKey(nextSchedule, tournamentKey);
+            reservationsByTournament[canonicalKey] = mergeReservationBucket(reservationsByTournament[canonicalKey], {
               reservationCount: count,
-              reservations: reservationsByTournament[tournamentKey]?.reservations || [],
-              publicReservations: publicRosterByTournament[tournamentKey] || reservationsByTournament[tournamentKey]?.publicReservations || [],
+              tournamentKey: canonicalKey,
+              reservations: reservationsByTournament[canonicalKey]?.reservations || [],
+              publicReservations: publicRosterByTournament[tournamentKey] || reservationsByTournament[canonicalKey]?.publicReservations || [],
             });
           });
           Object.entries(publicRosterByTournament).forEach(([tournamentKey, publicReservations]) => {
             if (!tournamentKey) return;
-            reservationsByTournament[tournamentKey] = mergeReservationBucket(reservationsByTournament[tournamentKey], {
+            const canonicalKey = canonicalScheduleReservationKey(nextSchedule, tournamentKey);
+            reservationsByTournament[canonicalKey] = mergeReservationBucket(reservationsByTournament[canonicalKey], {
               reservationCount: Number(reservationCountByTournament[tournamentKey] ?? publicReservations.length),
-              reservations: reservationsByTournament[tournamentKey]?.reservations || [],
+              tournamentKey: canonicalKey,
+              reservations: reservationsByTournament[canonicalKey]?.reservations || [],
               publicReservations,
             });
           });
           nextReservations.forEach((reservation) => {
-            const tournamentKey = reservation.tournamentKey || currentReservationKey;
+            const tournamentKey = canonicalScheduleReservationKey(nextSchedule, reservation.tournamentKey || currentReservationKey);
             if (!reservationsByTournament[tournamentKey]) {
               reservationsByTournament[tournamentKey] = {
+                tournamentKey,
                 tournamentName: reservation.tournament || "",
                 tournamentDate: "",
                 tournamentStartTime: "",
@@ -19145,18 +19221,29 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
               : publicRosterByTournament[tournamentKey] || [];
           });
           const currentBucket = reservationsByTournament[currentReservationKey] || {};
-          const currentTournamentReservations = nextReservations.filter((reservation) => (reservation.tournamentKey || "") === currentReservationKey);
+          const currentTournamentReservations = nextReservations.filter((reservation) =>
+            canonicalScheduleReservationKey(nextSchedule, reservation.tournamentKey || "") === currentReservationKey
+          );
           const currentReservationCount = Number(
             reservationCountByTournament[currentReservationKey] ??
             reservationSettings.reservationCount ??
             0
           );
-          const currentPublicReservations = publicRosterByTournament[currentReservationKey] || [];
+          const currentPublicReservations = reservationsByTournament[currentReservationKey]?.publicReservations || publicRosterByTournament[currentReservationKey] || [];
           const currentPublicTournamentInfo = reservationSettings.publicTournamentInfo || reservationsByTournament[currentReservationKey]?.publicTournamentInfo || null;
+          const canonicalOpenTournamentKeys = Array.from(new Set([
+            ...(Array.isArray(reservationSettings.openTournamentKeys) ? reservationSettings.openTournamentKeys : [])
+              .map((key) => canonicalScheduleReservationKey(nextSchedule, key)),
+            ...Object.entries(reservationsByTournament)
+              .filter(([, bucket]) => Boolean(bucket?.entriesOpen))
+              .map(([key]) => key),
+          ].filter(Boolean)));
           setReservationState((current) => ({
             ...current,
             ...reservationSettings,
             reservationsByTournament,
+            tournamentKey: currentReservationKey,
+            openTournamentKeys: canonicalOpenTournamentKeys,
             entriesOpen: currentBucket.entriesOpen ?? reservationSettings.entriesOpen ?? false,
             reservationLimit: Number(currentBucket.reservationLimit || reservationSettings.reservationLimit || DEFAULT_RESERVATION_LIMIT),
             reservationLimitUpdatedAt: currentBucket.reservationLimitUpdatedAt || reservationSettings.reservationLimitUpdatedAt || "",
@@ -19303,7 +19390,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         if (parsed.savedScoreGames) setSavedScoreGames(parsed.savedScoreGames);
         if (parsed.savedFinalsRounds) setSavedFinalsRounds(parsed.savedFinalsRounds);
         if (parsed.qualifyingAdjustments) setQualifyingAdjustments(parsed.qualifyingAdjustments);
-        if (Array.isArray(parsed.scheduleItems)) setScheduleItems(parsed.scheduleItems);
+        if (Array.isArray(parsed.scheduleItems)) setScheduleItems(ensureScheduleEventIds(parsed.scheduleItems));
         if (typeof parsed.scheduleLocked === "boolean") setScheduleLocked(parsed.scheduleLocked);
         if (parsed.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...parsed.eliminatorState });
         if (parsed.sidePotState) setSidePotState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: DEFAULT_BRACKET_PRICE, highGamePrice: 10, handicapHighGamePrice: 10, entries: {}, bracketSets: { early: parsed.sidePotState.entries || {}, handicapEarly: {}, middle: {}, late: {} }, brackets: [], bracketGroups: { early: parsed.sidePotState.brackets || [], handicapEarly: [], middle: [], late: [] }, leftovers: 0, leftoversBySet: { early: parsed.sidePotState.leftovers || 0, handicapEarly: 0, middle: 0, late: 0 }, refunds: [], refundsBySet: { early: parsed.sidePotState.refunds || [], handicapEarly: [], middle: [], late: [] }, selectedPlanIds: { early: parsed.sidePotState.selectedPlanId || "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only" }, ...parsed.sidePotState });
@@ -19461,7 +19548,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         savedAt: now,
         snapshot,
       };
-      const snapshotKey = reservationTournamentKey({
+      const snapshotKey = snapshot.tournamentInfo?.scheduleEventId || reservationTournamentKey({
+        name: snapshot.tournamentInfo?.name,
+        date: snapshot.tournamentInfo?.date,
+        center: snapshot.tournamentInfo?.center,
+      });
+      const snapshotLegacyKey = reservationTournamentKey({
         name: snapshot.tournamentInfo?.name,
         date: snapshot.tournamentInfo?.date,
         center: snapshot.tournamentInfo?.center,
@@ -19469,7 +19561,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       const scheduleSetup = buildScheduleEventSetupFromSnapshot(snapshot);
       if (snapshotKey) {
         setScheduleItems((current) => (current || []).map((item) => (
-          reservationKeyFromScheduleItem(item) === snapshotKey
+          reservationKeyFromScheduleItem(item) === snapshotKey ||
+          legacyReservationKeyFromScheduleItem(item) === snapshotKey ||
+          legacyReservationKeyFromScheduleItem(item) === snapshotLegacyKey
             ? {
                 ...item,
                 ...scheduleSetup,
