@@ -855,7 +855,7 @@ const DEFAULT_PAYOUT_STATE = {
 };
 const DEFAULT_BRACKET_PRICE = 5;
 const DEFAULT_BBTV_YOUTUBE_LINK = "https://www.youtube.com/@BBPSTV";
-const DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK = "";
+const DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK = "https://www.facebook.com/bowlerbuildersproshops";
 const TOURNAMENT_IMAGE_MAX_WIDTH = 1600;
 const TOURNAMENT_IMAGE_MAX_HEIGHT = 1200;
 const TOURNAMENT_IMAGE_BUCKET = "tournament-images";
@@ -3632,12 +3632,13 @@ function TournamentInfoTab({
     .map((item) => item.trim())
     .filter(Boolean);
   const displayedWatchLinks = [
-    ...(displayedTournamentInfo.streamLink ? [{ label: "Current Livestream", href: displayedTournamentInfo.streamLink }] : []),
-    { label: "BBTV YouTube", href: displayedTournamentInfo.bbtvYoutubeLink || DEFAULT_BBTV_YOUTUBE_LINK },
-    ...(displayedTournamentInfo.facebookLink ? [{ label: "Bowler Builders Facebook", href: displayedTournamentInfo.facebookLink }] : []),
-    ...(displayedTournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: displayedTournamentInfo.recentVideoLink }] : []),
-    ...displayedVideoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href })),
-  ].filter((item) => item.href);
+    ...(displayedTournamentInfo.streamLink ? [{ label: "Current Livestream", href: displayedTournamentInfo.streamLink, type: "stream" }] : []),
+    { label: "Bowler Builders Facebook", href: displayedTournamentInfo.facebookLink || DEFAULT_BOWLER_BUILDERS_FACEBOOK_LINK, type: "facebook" },
+    { label: "BBTV YouTube", href: displayedTournamentInfo.bbtvYoutubeLink || DEFAULT_BBTV_YOUTUBE_LINK, type: "youtube" },
+    ...(displayedTournamentInfo.recentVideoLink ? [{ label: "Recent Tournament Video", href: displayedTournamentInfo.recentVideoLink, type: "video" }] : []),
+    ...displayedVideoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href, type: "video" })),
+  ].filter((item) => item.href)
+    .filter((item, index, links) => links.findIndex((link) => normalizeMatchText(link.href) === normalizeMatchText(item.href)) === index);
   const reservationsMatchCurrentTournament = Boolean(matchingReservationState?.entriesOpen);
   const publicReservationEntries = matchingReservationState
     ? (matchingReservationState.reservations?.length
@@ -3937,10 +3938,22 @@ const infoRows = [
             {displayedWatchLinks.length > 0 && (
               <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4">
                 <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Watch & Follow</h3>
-                <div className="space-y-2">
+                <div className="grid gap-2 sm:grid-cols-2">
                   {displayedWatchLinks.map((link) => (
-                    <a key={`${link.label}-${link.href}`} href={link.href} target="_blank" rel="noreferrer" className="block rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-900 hover:bg-blue-100">
-                      {link.label}
+                    <a
+                      key={`${link.label}-${link.href}`}
+                      href={link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-h-[62px] items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-900 hover:bg-blue-100"
+                    >
+                      {link.type === "facebook" && (
+                        <img src={bowlerBuildersLogo} alt="" className="h-10 w-10 rounded-lg bg-white object-contain p-1" />
+                      )}
+                      {link.type === "youtube" && (
+                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-950 text-xs font-black text-white">BBTV</span>
+                      )}
+                      <span>{link.label}</span>
                     </a>
                   ))}
                 </div>
