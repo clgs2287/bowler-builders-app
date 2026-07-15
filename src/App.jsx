@@ -7558,10 +7558,10 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
           {scheduleItems.map((item, index) => (
             <div
               key={`schedule-${index}`}
-              className="space-y-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm"
+              className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm"
             >
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
+              <div className="mb-4 flex flex-col gap-3 border-b border-blue-100 pb-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-wide text-blue-600">Schedule Event</p>
                   <h3 className="text-lg font-black text-blue-950">
                     {item.name || `Tournament ${index + 1}`}
@@ -7581,134 +7581,140 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                 </Button>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Tournament Name</Label>
-                  <Input
-                    value={item.name}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateItem(index, "name", e.target.value)}
-                    placeholder="Tournament Name"
-                  />
-                </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <section className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                  <h4 className="text-xs font-black uppercase tracking-wide text-blue-700">Event Details</h4>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs font-black text-blue-900">Tournament Name</Label>
+                      <Input
+                        value={item.name}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(index, "name", e.target.value)}
+                        placeholder="Tournament Name"
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Format / Short Note</Label>
-                  <Input
-                    value={item.format}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateItem(index, "format", e.target.value)}
-                    placeholder="Format"
-                  />
-                </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs font-black text-blue-900">Format / Short Note</Label>
+                      <Input
+                        value={item.format}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(index, "format", e.target.value)}
+                        placeholder="Format"
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Start Date</Label>
-                  <Input
-                    type="date"
-                    value={item.startDate}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateItem(index, "startDate", e.target.value)}
-                  />
-                </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-black text-blue-900">Start Date</Label>
+                      <Input
+                        type="date"
+                        value={item.startDate}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(index, "startDate", e.target.value)}
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Start Time</Label>
-                  <Input
-                    type="time"
-                    value={item.startTime || ""}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateItem(index, "startTime", e.target.value)}
-                  />
-                </div>
-              </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-black text-blue-900">Start Time</Label>
+                      <Input
+                        type="time"
+                        value={item.startTime || ""}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(index, "startTime", e.target.value)}
+                      />
+                    </div>
 
-              <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_1fr]">
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Center</Label>
-                  <select
-                    value={BOWLING_CENTERS.some((center) => center.name === item.center) ? item.center : item.center || ""}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateScheduleCenter(index, e.target.value)}
-                    className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
-                  >
-                    <option value="">Select Center</option>
-                    {item.center && !BOWLING_CENTERS.some((center) => center.name === item.center) && (
-                      <option value={item.center}>{item.center}</option>
-                    )}
-                    {BOWLING_CENTERS.map((center) => (
-                      <option key={center.name} value={center.name}>
-                        {center.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs font-black text-blue-900">End Date</Label>
+                      <Input
+                        type="date"
+                        value={item.endDate}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(index, "endDate", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </section>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Address</Label>
-                  <Input
-                    value={item.address}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateItem(index, "address", e.target.value)}
-                    placeholder="Address"
-                  />
-                </div>
+                <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <h4 className="text-xs font-black uppercase tracking-wide text-slate-700">Location & Registration</h4>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-black text-blue-900">Center</Label>
+                      <select
+                        value={BOWLING_CENTERS.some((center) => center.name === item.center) ? item.center : item.center || ""}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateScheduleCenter(index, e.target.value)}
+                        className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+                      >
+                        <option value="">Select Center</option>
+                        {item.center && !BOWLING_CENTERS.some((center) => center.name === item.center) && (
+                          <option value={item.center}>{item.center}</option>
+                        )}
+                        {BOWLING_CENTERS.map((center) => (
+                          <option key={center.name} value={center.name}>
+                            {center.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">End Date</Label>
-                  <Input
-                    type="date"
-                    value={item.endDate}
-                    disabled={scheduleLocked}
-                    onChange={(e) => updateItem(index, "endDate", e.target.value)}
-                  />
-                </div>
-              </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-black text-blue-900">Max Entries</Label>
+                      <Input
+                        type="number"
+                        value={getScheduleEventReservationSettings(item).reservationLimit}
+                        disabled={scheduleLocked}
+                        onChange={(e) =>
+                          updateItem(index, "reservationSettings", {
+                            ...(item.reservationSettings || {}),
+                            reservationLimit: Number(e.target.value || 0),
+                            reservationLimitUpdatedAt: new Date().toISOString(),
+                          })
+                        }
+                        placeholder="Max"
+                      />
+                    </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className={`flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
-                  <Label className="text-xs font-black text-blue-900">FKM Title Event</Label>
-                  <Switch
-                    compact
-                    checked={Boolean(item.fkmTitle)}
-                    onCheckedChange={(checked) =>
-                      !scheduleLocked && updateItem(index, "fkmTitle", checked)
-                    }
-                  />
-                </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs font-black text-blue-900">Address</Label>
+                      <Input
+                        value={item.address}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(index, "address", e.target.value)}
+                        placeholder="Address"
+                      />
+                    </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-black text-blue-900">Max Entries</Label>
-                  <Input
-                    type="number"
-                    value={getScheduleEventReservationSettings(item).reservationLimit}
-                    disabled={scheduleLocked}
-                    onChange={(e) =>
-                      updateItem(index, "reservationSettings", {
-                        ...(item.reservationSettings || {}),
-                        reservationLimit: Number(e.target.value || 0),
-                        reservationLimitUpdatedAt: new Date().toISOString(),
-                      })
-                    }
-                    placeholder="Max"
-                  />
-                </div>
+                    <div className={`flex min-h-10 items-center justify-between gap-3 rounded-xl border border-blue-100 bg-white px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
+                      <Label className="text-xs font-black text-blue-900">FKM Title Event</Label>
+                      <Switch
+                        compact
+                        checked={Boolean(item.fkmTitle)}
+                        onCheckedChange={(checked) =>
+                          !scheduleLocked && updateItem(index, "fkmTitle", checked)
+                        }
+                      />
+                    </div>
 
-                <div className={`flex items-center justify-between gap-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
-                  <Label className="text-xs font-black text-green-900">Entries Open</Label>
-                  <Switch
-                    compact
-                    checked={getScheduleEventReservationSettings(item).entriesOpen}
-                    onCheckedChange={(checked) =>
-                      !scheduleLocked && updateItem(index, "reservationSettings", {
-                        ...(item.reservationSettings || {}),
-                        entriesOpen: checked,
-                        reservationLimit: getScheduleEventReservationSettings(item).reservationLimit,
-                        reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || "",
-                      })
-                    }
-                  />
-                </div>
+                    <div className={`flex min-h-10 items-center justify-between gap-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
+                      <Label className="text-xs font-black text-green-900">Entries Open</Label>
+                      <Switch
+                        compact
+                        checked={getScheduleEventReservationSettings(item).entriesOpen}
+                        onCheckedChange={(checked) =>
+                          !scheduleLocked && updateItem(index, "reservationSettings", {
+                            ...(item.reservationSettings || {}),
+                            entriesOpen: checked,
+                            reservationLimit: getScheduleEventReservationSettings(item).reservationLimit,
+                            reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || "",
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
           ))}
