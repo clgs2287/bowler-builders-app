@@ -3723,6 +3723,9 @@ const infoRows = [
   ["FKM Eligible", displayedTournamentInfo.titleEligible ?? true ? "Yes" : "No"],
   ["Major", displayedTournamentInfo.major ? "Yes" : "No"],
 ];
+  const showTournamentInfoFbetBrand = String(displayedTournamentInfo.series || "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "") === "fbet";
 
   return (
     <AppCard>
@@ -3755,6 +3758,17 @@ const infoRows = [
             </ul>
           </div>
         </section>
+
+        {showTournamentInfoFbetBrand && (
+          <section className="mb-3 overflow-hidden rounded-2xl border border-red-900/60 bg-slate-950 shadow-sm md:mb-5">
+            <img
+              src={fbetLogo}
+              alt="Frankie's Bowling Emporium Tour"
+              className="h-auto max-h-[320px] w-full object-contain"
+              loading="lazy"
+            />
+          </section>
+        )}
 
         <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-5">
           <div className="space-y-2.5 md:space-y-4">
