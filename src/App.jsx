@@ -1015,6 +1015,55 @@ function scheduleItemForReservationKey(scheduleItems = [], tournamentKey = "") {
   return (scheduleItems || []).find((item) => reservationKeyFromScheduleItem(item) === tournamentKey) || null;
 }
 
+function getScheduleEventReservationSettings(item = {}) {
+  const settings = item?.reservationSettings || {};
+  return {
+    entriesOpen: Boolean(settings.entriesOpen),
+    reservationLimit: Number(settings.reservationLimit || item.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+    reservationLimitUpdatedAt: settings.reservationLimitUpdatedAt || item.reservationLimitUpdatedAt || "",
+    waitlistOnlyNames: settings.waitlistOnlyNames || item.waitlistOnlyNames || "",
+  };
+}
+
+function getScheduleEventPublicInfo(item = {}) {
+  const publicInfo = item?.publicInfo || item?.eventSetup?.tournamentInfo || {};
+  return buildReservationTournamentInfoSnapshot({
+    tournamentInfo: publicInfo,
+    scheduleItem: item,
+    reservationState: {
+      tournamentName: item?.name || publicInfo.name || "",
+      tournamentDate: item?.startDate || publicInfo.date || "",
+      tournamentStartTime: item?.startTime || publicInfo.startTime || "",
+      tournamentCenter: item?.center || publicInfo.center || "",
+      tournamentAddress: item?.address || publicInfo.location || "",
+    },
+    payoutState: item?.eventSetup?.payoutState || {},
+  });
+}
+
+function buildScheduleEventSetupFromSnapshot(snapshot = {}) {
+  const tournamentInfo = snapshot.tournamentInfo || {};
+  return {
+    publicInfo: buildReservationTournamentInfoSnapshot({
+      tournamentInfo,
+      payoutState: snapshot.payoutState || {},
+      reservationState: {
+        tournamentName: tournamentInfo.name || "",
+        tournamentDate: tournamentInfo.date || "",
+        tournamentStartTime: tournamentInfo.startTime || "",
+        tournamentCenter: tournamentInfo.center || "",
+        tournamentAddress: tournamentInfo.location || "",
+      },
+    }),
+    eventSetup: {
+      tournamentInfo,
+      payoutState: snapshot.payoutState || {},
+      tournamentFormat: snapshot.tournamentFormat || "bracket",
+      qualifyingGames: Number(snapshot.qualifyingGames || 4),
+    },
+  };
+}
+
 function tournamentInfoMatchesReservationKey(tournamentInfo = {}, tournamentKey = "") {
   if (!tournamentKey) return false;
   const [keyName = "", keyDate = "", keyCenter = ""] = String(tournamentKey || "").split("|");
@@ -1229,28 +1278,38 @@ function getOpenReservationKeys(reservationState = {}) {
 }
 
 function reservationStateForKey(reservationState = {}, tournamentKey = "", scheduleItems = []) {
+  const scheduleItem = scheduleItemForReservationKey(scheduleItems, tournamentKey);
+  const scheduleReservationSettings = getScheduleEventReservationSettings(scheduleItem || {});
   if (!tournamentKey || tournamentKey === reservationKeyFromState(reservationState)) {
     const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
     return {
       ...reservationState,
       publicTournamentInfo: reservationState.publicTournamentInfo || bucket.publicTournamentInfo || null,
+      entriesOpen: Boolean(scheduleReservationSettings.entriesOpen || reservationState.entriesOpen || bucket.entriesOpen),
+      reservationLimit: Number(scheduleReservationSettings.reservationLimit || reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+      reservationLimitUpdatedAt: scheduleReservationSettings.reservationLimitUpdatedAt || reservationState.reservationLimitUpdatedAt || "",
+      waitlistOnlyNames: scheduleReservationSettings.waitlistOnlyNames || reservationState.waitlistOnlyNames || "",
     };
   }
   const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
   const snapshot = bucket.publicTournamentInfo || {};
-  const scheduleItem = scheduleItemForReservationKey(scheduleItems, tournamentKey);
   const [keyName = "", keyDate = "", keyCenter = ""] = String(tournamentKey || "").split("|");
   const bucketName = String(bucket.tournamentName || "").trim();
   const bucketNameLooksLikeKey = bucketName && keyName && getIdentityKey(bucketName) === getIdentityKey(keyName);
+  const schedulePublicInfo = scheduleItem ? getScheduleEventPublicInfo(scheduleItem) : null;
   return {
     ...reservationState,
     ...bucket,
-    tournamentName: (bucketNameLooksLikeKey ? "" : bucketName) || snapshot.name || scheduleItem?.name || keyName || "",
-    tournamentDate: bucket.tournamentDate || snapshot.date || scheduleItem?.startDate || keyDate || "",
-    tournamentStartTime: bucket.tournamentStartTime || snapshot.startTime || scheduleItem?.startTime || "",
-    tournamentCenter: bucket.tournamentCenter || snapshot.center || scheduleItem?.center || keyCenter || "",
-    tournamentAddress: bucket.tournamentAddress || snapshot.location || scheduleItem?.address || "",
-    entriesOpen: Boolean(bucket.entriesOpen || getOpenReservationKeys(reservationState).includes(tournamentKey)),
+    tournamentName: (bucketNameLooksLikeKey ? "" : bucketName) || schedulePublicInfo?.name || snapshot.name || scheduleItem?.name || keyName || "",
+    tournamentDate: bucket.tournamentDate || schedulePublicInfo?.date || snapshot.date || scheduleItem?.startDate || keyDate || "",
+    tournamentStartTime: bucket.tournamentStartTime || schedulePublicInfo?.startTime || snapshot.startTime || scheduleItem?.startTime || "",
+    tournamentCenter: bucket.tournamentCenter || schedulePublicInfo?.center || snapshot.center || scheduleItem?.center || keyCenter || "",
+    tournamentAddress: bucket.tournamentAddress || schedulePublicInfo?.location || snapshot.location || scheduleItem?.address || "",
+    entriesOpen: Boolean(scheduleReservationSettings.entriesOpen || bucket.entriesOpen || getOpenReservationKeys(reservationState).includes(tournamentKey)),
+    reservationLimit: Number(scheduleReservationSettings.reservationLimit || bucket.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+    reservationLimitUpdatedAt: scheduleReservationSettings.reservationLimitUpdatedAt || bucket.reservationLimitUpdatedAt || "",
+    waitlistOnlyNames: scheduleReservationSettings.waitlistOnlyNames || bucket.waitlistOnlyNames || "",
+    publicTournamentInfo: schedulePublicInfo || bucket.publicTournamentInfo || null,
     reservationsByTournament: reservationState.reservationsByTournament || {},
     openTournamentKeys: getOpenReservationKeys(reservationState),
   };
@@ -1258,14 +1317,17 @@ function reservationStateForKey(reservationState = {}, tournamentKey = "", sched
 
 function openReservationOptions(reservationState = {}, scheduleItems = []) {
   const seen = new Set();
-  return getOpenReservationKeys(reservationState)
+  const scheduleOpenKeys = (scheduleItems || [])
+    .filter((item) => getScheduleEventReservationSettings(item).entriesOpen)
+    .map((item) => reservationKeyFromScheduleItem(item));
+  return Array.from(new Set([...getOpenReservationKeys(reservationState), ...scheduleOpenKeys].filter(Boolean)))
     .map((key) => {
       const bucket = key === reservationKeyFromState(reservationState)
         ? reservationBucketFromState(reservationState)
         : reservationState.reservationsByTournament?.[key] || {};
       const state = reservationStateForKey(reservationState, key, scheduleItems);
-      const snapshot = bucket.publicTournamentInfo || state.publicTournamentInfo || {};
       const scheduleItem = scheduleItemForReservationKey(scheduleItems, key);
+      const snapshot = scheduleItem ? getScheduleEventPublicInfo(scheduleItem) : bucket.publicTournamentInfo || state.publicTournamentInfo || {};
       const [keyName = "", keyDate = "", keyCenter = ""] = String(key || "").split("|");
       const labelName = state.tournamentName || snapshot.name || scheduleItem?.name || bucket.tournamentName || keyName || "Tournament";
       const labelDate = state.tournamentDate || snapshot.date || scheduleItem?.startDate || bucket.tournamentDate || keyDate || "";
@@ -3244,7 +3306,7 @@ function PublicHomeTab({
   const nextEvent = upcomingEvents[0] || null;
   const nextEventKey = nextEvent ? reservationKeyFromScheduleItem(nextEvent) : "";
   const nextEventReservation = nextEventKey ? publicReservationOptions.find((option) => option.key === nextEventKey) || null : null;
-  const nextEventInfo = nextEventReservation?.state?.publicTournamentInfo || null;
+  const nextEventInfo = nextEvent ? getScheduleEventPublicInfo(nextEvent) : nextEventReservation?.state?.publicTournamentInfo || null;
   const fallbackHomeInfo = nextEvent ? {} : tournamentInfo;
   const featuredName = nextEventInfo?.name || nextEvent?.name || fallbackHomeInfo.name || "Next Bowler Builders Event";
   const featuredDate = nextEventInfo?.date || nextEvent?.startDate || fallbackHomeInfo.date || "";
@@ -3494,7 +3556,9 @@ function TournamentInfoTab({
       ? reservationBucketFromState(reservationState)
       : reservationState.reservationsByTournament?.[selectedEventKey] || null
     : null;
+  const selectedEventReservationSettings = getScheduleEventReservationSettings(selectedEventScheduleItem || {});
   const selectedEventHasReservationData = Boolean(
+    selectedEventReservationSettings.entriesOpen ||
     selectedEventBucket?.publicTournamentInfo ||
     selectedEventBucket?.entriesOpen ||
     selectedEventBucket?.reservationCount ||
@@ -3502,12 +3566,14 @@ function TournamentInfoTab({
     selectedEventBucket?.publicReservations?.length
   );
   const selectedEventInfo = selectedEventKey
-    ? buildReservationTournamentInfoSnapshot({
-        tournamentInfo: selectedEventDraftSnapshot?.tournamentInfo || selectedEventBucket?.publicTournamentInfo || {},
-        scheduleItem: selectedEventScheduleItem,
-        reservationState: selectedEventHasReservationData ? selectedEventReservationState || {} : {},
-        payoutState: selectedEventDraftSnapshot?.payoutState || {},
-      })
+    ? selectedEventScheduleItem
+      ? getScheduleEventPublicInfo(selectedEventScheduleItem)
+      : buildReservationTournamentInfoSnapshot({
+          tournamentInfo: selectedEventDraftSnapshot?.tournamentInfo || selectedEventBucket?.publicTournamentInfo || {},
+          scheduleItem: selectedEventScheduleItem,
+          reservationState: selectedEventHasReservationData ? selectedEventReservationState || {} : {},
+          payoutState: selectedEventDraftSnapshot?.payoutState || {},
+        })
     : null;
   const selectedReservationOption = publicReservationOptions.find((option) => option.key === selectedReservationKey);
   const dashboardReservationOption = publicReservationOptions.length <= 1
@@ -4684,6 +4750,7 @@ function DashboardTab({
   payoutState,
   matchplayState = DEFAULT_MATCHPLAY_STATE,
   scheduleItems = [],
+  setScheduleItems = () => {},
   scheduleLocked = false,
   manualTitles = [],
   bowlerIdentities = [],
@@ -4709,9 +4776,11 @@ function DashboardTab({
       update("name", name);
       return;
     }
+    const savedSetup = scheduledItem.eventSetup || {};
 
     setTournamentInfo((current) => ({
       ...current,
+      ...(savedSetup.tournamentInfo || {}),
       name: scheduledItem.name || name,
       date: scheduledItem.startDate || current.date || "",
       startTime: scheduledItem.startTime || current.startTime || "",
@@ -4721,6 +4790,8 @@ function DashboardTab({
       major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : current.major,
       series: scheduledItem.series || current.series || DEFAULT_TOURNAMENT_SERIES,
     }));
+    if (savedSetup.tournamentFormat) setTournamentFormat(savedSetup.tournamentFormat);
+    if (savedSetup.qualifyingGames) updateQualifyingGames(savedSetup.qualifyingGames);
   };
   const uploadAnnouncementImages = async (fileList) => {
     const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
@@ -7354,6 +7425,10 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
         center: "",
         address: "",
         fkmTitle: false,
+        reservationSettings: {
+          entriesOpen: false,
+          reservationLimit: DEFAULT_RESERVATION_LIMIT,
+        },
       },
     ]);
   };
@@ -7399,7 +7474,7 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
           {scheduleItems.map((item, index) => (
             <div
               key={`schedule-${index}`}
-              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-9"
+              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-11"
             >
               <Input
                 value={item.name}
@@ -7472,6 +7547,36 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                   checked={Boolean(item.fkmTitle)}
                   onCheckedChange={(checked) =>
                     !scheduleLocked && updateItem(index, "fkmTitle", checked)
+                  }
+                />
+              </div>
+
+              <Input
+                type="number"
+                value={getScheduleEventReservationSettings(item).reservationLimit}
+                disabled={scheduleLocked}
+                onChange={(e) =>
+                  updateItem(index, "reservationSettings", {
+                    ...(item.reservationSettings || {}),
+                    reservationLimit: Number(e.target.value || 0),
+                    reservationLimitUpdatedAt: new Date().toISOString(),
+                  })
+                }
+                placeholder="Max"
+              />
+
+              <div className={`flex items-center justify-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
+                <Label className="text-xs">Open</Label>
+                <Switch
+                  compact
+                  checked={getScheduleEventReservationSettings(item).entriesOpen}
+                  onCheckedChange={(checked) =>
+                    !scheduleLocked && updateItem(index, "reservationSettings", {
+                      ...(item.reservationSettings || {}),
+                      entriesOpen: checked,
+                      reservationLimit: getScheduleEventReservationSettings(item).reservationLimit,
+                      reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || "",
+                    })
                   }
                 />
               </div>
@@ -7753,6 +7858,7 @@ function ReservationsTab({
   tournamentInfo = {},
   payoutState = {},
   scheduleItems = [],
+  setScheduleItems = () => {},
   savedTournamentDrafts = [],
   bowlerIdentities = [],
   setBowlerIdentities = () => {},
@@ -7919,11 +8025,13 @@ function ReservationsTab({
       }
 
       const savedBucket = reservationsByTournament[nextKey] || {};
+      const eventReservationSettings = getScheduleEventReservationSettings(item || {});
+      const eventPublicInfo = item ? getScheduleEventPublicInfo(item) : null;
       const openTournamentKeys = getOpenReservationKeys(current);
-      const nextEntriesOpen = Boolean(savedBucket.entriesOpen || openTournamentKeys.includes(nextKey));
+      const nextEntriesOpen = Boolean(eventReservationSettings.entriesOpen || savedBucket.entriesOpen || openTournamentKeys.includes(nextKey));
       const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, nextKey);
       const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, nextKey)?.snapshot || null;
-      const publicTournamentInfo = matchingDraftSnapshot
+      const publicTournamentInfo = eventPublicInfo || (matchingDraftSnapshot
         ? buildReservationTournamentInfoSnapshot({
             tournamentInfo: matchingDraftSnapshot.tournamentInfo || {},
             payoutState: matchingDraftSnapshot.payoutState || {},
@@ -7951,7 +8059,7 @@ function ReservationsTab({
             tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
             tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
             },
-          });
+          }));
 
       return {
         ...current,
@@ -7963,10 +8071,10 @@ function ReservationsTab({
         tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
         tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
         tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
-        reservationLimit: Number(savedBucket.reservationLimit || current.reservationLimit || DEFAULT_RESERVATION_LIMIT),
-        reservationLimitUpdatedAt: savedBucket.reservationLimitUpdatedAt || "",
+        reservationLimit: Number(eventReservationSettings.reservationLimit || savedBucket.reservationLimit || current.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+        reservationLimitUpdatedAt: eventReservationSettings.reservationLimitUpdatedAt || savedBucket.reservationLimitUpdatedAt || "",
         reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
-        waitlistOnlyNames: savedBucket.waitlistOnlyNames || "",
+        waitlistOnlyNames: eventReservationSettings.waitlistOnlyNames || savedBucket.waitlistOnlyNames || "",
         reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
         reservations: savedBucket.reservations || [],
         publicReservations: savedBucket.publicReservations || [],
@@ -8017,9 +8125,29 @@ function ReservationsTab({
         openTournamentKeys: Array.from(openTournamentKeys),
       };
     });
+    const currentKey = reservationKeyFromState(reservationState);
+    if (currentKey) {
+      setScheduleItems((current) => (current || []).map((item) => (
+        reservationKeyFromScheduleItem(item) === currentKey
+          ? {
+              ...item,
+              reservationSettings: {
+                ...(item.reservationSettings || {}),
+                entriesOpen: checked,
+                reservationLimit: Number(reservationState.reservationLimit || item.reservationSettings?.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+                reservationLimitUpdatedAt: reservationState.reservationLimitUpdatedAt || item.reservationSettings?.reservationLimitUpdatedAt || "",
+                waitlistOnlyNames: reservationState.waitlistOnlyNames || item.reservationSettings?.waitlistOnlyNames || "",
+              },
+              publicInfo: reservationState.publicTournamentInfo || getScheduleEventPublicInfo(item),
+            }
+          : item
+      )));
+    }
   };
 
   const updateSelectedTournamentPublicInfo = () => {
+    let nextPublicInfo = null;
+    let nextKey = "";
     setReservationState((current) => {
       const currentKey = reservationKeyFromState(current);
       if (!currentKey) return current;
@@ -8033,6 +8161,8 @@ function ReservationsTab({
         scheduleItem: currentScheduleItem || null,
         reservationState: current,
       });
+      nextKey = currentKey;
+      nextPublicInfo = publicTournamentInfo;
       reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
         ...reservationBucketFromState(current),
         entriesOpen: current.entriesOpen,
@@ -8044,6 +8174,23 @@ function ReservationsTab({
         reservationsByTournament,
       };
     });
+    if (nextKey && nextPublicInfo) {
+      setScheduleItems((current) => (current || []).map((item) => (
+        reservationKeyFromScheduleItem(item) === nextKey
+          ? {
+              ...item,
+              publicInfo: nextPublicInfo,
+              reservationSettings: {
+                ...(item.reservationSettings || {}),
+                entriesOpen: Boolean(reservationState.entriesOpen || item.reservationSettings?.entriesOpen),
+                reservationLimit: Number(reservationState.reservationLimit || item.reservationSettings?.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+                reservationLimitUpdatedAt: reservationState.reservationLimitUpdatedAt || item.reservationSettings?.reservationLimitUpdatedAt || "",
+                waitlistOnlyNames: reservationState.waitlistOnlyNames || item.reservationSettings?.waitlistOnlyNames || "",
+              },
+            }
+          : item
+      )));
+    }
     setRosterNotice("Public tournament info was updated for the selected tournament.");
   };
 
@@ -8305,10 +8452,27 @@ function ReservationsTab({
     <Input
       type="number"
       value={reservationState.reservationLimit}
-      onChange={(e) =>
+      onChange={(e) => {
+        const nextLimit = Number(e.target.value || 0);
+        const nextUpdatedAt = new Date().toISOString();
+        const selectedKey = reservationKeyFromState(reservationState);
+        if (selectedKey) {
+          setScheduleItems((current) => (current || []).map((item) => (
+            reservationKeyFromScheduleItem(item) === selectedKey
+              ? {
+                  ...item,
+                  reservationSettings: {
+                    ...(item.reservationSettings || {}),
+                    reservationLimit: nextLimit,
+                    reservationLimitUpdatedAt: nextUpdatedAt,
+                    entriesOpen: Boolean(reservationState.entriesOpen || item.reservationSettings?.entriesOpen),
+                    waitlistOnlyNames: reservationState.waitlistOnlyNames || item.reservationSettings?.waitlistOnlyNames || "",
+                  },
+                }
+              : item
+          )));
+        }
         setReservationState((current) => {
-          const nextLimit = Number(e.target.value || 0);
-          const nextUpdatedAt = new Date().toISOString();
           const currentKey = reservationKeyFromState(current);
           const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
           if (currentKey) {
@@ -8324,8 +8488,8 @@ function ReservationsTab({
             reservationLimitUpdatedAt: nextUpdatedAt,
             reservationsByTournament,
           };
-        })
-      }
+        });
+      }}
       placeholder="Reservation Limit"
     />
     <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-900">
@@ -19270,6 +19434,30 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         savedAt: now,
         snapshot,
       };
+      const snapshotKey = reservationTournamentKey({
+        name: snapshot.tournamentInfo?.name,
+        date: snapshot.tournamentInfo?.date,
+        center: snapshot.tournamentInfo?.center,
+      });
+      const scheduleSetup = buildScheduleEventSetupFromSnapshot(snapshot);
+      if (snapshotKey) {
+        setScheduleItems((current) => (current || []).map((item) => (
+          reservationKeyFromScheduleItem(item) === snapshotKey
+            ? {
+                ...item,
+                ...scheduleSetup,
+                name: item.name || scheduleSetup.publicInfo.name || "",
+                startDate: item.startDate || scheduleSetup.publicInfo.date || "",
+                startTime: item.startTime || scheduleSetup.publicInfo.startTime || "",
+                center: item.center || scheduleSetup.publicInfo.center || "",
+                address: item.address || scheduleSetup.publicInfo.location || "",
+                series: scheduleSetup.publicInfo.series || item.series || DEFAULT_TOURNAMENT_SERIES,
+                fkmTitle: typeof scheduleSetup.publicInfo.titleEligible === "boolean" ? scheduleSetup.publicInfo.titleEligible : item.fkmTitle,
+                major: typeof scheduleSetup.publicInfo.major === "boolean" ? scheduleSetup.publicInfo.major : item.major,
+              }
+            : item
+        )));
+      }
       refreshOpenReservationPublicInfoFromSnapshot(snapshot);
       setSavedTournamentDrafts((current) => [draft, ...current.filter((item) =>
         item.name !== name &&
@@ -19789,6 +19977,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       eliminatorState={eliminatorState}
       matchplayState={matchplayState}
       scheduleItems={scheduleItems}
+      setScheduleItems={setScheduleItems}
       scheduleLocked={scheduleLocked}
       manualTitles={manualTitles}
       bowlerIdentities={bowlerIdentities}
@@ -19845,6 +20034,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   tournamentInfo={tournamentInfo}
   payoutState={payoutState}
   scheduleItems={scheduleItems}
+  setScheduleItems={setScheduleItems}
   savedTournamentDrafts={savedTournamentDrafts}
   bowlerIdentities={bowlerIdentities}
   setBowlerIdentities={setBowlerIdentities}
