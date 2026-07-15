@@ -1394,7 +1394,10 @@ function openReservationOptions(reservationState = {}, scheduleItems = []) {
     })
     .filter((option) => {
       if (!option.state.entriesOpen || !option.state.tournamentName) return false;
-      if (isTournamentDayOrLater(option.state.tournamentDate || option.scheduleItem?.startDate)) return false;
+      if (isReservationCutoffReached(
+        option.state.tournamentDate || option.scheduleItem?.startDate,
+        option.state.tournamentStartTime || option.scheduleItem?.startTime
+      )) return false;
       const identity = reservationTournamentKey({
         name: option.state.tournamentName,
         date: option.state.tournamentDate,
@@ -1480,6 +1483,12 @@ function isTournamentRegistrationWindow(date, startTime) {
   if (!startDateTime) return false;
   const now = Date.now();
   return now >= startDateTime.getTime() - 60 * 60 * 1000 && now < startDateTime.getTime();
+}
+
+function isReservationCutoffReached(date, startTime) {
+  const startDateTime = getTournamentStartDateTime(date, startTime);
+  if (!startDateTime) return isTournamentDayOrLater(date);
+  return Date.now() >= startDateTime.getTime() - 60 * 60 * 1000;
 }
 
 function formatStartTime(startTime) {
@@ -3688,7 +3697,13 @@ function TournamentInfoTab({
     ...displayedVideoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href, type: "video" })),
   ].filter((item) => item.href)
     .filter((item, index, links) => links.findIndex((link) => normalizeMatchText(link.href) === normalizeMatchText(item.href)) === index);
-  const reservationsMatchCurrentTournament = Boolean(matchingReservationState?.entriesOpen);
+  const reservationsMatchCurrentTournament = Boolean(
+    matchingReservationState?.entriesOpen &&
+    !isReservationCutoffReached(
+      matchingReservationState.tournamentDate || displayedTournamentInfo.date,
+      matchingReservationState.tournamentStartTime || displayedTournamentInfo.startTime
+    )
+  );
   const publicReservationEntries = matchingReservationState
     ? (matchingReservationState.reservations?.length
         ? matchingReservationState.reservations
