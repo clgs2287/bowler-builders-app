@@ -7511,6 +7511,8 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
         center: "",
         address: "",
         fkmTitle: false,
+        series: DEFAULT_TOURNAMENT_SERIES,
+        major: false,
         eventId: "",
         reservationSettings: {
           entriesOpen: false,
@@ -7562,12 +7564,14 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[880px] text-sm">
               <thead className="bg-blue-800 text-white">
                 <tr>
                   <th className="p-3 text-left">Date</th>
                   <th className="p-3 text-left">Tournament</th>
                   <th className="p-3 text-left">Center</th>
+                  <th className="p-3 text-center">Series</th>
+                  <th className="p-3 text-center">Major</th>
                   <th className="p-3 text-center">Max</th>
                   <th className="p-3 text-center">Entries</th>
                   <th className="p-3 text-right">Edit</th>
@@ -7592,6 +7596,16 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                         <p className="text-xs font-bold text-blue-600">ID: {item.eventId || generateScheduleEventId(item, scheduleItems) || "set date"}</p>
                       </td>
                       <td className="p-3 font-semibold text-slate-700">{item.center || "Center TBD"}</td>
+                      <td className="p-3 text-center">
+                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">
+                          {item.series || DEFAULT_TOURNAMENT_SERIES}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${item.major ? "bg-yellow-100 text-yellow-800" : "bg-slate-100 text-slate-700"}`}>
+                          {item.major ? "Major" : "No"}
+                        </span>
+                      </td>
                       <td className="p-3 text-center font-black text-blue-950">{reservationSettings.reservationLimit || "-"}</td>
                       <td className="p-3 text-center">
                         <span className={`rounded-full px-3 py-1 text-xs font-black ${reservationSettings.entriesOpen ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-700"}`}>
@@ -7673,6 +7687,23 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                     <div className="space-y-1 sm:col-span-2">
                       <Label className="text-xs font-black text-blue-900">End Date</Label>
                       <Input type="date" value={selectedItem.endDate} disabled={scheduleLocked} onChange={(e) => updateItem(selectedIndex, "endDate", e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-black text-blue-900">Series</Label>
+                      <select
+                        value={selectedItem.series || DEFAULT_TOURNAMENT_SERIES}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(selectedIndex, "series", e.target.value)}
+                        className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+                      >
+                        {HISTORICAL_TITLE_SERIES_OPTIONS.map((series) => (
+                          <option key={series} value={series}>{series}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className={`flex min-h-10 items-center justify-between gap-3 rounded-xl border border-yellow-100 bg-yellow-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
+                      <Label className="text-xs font-black text-yellow-900">Major</Label>
+                      <Switch compact checked={Boolean(selectedItem.major)} onCheckedChange={(checked) => !scheduleLocked && updateItem(selectedIndex, "major", checked)} />
                     </div>
                   </div>
                 </section>
