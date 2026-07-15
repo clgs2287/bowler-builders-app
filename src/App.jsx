@@ -5413,11 +5413,11 @@ function DashboardTab({
             <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
               <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-black text-blue-950">Tournament Saves</h2>
-                  <p className="text-sm font-semibold text-blue-700">Save this tournament exactly where it is, then reopen it later.</p>
+                  <h2 className="text-xl font-black text-blue-950">Event Setup</h2>
+                  <p className="text-sm font-semibold text-blue-700">Save the current Dashboard setup to this scheduled event and keep a reopen point.</p>
                 </div>
                 <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onSaveTournamentDraft}>
-                  Save Current
+                  Save Event Setup
                 </Button>
               </div>
 
@@ -5452,7 +5452,7 @@ function DashboardTab({
                 ))}
                 {savedTournamentDrafts.length === 0 && (
                   <p className="rounded-xl bg-white p-3 text-sm font-semibold text-blue-700">
-                    No saved tournament drafts yet.
+                    No saved event setup points yet.
                   </p>
                 )}
               </div>
