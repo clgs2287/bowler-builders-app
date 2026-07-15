@@ -7558,125 +7558,158 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
           {scheduleItems.map((item, index) => (
             <div
               key={`schedule-${index}`}
-              className="grid gap-3 rounded-2xl border border-blue-200 bg-white p-4 md:grid-cols-12"
+              className="space-y-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm"
             >
-              <Input
-                value={item.name}
-                disabled={scheduleLocked}
-                onChange={(e) => updateItem(index, "name", e.target.value)}
-                placeholder="Tournament Name"
-              />
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-blue-600">Schedule Event</p>
+                  <h3 className="text-lg font-black text-blue-950">
+                    {item.name || `Tournament ${index + 1}`}
+                  </h3>
+                  <p className="mt-1 text-xs font-black text-blue-700">
+                    ID: {item.eventId || generateScheduleEventId(item, scheduleItems) || "set date"}
+                  </p>
+                </div>
 
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
-                ID: {item.eventId || generateScheduleEventId(item, scheduleItems) || "set date"}
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                  disabled={scheduleLocked}
+                  onClick={() => deleteScheduleItem(index)}
+                >
+                  Delete
+                </Button>
               </div>
 
-              <Input
-                value={item.format}
-                disabled={scheduleLocked}
-                onChange={(e) => updateItem(index, "format", e.target.value)}
-                placeholder="Format"
-              />
-<Input
-  type="date"
-  value={item.startDate}
-  disabled={scheduleLocked}
-  onChange={(e) =>
-    updateItem(index, "startDate", e.target.value)
-  }
-/>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Tournament Name</Label>
+                  <Input
+                    value={item.name}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateItem(index, "name", e.target.value)}
+                    placeholder="Tournament Name"
+                  />
+                </div>
 
-<Input
-  type="time"
-  value={item.startTime || ""}
-  disabled={scheduleLocked}
-  onChange={(e) =>
-    updateItem(index, "startTime", e.target.value)
-  }
-/>
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Format / Short Note</Label>
+                  <Input
+                    value={item.format}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateItem(index, "format", e.target.value)}
+                    placeholder="Format"
+                  />
+                </div>
 
-<Input
-  type="date"
-  value={item.endDate}
-  disabled={scheduleLocked}
-  onChange={(e) =>
-    updateItem(index, "endDate", e.target.value)
-  }
-/>
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Start Date</Label>
+                  <Input
+                    type="date"
+                    value={item.startDate}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateItem(index, "startDate", e.target.value)}
+                  />
+                </div>
 
-              <select
-                value={BOWLING_CENTERS.some((center) => center.name === item.center) ? item.center : item.center || ""}
-                disabled={scheduleLocked}
-                onChange={(e) => updateScheduleCenter(index, e.target.value)}
-                className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
-              >
-                <option value="">Select Center</option>
-                {item.center && !BOWLING_CENTERS.some((center) => center.name === item.center) && (
-                  <option value={item.center}>{item.center}</option>
-                )}
-                {BOWLING_CENTERS.map((center) => (
-                  <option key={center.name} value={center.name}>
-                    {center.name}
-                  </option>
-                ))}
-              </select>
-
-              <Input
-                value={item.address}
-                disabled={scheduleLocked}
-                onChange={(e) => updateItem(index, "address", e.target.value)}
-                placeholder="Address"
-              />
-
-              <div className={`flex items-center justify-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
-                <Label className="text-xs">FKM *</Label>
-                <Switch
-                  compact
-                  checked={Boolean(item.fkmTitle)}
-                  onCheckedChange={(checked) =>
-                    !scheduleLocked && updateItem(index, "fkmTitle", checked)
-                  }
-                />
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Start Time</Label>
+                  <Input
+                    type="time"
+                    value={item.startTime || ""}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateItem(index, "startTime", e.target.value)}
+                  />
+                </div>
               </div>
 
-              <Input
-                type="number"
-                value={getScheduleEventReservationSettings(item).reservationLimit}
-                disabled={scheduleLocked}
-                onChange={(e) =>
-                  updateItem(index, "reservationSettings", {
-                    ...(item.reservationSettings || {}),
-                    reservationLimit: Number(e.target.value || 0),
-                    reservationLimitUpdatedAt: new Date().toISOString(),
-                  })
-                }
-                placeholder="Max"
-              />
+              <div className="grid gap-3 md:grid-cols-[1fr_1.4fr_1fr]">
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Center</Label>
+                  <select
+                    value={BOWLING_CENTERS.some((center) => center.name === item.center) ? item.center : item.center || ""}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateScheduleCenter(index, e.target.value)}
+                    className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+                  >
+                    <option value="">Select Center</option>
+                    {item.center && !BOWLING_CENTERS.some((center) => center.name === item.center) && (
+                      <option value={item.center}>{item.center}</option>
+                    )}
+                    {BOWLING_CENTERS.map((center) => (
+                      <option key={center.name} value={center.name}>
+                        {center.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className={`flex items-center justify-center gap-2 rounded-xl border border-green-100 bg-green-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
-                <Label className="text-xs">Open</Label>
-                <Switch
-                  compact
-                  checked={getScheduleEventReservationSettings(item).entriesOpen}
-                  onCheckedChange={(checked) =>
-                    !scheduleLocked && updateItem(index, "reservationSettings", {
-                      ...(item.reservationSettings || {}),
-                      entriesOpen: checked,
-                      reservationLimit: getScheduleEventReservationSettings(item).reservationLimit,
-                      reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || "",
-                    })
-                  }
-                />
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Address</Label>
+                  <Input
+                    value={item.address}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateItem(index, "address", e.target.value)}
+                    placeholder="Address"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">End Date</Label>
+                  <Input
+                    type="date"
+                    value={item.endDate}
+                    disabled={scheduleLocked}
+                    onChange={(e) => updateItem(index, "endDate", e.target.value)}
+                  />
+                </div>
               </div>
 
-              <Button
-                variant="outline"
-                className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                disabled={scheduleLocked}
-                onClick={() => deleteScheduleItem(index)}
-              >
-                Delete
-              </Button>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className={`flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
+                  <Label className="text-xs font-black text-blue-900">FKM Title Event</Label>
+                  <Switch
+                    compact
+                    checked={Boolean(item.fkmTitle)}
+                    onCheckedChange={(checked) =>
+                      !scheduleLocked && updateItem(index, "fkmTitle", checked)
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-black text-blue-900">Max Entries</Label>
+                  <Input
+                    type="number"
+                    value={getScheduleEventReservationSettings(item).reservationLimit}
+                    disabled={scheduleLocked}
+                    onChange={(e) =>
+                      updateItem(index, "reservationSettings", {
+                        ...(item.reservationSettings || {}),
+                        reservationLimit: Number(e.target.value || 0),
+                        reservationLimitUpdatedAt: new Date().toISOString(),
+                      })
+                    }
+                    placeholder="Max"
+                  />
+                </div>
+
+                <div className={`flex items-center justify-between gap-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
+                  <Label className="text-xs font-black text-green-900">Entries Open</Label>
+                  <Switch
+                    compact
+                    checked={getScheduleEventReservationSettings(item).entriesOpen}
+                    onCheckedChange={(checked) =>
+                      !scheduleLocked && updateItem(index, "reservationSettings", {
+                        ...(item.reservationSettings || {}),
+                        entriesOpen: checked,
+                        reservationLimit: getScheduleEventReservationSettings(item).reservationLimit,
+                        reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || "",
+                      })
+                    }
+                  />
+                </div>
+              </div>
             </div>
           ))}
         </div>
