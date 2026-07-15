@@ -4824,6 +4824,7 @@ function DashboardTab({
   setBowlers,
   eliminatorState,
   payoutState,
+  setPayoutState = () => {},
   matchplayState = DEFAULT_MATCHPLAY_STATE,
   scheduleItems = [],
   setScheduleItems = () => {},
@@ -4853,22 +4854,47 @@ function DashboardTab({
       return;
     }
     const savedSetup = scheduledItem.eventSetup || {};
-
-    setTournamentInfo((current) => ({
-      ...current,
-      ...(savedSetup.tournamentInfo || {}),
+    const savedInfo = savedSetup.tournamentInfo || scheduledItem.publicInfo || {};
+    const nextTournamentInfo = {
+      name: scheduledItem.name || savedInfo.name || name,
+      date: scheduledItem.startDate || savedInfo.date || "",
+      startTime: scheduledItem.startTime || savedInfo.startTime || "",
+      center: scheduledItem.center || savedInfo.center || "",
+      location: scheduledItem.address || savedInfo.location || "",
+      director: savedInfo.director || DEFAULT_TOURNAMENT_DIRECTOR,
+      directorEmail: savedInfo.directorEmail || DEFAULT_TOURNAMENT_DIRECTOR_EMAIL,
+      lanesUsed: savedInfo.lanesUsed || "",
+      season: savedInfo.season || new Date().getFullYear().toString(),
+      movementMode: savedInfo.movementMode || "custom",
+      customRotation: savedInfo.customRotation || "",
+      evenCustomRotation: savedInfo.evenCustomRotation || "",
+      streamLink: savedInfo.streamLink || "",
+      bbtvYoutubeLink: savedInfo.bbtvYoutubeLink || "",
+      facebookLink: savedInfo.facebookLink || "",
+      recentVideoLink: savedInfo.recentVideoLink || "",
+      sponsors: savedInfo.sponsors || "",
+      logoLinks: savedInfo.logoLinks || "",
+      videoLinks: savedInfo.videoLinks || "",
+      notes: savedInfo.notes || "",
+      finalsTeamScoring: savedInfo.finalsTeamScoring || "full",
+      titleEligible: typeof scheduledItem.fkmTitle === "boolean" ? scheduledItem.fkmTitle : savedInfo.titleEligible ?? true,
+      major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : Boolean(savedInfo.major),
+      series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
+      reservationEligibility: savedInfo.reservationEligibility || "open",
+      tournamentStyle: savedInfo.tournamentStyle || "singles",
+      announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
+      lanePatternImages: Array.isArray(savedInfo.lanePatternImages) ? savedInfo.lanePatternImages : [],
       scheduleEventId: scheduledItem.eventId || reservationKeyFromScheduleItem(scheduledItem),
-      name: scheduledItem.name || name,
-      date: scheduledItem.startDate || current.date || "",
-      startTime: scheduledItem.startTime || current.startTime || "",
-      center: scheduledItem.center || current.center || "",
-      location: scheduledItem.address || current.location || "",
-      titleEligible: typeof scheduledItem.fkmTitle === "boolean" ? scheduledItem.fkmTitle : current.titleEligible,
-      major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : current.major,
-      series: scheduledItem.series || current.series || DEFAULT_TOURNAMENT_SERIES,
-    }));
-    if (savedSetup.tournamentFormat) setTournamentFormat(savedSetup.tournamentFormat);
-    if (savedSetup.qualifyingGames) updateQualifyingGames(savedSetup.qualifyingGames);
+    };
+
+    setTournamentInfo(nextTournamentInfo);
+    setTournamentFormat(savedSetup.tournamentFormat || scheduledItem.tournamentFormat || "bracket");
+    updateQualifyingGames(savedSetup.qualifyingGames || 4);
+    setPayoutState({
+      ...DEFAULT_PAYOUT_STATE,
+      ...(savedSetup.payoutState || {}),
+      entryFee: Number(savedSetup.payoutState?.entryFee ?? savedInfo.entryFee ?? DEFAULT_PAYOUT_STATE.entryFee ?? 0),
+    });
   };
   const uploadAnnouncementImages = async (fileList) => {
     const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
@@ -20180,6 +20206,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       financials={financials}
       payoutRows={payoutRows}
       payoutState={payoutState}
+      setPayoutState={setPayoutState}
       useHandicapScores={useHandicapScores}
       tournamentFormat={tournamentFormat}
       setTournamentFormat={setTournamentFormat}
