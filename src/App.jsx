@@ -7578,7 +7578,11 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                   const reservationSettings = getScheduleEventReservationSettings(item);
                   const isSelected = index === selectedIndex;
                   return (
-                    <tr key={`schedule-row-${index}`} className={`border-t ${isSelected ? "bg-blue-50" : "bg-white"}`}>
+                    <tr
+                      key={`schedule-row-${index}`}
+                      className={`cursor-pointer border-t transition hover:bg-blue-50 ${isSelected ? "bg-blue-50 ring-2 ring-inset ring-blue-300" : "bg-white"}`}
+                      onClick={() => setSelectedScheduleIndex(index)}
+                    >
                       <td className="p-3 font-bold text-blue-950">
                         {item.startDate || "Date TBD"}
                         {item.startTime ? <span className="block text-xs font-semibold text-slate-500">{formatStartTime(item.startTime)}</span> : null}
@@ -7598,9 +7602,12 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                         <Button
                           variant="outline"
                           className={isSelected ? "rounded-xl border-blue-300 bg-blue-100 text-blue-900" : "rounded-xl"}
-                          onClick={() => setSelectedScheduleIndex(index)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedScheduleIndex(index);
+                          }}
                         >
-                          Edit
+                          {isSelected ? "Selected" : "Edit"}
                         </Button>
                       </td>
                     </tr>
@@ -7612,6 +7619,21 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
 
           {selectedItem ? (
             <div className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                <Label className="mb-2 block text-xs font-black uppercase tracking-wide text-blue-700">Choose Event To Edit</Label>
+                <select
+                  value={String(selectedIndex)}
+                  onChange={(event) => setSelectedScheduleIndex(Number(event.target.value))}
+                  className="h-11 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950 outline-none"
+                >
+                  {scheduleItems.map((item, index) => (
+                    <option key={`schedule-editor-select-${index}`} value={index}>
+                      {item.startDate ? `${item.startDate} - ` : ""}{item.name || `Tournament ${index + 1}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="mb-4 flex items-start justify-between gap-3 border-b border-blue-100 pb-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-wide text-blue-600">Editing Event</p>
