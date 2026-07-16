@@ -83,7 +83,7 @@ function parseLogoLinkEntries(value = "") {
         .split(/\s*(?:\||=>)\s*/)
         .map((part) => part.trim());
       const inferredWebsiteUrl = websiteUrl || (
-        /BroadwayBowl/i.test(imageUrl) ? "https://www.broadwaybowlmaine.com/" : ""
+        /BroadwayBowl/i.test(imageUrl) ? "https://www.baysidebowl.com/" : ""
       );
       return {
         id: `${index}-${imageUrl}-${inferredWebsiteUrl}`,
