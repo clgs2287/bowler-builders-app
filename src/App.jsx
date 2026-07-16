@@ -82,13 +82,44 @@ function parseLogoLinkEntries(value = "") {
       const [imageUrl = "", websiteUrl = ""] = row
         .split(/\s*(?:\||=>)\s*/)
         .map((part) => part.trim());
+      const inferredWebsiteUrl = websiteUrl || (
+        /BroadwayBowl/i.test(imageUrl) ? "https://www.broadwaybowlmaine.com/" : ""
+      );
       return {
-        id: `${index}-${imageUrl}-${websiteUrl}`,
+        id: `${index}-${imageUrl}-${inferredWebsiteUrl}`,
         imageUrl,
-        websiteUrl,
+        websiteUrl: inferredWebsiteUrl,
       };
     })
     .filter((entry) => entry.imageUrl);
+}
+
+function LogoLinkTile({ logo }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const content = imageFailed ? (
+    <span className="px-2 text-center text-sm font-black text-blue-900">
+      Visit Website
+    </span>
+  ) : (
+    <img
+      src={logo.imageUrl}
+      alt="Tournament logo"
+      className="max-h-20 max-w-full object-contain"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setImageFailed(true)}
+    />
+  );
+  const className = "flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2 transition hover:border-blue-300 hover:bg-blue-50";
+  return logo.websiteUrl ? (
+    <a key={logo.id} href={logo.websiteUrl} target="_blank" rel="noreferrer" className={className}>
+      {content}
+    </a>
+  ) : (
+    <div key={logo.id} className={className}>
+      {content}
+    </div>
+  );
 }
 
 const DEFAULT_LANE_ELIMINATOR_STATE = {
@@ -4204,21 +4235,7 @@ const infoRows = [
                 <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Featured Logos</h3>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                   {displayedLogoLinks.map((logo) => (
-                    logo.websiteUrl ? (
-                      <a
-                        key={logo.id}
-                        href={logo.websiteUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2 transition hover:border-blue-300 hover:bg-blue-50"
-                      >
-                        <img src={logo.imageUrl} alt="Tournament logo" className="max-h-20 max-w-full object-contain" />
-                      </a>
-                    ) : (
-                      <div key={logo.id} className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2">
-                        <img src={logo.imageUrl} alt="Tournament logo" className="max-h-20 max-w-full object-contain" />
-                      </div>
-                    )
+                    <LogoLinkTile key={logo.id} logo={logo} />
                   ))}
                 </div>
               </div>
