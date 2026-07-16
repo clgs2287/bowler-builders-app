@@ -82,9 +82,10 @@ function parseLogoLinkEntries(value = "") {
       const [imageUrl = "", websiteUrl = ""] = row
         .split(/\s*(?:\||=>)\s*/)
         .map((part) => part.trim());
-      const inferredWebsiteUrl = websiteUrl || (
-        /BroadwayBowl/i.test(imageUrl) ? "https://www.baysidebowl.com/" : ""
-      );
+      const isCopiedBaysideLogo = /BroadwayBowl/i.test(imageUrl);
+      const inferredWebsiteUrl = isCopiedBaysideLogo
+        ? "https://www.baysidebowl.com/"
+        : websiteUrl;
       return {
         id: `${index}-${imageUrl}-${inferredWebsiteUrl}`,
         imageUrl,
