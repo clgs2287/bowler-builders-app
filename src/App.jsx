@@ -70,6 +70,27 @@ function isMaintenanceModeEnabled() {
 function isOwnerAdminEmail(email = "") {
   return OWNER_ADMIN_EMAILS.includes(String(email || "").trim().toLowerCase());
 }
+
+function parseLogoLinkEntries(value = "") {
+  const rawText = String(value || "").trim();
+  if (!rawText) return [];
+  const rows = rawText.includes("\n") ? rawText.split(/\n+/) : rawText.split(",");
+  return rows
+    .map((row) => row.trim())
+    .filter(Boolean)
+    .map((row, index) => {
+      const [imageUrl = "", websiteUrl = ""] = row
+        .split(/\s*(?:\||=>)\s*/)
+        .map((part) => part.trim());
+      return {
+        id: `${index}-${imageUrl}-${websiteUrl}`,
+        imageUrl,
+        websiteUrl,
+      };
+    })
+    .filter((entry) => entry.imageUrl);
+}
+
 const DEFAULT_LANE_ELIMINATOR_STATE = {
   manualQualifiers: "",
   groupSize: 4,
@@ -3877,10 +3898,7 @@ function TournamentInfoTab({
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  const displayedLogoLinks = String(displayedTournamentInfo.logoLinks || "")
-    .split(/\n|,/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const displayedLogoLinks = parseLogoLinkEntries(displayedTournamentInfo.logoLinks);
   const displayedVideoLinks = String(displayedTournamentInfo.videoLinks || "")
     .split(/\n|,/)
     .map((item) => item.trim())
@@ -4185,10 +4203,22 @@ const infoRows = [
               <div className="rounded-2xl border border-blue-200 bg-white p-3 md:p-4">
                 <h3 className="mb-2 text-base font-black text-blue-950 md:mb-3 md:text-lg">Featured Logos</h3>
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {displayedLogoLinks.map((link) => (
-                    <div key={link} className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2">
-                      <img src={link} alt="Tournament logo" className="max-h-20 max-w-full object-contain" />
-                    </div>
+                  {displayedLogoLinks.map((logo) => (
+                    logo.websiteUrl ? (
+                      <a
+                        key={logo.id}
+                        href={logo.websiteUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2 transition hover:border-blue-300 hover:bg-blue-50"
+                      >
+                        <img src={logo.imageUrl} alt="Tournament logo" className="max-h-20 max-w-full object-contain" />
+                      </a>
+                    ) : (
+                      <div key={logo.id} className="flex min-h-24 items-center justify-center rounded-xl border border-blue-100 bg-slate-50 p-2">
+                        <img src={logo.imageUrl} alt="Tournament logo" className="max-h-20 max-w-full object-contain" />
+                      </div>
+                    )
                   ))}
                 </div>
               </div>
@@ -5491,7 +5521,7 @@ function DashboardTab({
   label="Logo Links"
   value={tournamentInfo.logoLinks || ""}
   onChange={(value) => update("logoLinks", value)}
-  placeholder="Image URLs separated by commas"
+  placeholder="One per line: image URL | website URL"
   commitOnChange
 />
 
