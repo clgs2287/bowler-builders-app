@@ -3558,6 +3558,8 @@ function PublicHomeTab({
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
   const latestArchiveWinner = latestArchive ? getArchivedWinnerName(latestArchive) : "";
+  const latestArchiveRecap = latestArchive?.tournamentRecap || latestArchive?.activeSnapshot?.tournamentRecap || {};
+  const latestArchiveWinnerPhotoUrl = latestArchiveRecap.winnerPhotoUrl || latestArchive?.winnerPhotoUrl || "";
   const reservationCount = Number(nextEventReservation?.state?.reservationCount || nextEventReservation?.state?.reservations?.length || 0);
   const reservationLimit = Number(nextEventReservation?.state?.reservationLimit || 0);
   const reservationSummary = nextEventReservation
@@ -3758,12 +3760,22 @@ function PublicHomeTab({
 
         {latestArchive && (
           <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center">
+              {latestArchiveWinnerPhotoUrl && (
+                <img
+                  src={latestArchiveWinnerPhotoUrl}
+                  alt={`${latestArchiveWinner || latestArchive.name} winner`}
+                  className="h-32 w-full rounded-2xl border border-blue-100 bg-white object-cover shadow-sm sm:w-44"
+                  loading="lazy"
+                />
+              )}
+              <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
               <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
               <p className="mt-1 text-sm font-semibold text-blue-800">
                 {latestArchive.date || "Date TBD"}{latestArchive.center ? ` - ${latestArchive.center}` : ""}
               </p>
+              </div>
             </div>
             {latestArchiveWinner && (
               <div className="rounded-2xl border border-green-200 bg-white px-4 py-3 text-left shadow-sm md:min-w-[220px] md:text-right">
@@ -12278,6 +12290,7 @@ function ArchivedTournamentRecapEditor({ tournamentRecap = {}, onChange = () => 
       winner: tournamentRecap.winner || "",
       runnerUp: tournamentRecap.runnerUp || "",
       highGame: tournamentRecap.highGame || "",
+      winnerPhotoUrl: tournamentRecap.winnerPhotoUrl || "",
       recapNotes: tournamentRecap.recapNotes || "",
       [field]: value,
     });
@@ -12306,6 +12319,24 @@ function ArchivedTournamentRecapEditor({ tournamentRecap = {}, onChange = () => 
           onChange={(event) => updateRecap("highGame", event.target.value)}
           placeholder="Ball Raffle Winner"
         />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="space-y-2">
+          <Label>Winner Photo URL</Label>
+          <Input
+            value={tournamentRecap.winnerPhotoUrl || ""}
+            onChange={(event) => updateRecap("winnerPhotoUrl", event.target.value)}
+            placeholder="https://..."
+          />
+        </div>
+        {tournamentRecap.winnerPhotoUrl && (
+          <img
+            src={tournamentRecap.winnerPhotoUrl}
+            alt="Winner preview"
+            className="h-24 w-32 rounded-xl border border-blue-100 bg-blue-50 object-cover"
+          />
+        )}
       </div>
 
       <textarea
@@ -16277,6 +16308,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       winner: nextRecap.winner || "",
       runnerUp: nextRecap.runnerUp || "",
       highGame: nextRecap.highGame || "",
+      winnerPhotoUrl: nextRecap.winnerPhotoUrl || "",
       recapNotes: nextRecap.recapNotes || "",
     };
     setTournamentHistory((current) =>
