@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLayoutEffect, useRef } from "react";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
@@ -57,6 +57,16 @@ const RESERVATION_ELIGIBILITY_OPTIONS = [
   { value: "championsOnly", label: "Champions only" },
 ];
 
+function isMaintenanceModeEnabled() {
+  const envValue = String(import.meta.env.VITE_MAINTENANCE_MODE || "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(envValue)) return true;
+  try {
+    return new URLSearchParams(window.location.search).get("maintenance") === "1";
+  } catch {
+    return false;
+  }
+}
+
 function isOwnerAdminEmail(email = "") {
   return OWNER_ADMIN_EMAILS.includes(String(email || "").trim().toLowerCase());
 }
@@ -71,6 +81,9 @@ const DEFAULT_LANE_ELIMINATOR_STATE = {
 const DEFAULT_MATCHPLAY_STATE = {
   openingScores: {},
   roundScores: {},
+  openingTiebreakers: {},
+  roundTiebreakers: {},
+  roundLanes: {},
   savedOpeningPods: {},
   savedOpeningPodGames: {},
   savedWinnerRounds: {},
@@ -257,6 +270,34 @@ const numberInputStyles = String.raw`
 
   .bb-finals-slip-print .mt-5 {
     margin-top: 0.12in !important;
+  }
+}
+
+@media print {
+  body.bb-print-matchplay-sheet * {
+    visibility: hidden !important;
+  }
+
+  body.bb-print-matchplay-sheet .bb-matchplay-viewer-print,
+  body.bb-print-matchplay-sheet .bb-matchplay-viewer-print * {
+    visibility: visible !important;
+  }
+
+  body.bb-print-matchplay-sheet .bb-matchplay-viewer-print {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 0.12in !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+
+  body.bb-print-matchplay-sheet .bb-matchplay-viewer-print svg {
+    width: 100% !important;
+    height: 100% !important;
   }
 }
 
@@ -927,6 +968,14 @@ function buildInitialBowlers(targetCount = 48, gameCount = 4) {
   return Array.from({ length: targetCount }, (_, index) => makeBowler(index + 1, gameCount));
 }
 
+function blankRegistrationBowlerSlot(bowler = {}, gameCount = 4) {
+  return {
+    ...makeBowler(bowler.seed || 1, gameCount),
+    lane: bowler.lane || "",
+    reservationTournamentKey: bowler.reservationTournamentKey || "",
+  };
+}
+
 function normalizeBowlerGames(bowler, gameCount) {
   const games = Array.isArray(bowler.games) ? bowler.games : [];
   return { ...bowler, games: Array.from({ length: gameCount }, (_, index) => Number(games[index] || 0)) };
@@ -1072,8 +1121,29 @@ function getScheduleEventReservationSettings(item = {}) {
   };
 }
 
+function scheduleEventInfoBelongsToItem(info = {}, item = {}) {
+  if (!info || typeof info !== "object" || !Object.keys(info).length || !item) return false;
+  const itemKey = reservationKeyFromScheduleItem(item);
+  const infoEventId = String(info.scheduleEventId || "");
+  if (infoEventId) return infoEventId === itemKey;
+
+  const infoName = normalizeMatchText(info.name);
+  const itemName = normalizeMatchText(item.name);
+  const infoDate = String(info.date || "").slice(0, 10);
+  const itemDate = String(item.startDate || item.date || "").slice(0, 10);
+  if (infoName && itemName && infoName !== itemName) return false;
+  if (infoDate && itemDate && infoDate !== itemDate) return false;
+  return true;
+}
+
+function getScheduleEventSavedPublicInfo(item = {}) {
+  const setupInfo = item?.eventSetup?.tournamentInfo || null;
+  if (scheduleEventInfoBelongsToItem(setupInfo, item)) return setupInfo;
+  return {};
+}
+
 function getScheduleEventPublicInfo(item = {}) {
-  const publicInfo = item?.publicInfo || item?.eventSetup?.tournamentInfo || {};
+  const publicInfo = getScheduleEventSavedPublicInfo(item);
   return buildReservationTournamentInfoSnapshot({
     tournamentInfo: publicInfo,
     scheduleItem: item,
@@ -1103,6 +1173,7 @@ function buildScheduleEventSetupFromSnapshot(snapshot = {}) {
       },
     }),
     eventSetup: {
+      snapshot,
       tournamentInfo,
       payoutState: snapshot.payoutState || {},
       tournamentFormat: snapshot.tournamentFormat || "bracket",
@@ -1113,6 +1184,7 @@ function buildScheduleEventSetupFromSnapshot(snapshot = {}) {
 
 function tournamentInfoMatchesReservationKey(tournamentInfo = {}, tournamentKey = "") {
   if (!tournamentKey) return false;
+  if (tournamentInfo.scheduleEventId && String(tournamentInfo.scheduleEventId) === String(tournamentKey)) return true;
   const [keyName = "", keyDate = "", keyCenter = ""] = String(tournamentKey || "").split("|");
   const infoName = getIdentityKey(tournamentInfo.name);
   const infoDate = getIdentityKey(tournamentInfo.date);
@@ -1329,12 +1401,15 @@ function getOpenReservationKeys(reservationState = {}) {
 function reservationStateForKey(reservationState = {}, tournamentKey = "", scheduleItems = []) {
   const scheduleItem = scheduleItemForReservationKey(scheduleItems, tournamentKey);
   const scheduleReservationSettings = getScheduleEventReservationSettings(scheduleItem || {});
+  const keyIsOpen = scheduleItem
+    ? Boolean(scheduleReservationSettings.entriesOpen)
+    : Boolean(getOpenReservationKeys(reservationState).includes(tournamentKey));
   if (!tournamentKey || tournamentKey === reservationKeyFromState(reservationState)) {
     const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
     return {
       ...reservationState,
       publicTournamentInfo: reservationState.publicTournamentInfo || bucket.publicTournamentInfo || null,
-      entriesOpen: Boolean(scheduleReservationSettings.entriesOpen || reservationState.entriesOpen || bucket.entriesOpen),
+      entriesOpen: scheduleItem ? Boolean(scheduleReservationSettings.entriesOpen) : Boolean(reservationState.entriesOpen || bucket.entriesOpen),
       reservationLimit: Number(scheduleReservationSettings.reservationLimit || reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT),
       reservationLimitUpdatedAt: scheduleReservationSettings.reservationLimitUpdatedAt || reservationState.reservationLimitUpdatedAt || "",
       waitlistOnlyNames: scheduleReservationSettings.waitlistOnlyNames || reservationState.waitlistOnlyNames || "",
@@ -1354,7 +1429,7 @@ function reservationStateForKey(reservationState = {}, tournamentKey = "", sched
     tournamentStartTime: bucket.tournamentStartTime || schedulePublicInfo?.startTime || snapshot.startTime || scheduleItem?.startTime || "",
     tournamentCenter: bucket.tournamentCenter || schedulePublicInfo?.center || snapshot.center || scheduleItem?.center || keyCenter || "",
     tournamentAddress: bucket.tournamentAddress || schedulePublicInfo?.location || snapshot.location || scheduleItem?.address || "",
-    entriesOpen: Boolean(scheduleReservationSettings.entriesOpen || bucket.entriesOpen || getOpenReservationKeys(reservationState).includes(tournamentKey)),
+    entriesOpen: scheduleItem ? Boolean(scheduleReservationSettings.entriesOpen) : Boolean(bucket.entriesOpen || keyIsOpen),
     reservationLimit: Number(scheduleReservationSettings.reservationLimit || bucket.reservationLimit || DEFAULT_RESERVATION_LIMIT),
     reservationLimitUpdatedAt: scheduleReservationSettings.reservationLimitUpdatedAt || bucket.reservationLimitUpdatedAt || "",
     waitlistOnlyNames: scheduleReservationSettings.waitlistOnlyNames || bucket.waitlistOnlyNames || "",
@@ -1369,7 +1444,19 @@ function openReservationOptions(reservationState = {}, scheduleItems = []) {
   const scheduleOpenKeys = (scheduleItems || [])
     .filter((item) => getScheduleEventReservationSettings(item).entriesOpen)
     .map((item) => reservationKeyFromScheduleItem(item));
-  return Array.from(new Set([...getOpenReservationKeys(reservationState), ...scheduleOpenKeys].filter(Boolean)))
+  const bucketOpenKeys = Object.entries(reservationState.reservationsByTournament || {})
+    .filter(([key, bucket]) => {
+      if (!bucket?.entriesOpen) return false;
+      const scheduleItem = scheduleItemForReservationKey(scheduleItems, key);
+      return scheduleItem ? getScheduleEventReservationSettings(scheduleItem).entriesOpen : true;
+    })
+    .map(([key]) => key);
+  const currentKey = reservationKeyFromState(reservationState);
+  const currentScheduleItem = currentKey ? scheduleItemForReservationKey(scheduleItems, currentKey) : null;
+  const currentOpenKeys = reservationState.entriesOpen && currentKey && (
+    currentScheduleItem ? getScheduleEventReservationSettings(currentScheduleItem).entriesOpen : true
+  ) ? [currentKey] : [];
+  return Array.from(new Set([...scheduleOpenKeys, ...bucketOpenKeys, ...currentOpenKeys].filter(Boolean)))
     .map((key) => {
       const bucket = key === reservationKeyFromState(reservationState)
         ? reservationBucketFromState(reservationState)
@@ -2771,6 +2858,10 @@ function matchplayRoundScoreKey(roundIndex, matchIndex, side) {
   return `matchplay-round-${roundIndex}-m${matchIndex}-${side}`;
 }
 
+function matchplayRoundLaneKey(roundIndex, matchIndex) {
+  return `matchplay-round-${roundIndex}-m${matchIndex}-lanes`;
+}
+
 function matchplayRoundTitle(playerCount) {
   if (playerCount <= 2) return "Championship";
   if (playerCount <= 4) return "Semifinal";
@@ -2780,6 +2871,7 @@ function matchplayRoundTitle(playerCount) {
 
 function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
   const scores = matchplayState.openingScores || {};
+  const tiebreakers = matchplayState.openingTiebreakers || {};
   const assigned = (bowlers || [])
     .filter((bowler) => bowler?.name?.trim() && lanePositionParts(bowler.lane).lane)
     .map((bowler, index) => ({ ...bowler, rosterIndex: index }))
@@ -2789,16 +2881,58 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
     groups[pair] = [...(groups[pair] || []), bowler];
     return groups;
   }, {});
+  const pairLabels = Object.keys(pairMap)
+    .sort((a, b) => Number(a.split("-")[0] || 9999) - Number(b.split("-")[0] || 9999));
+  const lanePairSlotMatches = (pair) => {
+    const laneNumbers = String(pair || "")
+      .split("-")
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((a, b) => a - b);
+    if (laneNumbers.length < 2) {
+      const fallbackPlayers = pairMap[pair] || [];
+      return [
+        [fallbackPlayers[0] || null, fallbackPlayers[1] || null],
+        [fallbackPlayers[2] || null, fallbackPlayers[3] || null],
+        [fallbackPlayers[4] || null, fallbackPlayers[5] || null],
+        [fallbackPlayers[6] || null, fallbackPlayers[7] || null],
+      ];
+    }
+    const [leftLane, rightLane] = laneNumbers;
+    const playersOnLane = (laneNumber) =>
+      (pairMap[pair] || [])
+        .filter((bowler) => Number(lanePositionParts(bowler.lane).lane) === Number(laneNumber))
+        .sort((a, b) => laneAssignmentSortValue(a.lane) - laneAssignmentSortValue(b.lane) || String(a.name || "").localeCompare(String(b.name || "")));
+    const leftLanePlayers = playersOnLane(leftLane);
+    const rightLanePlayers = playersOnLane(rightLane);
+    return [
+      [leftLanePlayers[0] || null, rightLanePlayers[0] || null],
+      [leftLanePlayers[1] || null, rightLanePlayers[1] || null],
+      [leftLanePlayers[2] || null, rightLanePlayers[2] || null],
+      [leftLanePlayers[3] || null, rightLanePlayers[3] || null],
+    ];
+  };
+  const bracketSize = getBracketSize(assigned.length);
+  if (bracketSize === "Over 64") return [];
+  const seedPairs = bracketPairs(bracketSize);
 
-  return Object.keys(pairMap)
-    .sort((a, b) => Number(a.split("-")[0] || 9999) - Number(b.split("-")[0] || 9999))
-    .map((pair) => {
-      const players = pairMap[pair];
+  return pairLabels
+    .map((pair, pairIndex) => {
+      const slotMatches = lanePairSlotMatches(pair);
+      const pairSeedMatches = seedPairs.slice(pairIndex * 4, pairIndex * 4 + 4);
+      const pairMatches = pairSeedMatches.map(([leftSeed, rightSeed], matchIndex) => {
+        const [leftPlayer, rightPlayer] = slotMatches[matchIndex] || [];
+        return {
+          left: leftPlayer ? { ...leftPlayer, matchplaySeed: leftSeed } : null,
+          right: rightPlayer ? { ...rightPlayer, matchplaySeed: rightSeed } : null,
+        };
+      });
+      const players = pairMatches.flatMap((match) => [match.left, match.right]).filter(Boolean);
       const matches = [];
 
-      for (let index = 0; index < players.length; index += 2) {
-        const left = players[index] || null;
-        const right = players[index + 1] || null;
+      pairMatches.forEach((pairMatch) => {
+        const left = pairMatch.left || null;
+        const right = pairMatch.right || null;
         const leftGames = Array.from({ length: 3 }, (_, gameIndex) => {
           const savedScore = scores[matchplayScoreKey(pair, matches.length, "left", gameIndex)];
           return Number(savedScore ?? left?.games?.[gameIndex] ?? 0);
@@ -2810,16 +2944,23 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
         const leftTotal = leftGames.reduce((sum, score) => sum + score, 0);
         const rightTotal = rightGames.reduce((sum, score) => sum + score, 0);
         const complete = Boolean(left && right) && leftGames.every((score) => score > 0) && rightGames.every((score) => score > 0);
+        const tied = complete && leftTotal === rightTotal;
+        const matchId = `${pair}-${matches.length}`;
+        const tiebreakWinner = tied ? tiebreakers[matchId] : "";
         const winner = !right && left
           ? left
           : complete && leftTotal > rightTotal
             ? left
             : complete && rightTotal > leftTotal
               ? right
+              : tied && tiebreakWinner === "left"
+                ? left
+                : tied && tiebreakWinner === "right"
+                  ? right
               : null;
 
         matches.push({
-          id: `${pair}-${matches.length}`,
+          id: matchId,
           pair,
           matchIndex: matches.length,
           matchNumber: matches.length + 1,
@@ -2830,16 +2971,29 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
           leftTotal,
           rightTotal,
           complete,
+          tied,
+          tiebreakWinner,
           winner,
         });
-      }
+      });
 
       return { pair, players, matches };
-    });
+    })
+    .filter((pod) => pod.matches.length > 0);
+}
+
+function getMatchplayOpeningWinners(pods = []) {
+  return (pods || []).flatMap((pod) =>
+    (pod.matches || [])
+      .map((match) => match.winner ? { ...match.winner, matchplayLanePair: pod.pair } : null)
+      .filter(Boolean)
+  );
 }
 
 function buildMatchplayWinnerRounds(openingWinners = [], matchplayState = {}) {
   const scores = matchplayState.roundScores || {};
+  const tiebreakers = matchplayState.roundTiebreakers || {};
+  const roundLanes = matchplayState.roundLanes || {};
   const rounds = [];
   let players = openingWinners;
 
@@ -2852,27 +3006,47 @@ function buildMatchplayWinnerRounds(openingWinners = [], matchplayState = {}) {
       const left = players[index] || null;
       const right = players[index + 1] || null;
       const matchIndex = matches.length;
+      const matchId = `winner-r${roundIndex}-m${matchIndex}`;
+      const sameOpeningPair =
+        left?.matchplayLanePair &&
+        right?.matchplayLanePair &&
+        String(left.matchplayLanePair) === String(right.matchplayLanePair);
+      const autoLanePair = players.length > 8 && sameOpeningPair ? left.matchplayLanePair : "";
+      const laneKey = matchplayRoundLaneKey(roundIndex, matchIndex);
+      const matchLanePair = String(roundLanes[laneKey] ?? autoLanePair ?? "").trim();
       const leftKey = matchplayRoundScoreKey(roundIndex, matchIndex, "left");
       const rightKey = matchplayRoundScoreKey(roundIndex, matchIndex, "right");
       const leftScore = Number(scores[leftKey] || 0);
       const rightScore = Number(scores[rightKey] || 0);
       const complete = Boolean(left && right) && leftScore > 0 && rightScore > 0;
+      const tied = complete && leftScore === rightScore;
+      const tiebreakWinner = tied ? tiebreakers[matchId] : "";
       const winner = !right && left
         ? left
         : complete && leftScore > rightScore
           ? left
           : complete && rightScore > leftScore
             ? right
+            : tied && tiebreakWinner === "left"
+              ? left
+              : tied && tiebreakWinner === "right"
+                ? right
             : null;
+      const advancingWinner = winner && matchLanePair
+        ? { ...winner, matchplayLanePair: matchLanePair }
+        : winner
+          ? { ...winner, matchplayLanePair: "" }
+          : null;
 
-      if (winner) winners.push(winner);
-      if (!winner) roundComplete = false;
+      if (advancingWinner) winners.push(advancingWinner);
+      if (!advancingWinner) roundComplete = false;
 
       matches.push({
-        id: `winner-r${roundIndex}-m${matchIndex}`,
+        id: matchId,
         roundIndex,
         matchIndex,
         matchNumber: matchIndex + 1,
+        lanePair: matchLanePair,
         left,
         right,
         leftKey,
@@ -2880,7 +3054,10 @@ function buildMatchplayWinnerRounds(openingWinners = [], matchplayState = {}) {
         leftScore,
         rightScore,
         complete,
-        winner,
+        tied,
+        tiebreakWinner,
+        laneKey,
+        winner: advancingWinner,
       });
     }
 
@@ -2914,7 +3091,7 @@ function countMatchplayLineageGames(matchplayState = {}) {
 
 function getMatchplayFinalOrder(bowlers = [], matchplayState = {}) {
   const pods = buildMatchplayOpeningPods(bowlers, matchplayState);
-  const openingWinners = pods.flatMap((pod) => pod.matches.map((match) => match.winner).filter(Boolean));
+  const openingWinners = getMatchplayOpeningWinners(pods);
   const winnerBracket = buildMatchplayWinnerRounds(openingWinners, matchplayState);
   const finalOrder = [];
   const addUnique = (player) => {
@@ -2951,7 +3128,7 @@ function getMatchplayTournamentStage(bowlers = [], matchplayState = {}) {
 
   const savedGames = matchplayState.savedOpeningPodGames || {};
   const savedWinnerRounds = matchplayState.savedWinnerRounds || {};
-  const openingWinners = pods.flatMap((pod) => pod.matches.map((match) => match.winner).filter(Boolean));
+  const openingWinners = getMatchplayOpeningWinners(pods);
   const allOpeningComplete = pods.every((pod) => pod.matches.every((match) => Boolean(match.winner)));
   const winnerBracket = allOpeningComplete ? buildMatchplayWinnerRounds(openingWinners, matchplayState) : { rounds: [], champion: null };
 
@@ -3388,6 +3565,19 @@ function PublicHomeTab({
       ? `${reservationCount}/${reservationLimit} reserved`
       : `${reservationCount} reserved`
     : "Entries closed";
+  const openReservationRows = publicReservationOptions.map((option) => {
+    const info = option.scheduleItem ? getScheduleEventPublicInfo(option.scheduleItem) : option.state?.publicTournamentInfo || {};
+    const count = Number(option.state?.reservationCount || option.state?.reservations?.length || 0);
+    const limit = Number(option.state?.reservationLimit || 0);
+    return {
+      key: option.key,
+      name: info.name || option.scheduleItem?.name || option.state?.tournamentName || "Tournament",
+      date: info.date || option.scheduleItem?.startDate || option.state?.tournamentDate || "",
+      startTime: info.startTime || option.scheduleItem?.startTime || option.state?.tournamentStartTime || "",
+      center: info.center || option.scheduleItem?.center || option.state?.tournamentCenter || "",
+      summary: limit ? `${count}/${limit} reserved` : `${count} reserved`,
+    };
+  });
 
   return (
     <AppCard>
@@ -3420,7 +3610,7 @@ function PublicHomeTab({
               <p className="text-xs font-black uppercase tracking-wide text-blue-200">{nextEventReservation ? "Entries Open" : "Upcoming Event"}</p>
               <h3 className="mt-2 text-2xl font-black text-white">{featuredName}</h3>
               <div className="mt-3 space-y-1 text-sm font-semibold text-blue-100">
-                <p>{featuredDate || "Date TBD"}{featuredTime ? ` • ${formatStartTime(featuredTime)}` : ""}</p>
+                <p>{featuredDate || "Date TBD"}{featuredTime ? ` - ${formatStartTime(featuredTime)}` : ""}</p>
                 <p>{featuredCenter || "Center TBD"}</p>
                 {featuredAddress && <p className="text-blue-200">{featuredAddress}</p>}
               </div>
@@ -3442,21 +3632,29 @@ function PublicHomeTab({
           </section>
         )}
 
-        {publicReservationOptions.length > 0 && (
+        {openReservationRows.length > 0 && (
           <section className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wide text-green-700">Open For Entries</p>
-                <h3 className="mt-1 text-xl font-black text-green-950">
-                  {publicReservationOptions.length === 1 ? "1 tournament is accepting reservations" : `${publicReservationOptions.length} tournaments are accepting reservations`}
-                </h3>
-                <p className="mt-1 text-sm font-semibold text-green-800">
-                  Select Reserve Now to enter an upcoming tournament.
-                </p>
-              </div>
-              <Button className="rounded-2xl bg-green-700 text-white hover:bg-green-800" onClick={() => onReserve(primaryOpenReservation?.key || "")}>
-                Reserve Now
-              </Button>
+            <div className="mb-3">
+              <p className="text-xs font-black uppercase tracking-wide text-green-700">Open For Entries</p>
+              <h3 className="mt-1 text-xl font-black text-green-950">
+                {openReservationRows.length === 1 ? "1 tournament is accepting reservations" : `${openReservationRows.length} tournaments are accepting reservations`}
+              </h3>
+            </div>
+            <div className="space-y-2">
+              {openReservationRows.map((row) => (
+                <div key={`home-open-entry-${row.key}`} className="flex flex-col gap-3 rounded-xl border border-green-200 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-base font-black text-green-950">{row.name}</p>
+                    <p className="mt-1 text-sm font-semibold text-green-800">
+                      {row.date || "Date TBD"}{row.startTime ? ` - ${formatStartTime(row.startTime)}` : ""}{row.center ? ` - ${row.center}` : ""}
+                    </p>
+                    <p className="mt-1 text-xs font-black uppercase tracking-wide text-green-700">{row.summary}</p>
+                  </div>
+                  <Button className="rounded-2xl bg-green-700 text-white hover:bg-green-800" onClick={() => onReserve(row.key)}>
+                    Reserve Now
+                  </Button>
+                </div>
+              ))}
             </div>
           </section>
         )}
@@ -3483,8 +3681,8 @@ function PublicHomeTab({
                     {item.name}
                   </button>
                   <p className="mt-1 text-sm font-semibold text-slate-600">
-                    {item.startDate || "Date TBD"}{item.startTime ? ` • ${formatStartTime(item.startTime)}` : ""}
-                    {item.center ? ` • ${item.center}` : ""}
+                    {item.startDate || "Date TBD"}{item.startTime ? ` - ${formatStartTime(item.startTime)}` : ""}
+                    {item.center ? ` - ${item.center}` : ""}
                   </p>
                 </div>
               )) : (
@@ -3564,7 +3762,7 @@ function PublicHomeTab({
               <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
               <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
               <p className="mt-1 text-sm font-semibold text-blue-800">
-                {latestArchive.date || "Date TBD"}{latestArchive.center ? ` • ${latestArchive.center}` : ""}
+                {latestArchive.date || "Date TBD"}{latestArchive.center ? ` - ${latestArchive.center}` : ""}
               </p>
             </div>
             {latestArchiveWinner && (
@@ -3723,25 +3921,34 @@ function TournamentInfoTab({
     ? Math.max(0, publicReservationLimit - publicReservationCount)
     : 0;
   const showPublicFieldInfo = Boolean(matchingReservationState && publicReservationLimit);
-  const detailQualifyingGames = selectedEventDraftSnapshot?.qualifyingGames || qualifyingGames || 4;
-  const detailTournamentFormat = selectedEventDraftSnapshot?.tournamentFormat || tournamentFormat;
+  const selectedEventSetup = selectedEventScheduleItem?.eventSetup || {};
+  const detailQualifyingGames = selectedEventDraftSnapshot?.qualifyingGames || selectedEventSetup.qualifyingGames || (!selectedEventKey ? qualifyingGames : 4) || 4;
+  const detailTournamentFormat = selectedEventDraftSnapshot?.tournamentFormat || selectedEventSetup.tournamentFormat || (!selectedEventKey ? tournamentFormat : "tbd");
+  const shouldUseSelectedEventActivity = Boolean(!selectedEventKey || selectedEventDraftSnapshot);
+  const stageBowlers = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.bowlers || bowlers) : [];
+  const stageSavedScoreGames = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.savedScoreGames || savedScoreGames) : {};
+  const stageSavedFinalsRounds = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.savedFinalsRounds || savedFinalsRounds) : {};
+  const stageEliminatorState = shouldUseSelectedEventActivity ? eliminatorState : {};
+  const stageBracketState = shouldUseSelectedEventActivity ? bracketState : {};
+  const stageLaneEliminatorState = shouldUseSelectedEventActivity ? laneEliminatorState : {};
+  const stageMatchplayState = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.matchplayState || matchplayState) : DEFAULT_MATCHPLAY_STATE;
   const normalStage = getTournamentStage({
-    bowlers: selectedEventDraftSnapshot?.bowlers || bowlers,
-    eliminatorState,
+    bowlers: stageBowlers,
+    eliminatorState: stageEliminatorState,
     useHandicapScores: selectedEventDraftSnapshot ? Boolean(selectedEventDraftSnapshot.useHandicapScores) : useHandicapScores,
     qualifyingGames: detailQualifyingGames,
-    savedScoreGames: selectedEventDraftSnapshot?.savedScoreGames || savedScoreGames,
+    savedScoreGames: stageSavedScoreGames,
     tournamentFormat: detailTournamentFormat,
-    savedFinalsRounds: selectedEventDraftSnapshot?.savedFinalsRounds || savedFinalsRounds,
-    bracketState,
-    laneEliminatorState,
-    matchplayState,
+    savedFinalsRounds: stageSavedFinalsRounds,
+    bracketState: stageBracketState,
+    laneEliminatorState: stageLaneEliminatorState,
+    matchplayState: stageMatchplayState,
     tournamentInfo: displayedTournamentInfo,
   });
   const tournamentStartDate = displayedTournamentInfo.date || reservationState.tournamentDate || "";
   const tournamentStartTime = displayedTournamentInfo.startTime || reservationState.tournamentStartTime || "";
-  const hasSavedQualifyingGame = Object.values(selectedEventDraftSnapshot?.savedScoreGames || savedScoreGames || {}).some(Boolean);
-  const hasMatchplayActivity = isMatchplayTournament(detailTournamentFormat, displayedTournamentInfo) && countMatchplayLineageGames(selectedEventDraftSnapshot?.matchplayState || matchplayState) > 0;
+  const hasSavedQualifyingGame = Object.values(stageSavedScoreGames || {}).some(Boolean);
+  const hasMatchplayActivity = isMatchplayTournament(detailTournamentFormat, displayedTournamentInfo) && countMatchplayLineageGames(stageMatchplayState) > 0;
   const tournamentStartDateTime = getTournamentStartDateTime(tournamentStartDate, tournamentStartTime);
   const isBeforeTournamentStart = tournamentStartDateTime
     ? Date.now() < tournamentStartDateTime.getTime()
@@ -4210,6 +4417,30 @@ function LockedTextField({ label, value, onChange, type = "text", placeholder = 
   );
 }
 
+function DashboardTournamentSelect({ value = "", scheduleItems = [], onChange = () => {} }) {
+  const currentValue = (scheduleItems || []).some((item) => String(item?.name || "") === String(value || ""))
+    ? value
+    : "";
+
+  return (
+    <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+      <Label className="text-left text-sm font-bold text-blue-900">Tournament Name</Label>
+      <select
+        value={currentValue}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-h-[38px] w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950 shadow-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+        <option value="">{value || "Select scheduled tournament"}</option>
+        {(scheduleItems || []).filter((item) => String(item?.name || "").trim()).map((item, index) => (
+          <option key={`${item.eventId || item.name}-${index}`} value={item.name}>
+            {item.name}{item.eventId ? ` - ID ${item.eventId}` : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function LockedQualifyingGamesField({ qualifyingGames, onSave }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(qualifyingGames || 4));
@@ -4639,6 +4870,56 @@ function SupabaseAdminLogin({ session, adminProfile, authLoading, onSignIn, onSi
   );
 }
 
+function MaintenanceModeScreen({ session, adminProfile, authLoading, onSignIn, onSignOut }) {
+  return (
+    <div className="bb-stage min-h-screen p-4 md:p-8">
+      <style>{numberInputStyles}</style>
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center justify-center">
+        <div className="w-full overflow-hidden rounded-3xl border border-blue-300/60 bg-slate-950 shadow-2xl">
+          <div className="bb-header relative p-6 text-white md:p-8">
+            <div className="bb-header-strip absolute inset-x-0 bottom-0 h-3 opacity-90" />
+            <div className="relative flex flex-col gap-5 md:flex-row md:items-center">
+              <img
+                src={bowlerBuildersLogo}
+                alt="Bowler Builders"
+                className="h-20 w-24 shrink-0 rounded-xl bg-white object-contain p-1 shadow-lg ring-2 ring-blue-300"
+              />
+              <div>
+                <p className="bb-kicker text-xs font-black uppercase">Bowler Builders</p>
+                <h1 className="bb-title mt-1 text-3xl font-black leading-tight text-white md:text-5xl">
+                  Tournament Hub
+                </h1>
+                <p className="mt-2 text-sm font-semibold text-blue-100 md:text-base">
+                  We are updating the site and will be back shortly.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-5 bg-slate-50 p-5 md:p-7">
+            <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+              <p className="text-base font-black text-blue-950">Maintenance in progress</p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-700">
+                Reservations, schedules, live scoring, and tournament history are temporarily paused while we publish updates.
+                Please check back soon.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-900 p-4">
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-blue-200">Admin access</p>
+              <SupabaseAdminLogin
+                session={session}
+                adminProfile={adminProfile}
+                authLoading={authLoading}
+                onSignIn={onSignIn}
+                onSignOut={onSignOut}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function dataFromRow(row) {
   return row?.data && typeof row.data === "object" ? row.data : {};
 }
@@ -4853,10 +5134,8 @@ function DashboardTab({
   onSyncSupabaseNow = () => {},
   onSyncLiveScoresNow = () => {},
   isOwnerAdmin = false,
-  savedTournamentDrafts = [],
-  onSaveTournamentDraft = () => {},
-  onLoadTournamentDraft = () => {},
-  onDeleteTournamentDraft = () => {},
+  onSaveCurrentTournament = () => {},
+  onOpenScheduledTournament = null,
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const announcementFileInputRef = useRef(null);
@@ -4866,6 +5145,10 @@ function DashboardTab({
     const scheduledItem = findScheduleItemByName(scheduleItems, name);
     if (!scheduledItem) {
       update("name", name);
+      return;
+    }
+    if (onOpenScheduledTournament) {
+      onOpenScheduledTournament(scheduledItem);
       return;
     }
     const savedSetup = scheduledItem.eventSetup || {};
@@ -5048,14 +5331,7 @@ function DashboardTab({
             <h2 className="mb-4 text-center text-xl font-semibold text-blue-900">Tournament Setup</h2>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-3">
-                <LockedTextField label="Tournament Name" value={tournamentInfo.name} onChange={applyScheduledTournament} listId="dashboard-schedule-tournaments" />
-                <datalist id="dashboard-schedule-tournaments">
-                  {(scheduleItems || []).filter((item) => String(item?.name || "").trim()).map((item, index) => (
-                    <option key={`${item.name}-${index}`} value={item.name}>
-                      {[item.startDate, item.startTime ? formatStartTime(item.startTime) : "", item.center].filter(Boolean).join(" | ")}
-                    </option>
-                  ))}
-                </datalist>
+                <DashboardTournamentSelect value={tournamentInfo.name} scheduleItems={scheduleItems} onChange={applyScheduledTournament} />
                 <LockedTextField label="Date" value={tournamentInfo.date} onChange={(value) => update("date", value)} type="date" />
                 <LockedTextField label="Start Time" value={tournamentInfo.startTime || ""} onChange={(value) => update("startTime", value)} type="time" />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
@@ -5426,50 +5702,19 @@ function DashboardTab({
         <AppCard className="lg:col-span-5">
           <CardContent className="p-3 md:p-5">
             <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-black text-blue-950">Event Setup</h2>
-                  <p className="text-sm font-semibold text-blue-700">Save the current Dashboard setup to this scheduled event and keep a reopen point.</p>
-                </div>
-                <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onSaveTournamentDraft}>
-                  Save Event Setup
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {savedTournamentDrafts.map((draft) => (
-                  <div key={draft.id} className="flex flex-col gap-2 rounded-xl border border-blue-100 bg-white p-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="font-black text-blue-950">{draft.name || "Saved Tournament"}</p>
-                      <p className="text-xs font-semibold text-slate-500">
-                        {draft.savedAt ? new Date(draft.savedAt).toLocaleString() : "Saved"}
-                      </p>
-                      <p className="text-xs font-semibold text-blue-700">
-                        {[
-                          draft.snapshot?.tournamentInfo?.date,
-                          draft.snapshot?.tournamentInfo?.startTime ? formatStartTime(draft.snapshot.tournamentInfo.startTime) : "",
-                          draft.snapshot?.tournamentInfo?.center,
-                          `${Array.isArray(draft.snapshot?.bowlers) ? draft.snapshot.bowlers.filter((bowler) => bowler?.name?.trim()).length : 0} bowlers`,
-                        ].filter(Boolean).join(" • ")}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" className="rounded-xl" onClick={() => onLoadTournamentDraft(draft.id)}>
-                        Open
-                      </Button>
-                      {isOwnerAdmin && (
-                        <Button variant="outline" className="rounded-xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => onDeleteTournamentDraft(draft.id)}>
-                          Delete
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {savedTournamentDrafts.length === 0 && (
-                  <p className="rounded-xl bg-white p-3 text-sm font-semibold text-blue-700">
-                    No saved event setup points yet.
+                  <h2 className="text-xl font-black text-blue-950">Tournament Save</h2>
+                  <p className="text-sm font-semibold text-blue-700">
+                    Save the current workspace to the selected tournament ID.
                   </p>
-                )}
+                  <p className="mt-1 text-xs font-bold uppercase tracking-wide text-blue-500">
+                    ID: {tournamentInfo.scheduleEventId || reservationTournamentKey({ name: tournamentInfo.name, date: tournamentInfo.date, center: tournamentInfo.center }) || "Select a scheduled tournament"}
+                  </p>
+                </div>
+                <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onSaveCurrentTournament}>
+                  Save Tournament
+                </Button>
               </div>
             </div>
 
@@ -5597,7 +5842,7 @@ function LockedCellInput({ value, onChange, type = "text", className = "", displ
       >
 {displayValue !== undefined && displayValue !== null
   ? displayValue
-  : (value ?? "") || "—"}
+  : (value ?? "") || " - -"}
       </button>
     );
   }
@@ -5653,7 +5898,7 @@ function LockedBowlerNameAutocomplete({ value, onChange, names, onSelectBowler, 
   if (!editing) {
     return (
       <button type="button" onClick={() => setEditing(true)} onKeyDown={inputKeyDown} className="min-h-[34px] min-w-[120px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1.5 text-left text-sm font-semibold text-blue-950 shadow-sm hover:bg-blue-100 md:min-w-[150px]" {...fieldProps}>
-        {value || "—"}
+        {value || " - -"}
       </button>
     );
   }
@@ -6695,8 +6940,7 @@ averageSource: archivedData?.eligible
                           {getTeamLabel(index, teamSize)}
                           <span className="ml-2 font-semibold normal-case tracking-normal text-blue-100">
                             Bowlers {index + 1}-{Math.min(index + teamSize, bowlers.length)}
-                            {" "}•
-                            {" "}
+                            {" "} - {" "}
                             {bowlers.slice(index, index + teamSize).filter((member) => member.paid).length}/{teamSize} paid
                           </span>
                         </div>
@@ -6719,7 +6963,7 @@ averageSource: archivedData?.eligible
                         type="number"
                         className="w-14 text-center md:w-16"
                         value={b.average ?? ""}
-                        displayValue={bowlerAverageDisplay(b) || "—"}
+                        displayValue={bowlerAverageDisplay(b) || " - -"}
                         onChange={(value) => updateBowler(index, "average", value)}
                         inputProps={averageNavProps}
                       />
@@ -6799,7 +7043,7 @@ function LockedScoreCell({ value, onChange, rowIndex, colIndex, locked = false, 
         className="w-12 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-center font-bold text-blue-950 shadow-sm hover:bg-blue-100 md:w-14"
         title={allowLockedEdit ? "Click to edit saved score" : "Click the game header to enter scores"}
       >
-        {value || "—"}
+        {value || " - -"}
       </button>
     );
   }
@@ -6994,10 +7238,10 @@ const removeQualifyingAdjustment = (bowlerId) => {
                   )}
                   <tr className="border-t">
                     <td className="p-2 text-center font-semibold">{ranked?.rank ?? index + 1}</td>
-                    <td className="p-2 font-semibold text-blue-950">{b.name || "—"}</td>
+                    <td className="p-2 font-semibold text-blue-950">{b.name || " - -"}</td>
                     {useHandicapScores && (
                       <td className="p-2 text-center font-semibold text-blue-950">
-                        {bowlerAverageDisplay(b) || "—"}
+                        {bowlerAverageDisplay(b) || " - -"}
                       </td>
                     )}
                     {useHandicapScores && (
@@ -7793,18 +8037,16 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                       <Label className="text-xs font-black text-blue-900">FKM Title Event</Label>
                       <Switch compact checked={Boolean(selectedItem.fkmTitle)} onCheckedChange={(checked) => !scheduleLocked && updateItem(selectedIndex, "fkmTitle", checked)} />
                     </div>
-                    <div className={`flex min-h-10 items-center justify-between gap-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
-                      <Label className="text-xs font-black text-green-900">Entries Open</Label>
-                      <Switch
-                        compact
-                        checked={getScheduleEventReservationSettings(selectedItem).entriesOpen}
-                        onCheckedChange={(checked) => !scheduleLocked && updateItem(selectedIndex, "reservationSettings", {
-                          ...(selectedItem.reservationSettings || {}),
-                          entriesOpen: checked,
-                          reservationLimit: getScheduleEventReservationSettings(selectedItem).reservationLimit,
-                          reservationLimitUpdatedAt: selectedItem.reservationSettings?.reservationLimitUpdatedAt || "",
-                        })}
-                      />
+                    <div className="min-h-10 rounded-xl border border-green-100 bg-green-50 px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <Label className="text-xs font-black text-green-900">Entries Status</Label>
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${getScheduleEventReservationSettings(selectedItem).entriesOpen ? "bg-green-200 text-green-900" : "bg-slate-200 text-slate-700"}`}>
+                          {getScheduleEventReservationSettings(selectedItem).entriesOpen ? "Open" : "Closed"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold text-green-800">
+                        Open or close entries from the Reservations page for the active Dashboard tournament.
+                      </p>
                     </div>
                   </div>
                 </section>
@@ -8090,6 +8332,7 @@ function ReservationsTab({
   supabaseSession = null,
   onAddReservationToRegistration = () => {},
   onDeleteReservation = () => Promise.resolve(),
+  onRemoveReservationFromRegistration = () => {},
   onRemoveHiddenReservation = () => Promise.resolve(0),
 }) {
   const [rosterNotice, setRosterNotice] = useState("");
@@ -8102,7 +8345,15 @@ function ReservationsTab({
   const [announcementSending, setAnnouncementSending] = useState("");
   const [announcementIncludeFlyer, setAnnouncementIncludeFlyer] = useState(true);
   const currentScheduledTournamentKey = reservationKeyFromState(reservationState);
-  const selectedScheduledTournament = scheduleItemForReservationKey(scheduleItems, currentScheduledTournamentKey);
+  const activeDashboardTournamentKey = tournamentInfo.scheduleEventId || (
+    tournamentInfo.name || tournamentInfo.date || tournamentInfo.center
+      ? reservationTournamentKey({
+          name: tournamentInfo.name,
+          date: tournamentInfo.date,
+          center: tournamentInfo.center,
+        })
+      : ""
+  );
   const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
@@ -8137,6 +8388,68 @@ function ReservationsTab({
       ? tournamentInfo.announcementImages
       : [];
   const announcementFlyer = selectedAnnouncementImages.find((image) => image?.src) || null;
+
+  useEffect(() => {
+    if (!activeDashboardTournamentKey || activeDashboardTournamentKey === currentScheduledTournamentKey) return;
+    const item = scheduleItemForReservationKey(scheduleItems, activeDashboardTournamentKey);
+    const [keyName = "", keyDate = "", keyCenter = ""] = String(activeDashboardTournamentKey || "").split("|");
+    const name = item?.name || tournamentInfo.name || keyName;
+    setReservationState((current) => {
+      const currentKey = reservationKeyFromState(current);
+      const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
+      if (currentKey) {
+        reservationsByTournament[currentKey] = mergeReservationBucket(
+          reservationsByTournament[currentKey],
+          reservationBucketFromState(current)
+        );
+      }
+
+      const savedBucket = reservationsByTournament[activeDashboardTournamentKey] || {};
+      const eventReservationSettings = getScheduleEventReservationSettings(item || {});
+      const nextEntriesOpen = Boolean(eventReservationSettings.entriesOpen);
+      const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
+        tournamentInfo,
+        payoutState,
+        scheduleItem: item || null,
+        reservationState: {
+          ...current,
+          ...savedBucket,
+          tournamentName: name,
+          tournamentDate: savedBucket.tournamentDate || item?.startDate || tournamentInfo.date || keyDate || "",
+          tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || tournamentInfo.startTime || "",
+          tournamentCenter: savedBucket.tournamentCenter || item?.center || tournamentInfo.center || keyCenter || "",
+          tournamentAddress: savedBucket.tournamentAddress || item?.address || tournamentInfo.location || "",
+        },
+      });
+
+      return {
+        ...current,
+        reservationsByTournament,
+        tournamentKey: activeDashboardTournamentKey,
+        entriesOpen: nextEntriesOpen,
+        tournamentName: name,
+        tournamentDate: savedBucket.tournamentDate || item?.startDate || tournamentInfo.date || keyDate || "",
+        tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || tournamentInfo.startTime || "",
+        tournamentCenter: savedBucket.tournamentCenter || item?.center || tournamentInfo.center || keyCenter || "",
+        tournamentAddress: savedBucket.tournamentAddress || item?.address || tournamentInfo.location || "",
+        reservationLimit: Number(eventReservationSettings.reservationLimit || savedBucket.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+        reservationLimitUpdatedAt: eventReservationSettings.reservationLimitUpdatedAt || savedBucket.reservationLimitUpdatedAt || "",
+        reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
+        waitlistOnlyNames: eventReservationSettings.waitlistOnlyNames || savedBucket.waitlistOnlyNames || "",
+        reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
+        reservations: savedBucket.reservations || [],
+        publicReservations: savedBucket.publicReservations || [],
+        publicTournamentInfo,
+      };
+    });
+  }, [
+    activeDashboardTournamentKey,
+    currentScheduledTournamentKey,
+    payoutState,
+    scheduleItems,
+    setReservationState,
+    tournamentInfo,
+  ]);
 
   const saveReservationNameMapping = (reservation) => {
     const nickname = String(reservation.nickname || "").trim();
@@ -8233,81 +8546,6 @@ function ReservationsTab({
     setRosterNotice(`${getReservationDisplayName(reservation) || reservation.name || "Reservation"} marked ${nextStatus}.`);
   };
 
-  const selectScheduledTournament = (nextKey) => {
-    const item = (scheduleItems || []).find((scheduleItem) => reservationKeyFromScheduleItem(scheduleItem) === nextKey);
-    const [keyName = "", keyDate = "", keyCenter = ""] = String(nextKey || "").split("|");
-    const name = item?.name || keyName;
-    setReservationState((current) => {
-      const currentKey = reservationKeyFromState(current);
-      const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
-
-      if (currentKey) {
-        reservationsByTournament[currentKey] = mergeReservationBucket(
-          reservationsByTournament[currentKey],
-          reservationBucketFromState(current)
-        );
-      }
-
-      const savedBucket = reservationsByTournament[nextKey] || {};
-      const eventReservationSettings = getScheduleEventReservationSettings(item || {});
-      const eventPublicInfo = item ? getScheduleEventPublicInfo(item) : null;
-      const openTournamentKeys = getOpenReservationKeys(current);
-      const nextEntriesOpen = Boolean(eventReservationSettings.entriesOpen || savedBucket.entriesOpen || openTournamentKeys.includes(nextKey));
-      const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, nextKey);
-      const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, nextKey)?.snapshot || null;
-      const publicTournamentInfo = eventPublicInfo || (matchingDraftSnapshot
-        ? buildReservationTournamentInfoSnapshot({
-            tournamentInfo: matchingDraftSnapshot.tournamentInfo || {},
-            payoutState: matchingDraftSnapshot.payoutState || {},
-          scheduleItem: item || null,
-          reservationState: {
-            ...current,
-            ...savedBucket,
-            tournamentName: name,
-            tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
-            tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
-            tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
-            tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
-            },
-          })
-        : savedBucket.publicTournamentInfo || buildReservationTournamentInfoSnapshot({
-            tournamentInfo: dashboardTournamentMatchesSelection ? tournamentInfo : {},
-            payoutState: dashboardTournamentMatchesSelection ? payoutState : {},
-          scheduleItem: item || null,
-          reservationState: {
-            ...current,
-            ...savedBucket,
-            tournamentName: name,
-            tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
-            tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
-            tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
-            tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
-            },
-          }));
-
-      return {
-        ...current,
-        reservationsByTournament,
-        openTournamentKeys,
-        tournamentKey: nextKey,
-        entriesOpen: nextEntriesOpen,
-        tournamentName: name,
-        tournamentDate: savedBucket.tournamentDate || item?.startDate || keyDate || "",
-        tournamentStartTime: savedBucket.tournamentStartTime || item?.startTime || "",
-        tournamentCenter: savedBucket.tournamentCenter || item?.center || keyCenter || "",
-        tournamentAddress: savedBucket.tournamentAddress || item?.address || "",
-        reservationLimit: Number(eventReservationSettings.reservationLimit || savedBucket.reservationLimit || current.reservationLimit || DEFAULT_RESERVATION_LIMIT),
-        reservationLimitUpdatedAt: eventReservationSettings.reservationLimitUpdatedAt || savedBucket.reservationLimitUpdatedAt || "",
-        reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
-        waitlistOnlyNames: eventReservationSettings.waitlistOnlyNames || savedBucket.waitlistOnlyNames || "",
-        reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
-        reservations: savedBucket.reservations || [],
-        publicReservations: savedBucket.publicReservations || [],
-        publicTournamentInfo,
-      };
-    });
-  };
-
   const setSelectedTournamentOpen = (checked) => {
     setReservationState((current) => {
       const currentKey = reservationKeyFromState(current);
@@ -8359,11 +8597,13 @@ function ReservationsTab({
               reservationSettings: {
                 ...(item.reservationSettings || {}),
                 entriesOpen: checked,
-                reservationLimit: Number(reservationState.reservationLimit || item.reservationSettings?.reservationLimit || DEFAULT_RESERVATION_LIMIT),
-                reservationLimitUpdatedAt: reservationState.reservationLimitUpdatedAt || item.reservationSettings?.reservationLimitUpdatedAt || "",
+                reservationLimit: Number(item.reservationSettings?.reservationLimit || item.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+                reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || item.reservationLimitUpdatedAt || "",
                 waitlistOnlyNames: reservationState.waitlistOnlyNames || item.reservationSettings?.waitlistOnlyNames || "",
               },
-              publicInfo: reservationState.publicTournamentInfo || getScheduleEventPublicInfo(item),
+              publicInfo: scheduleEventInfoBelongsToItem(reservationState.publicTournamentInfo, item)
+                ? reservationState.publicTournamentInfo
+                : getScheduleEventPublicInfo(item),
             }
           : item
       )));
@@ -8407,9 +8647,9 @@ function ReservationsTab({
               publicInfo: nextPublicInfo,
               reservationSettings: {
                 ...(item.reservationSettings || {}),
-                entriesOpen: Boolean(reservationState.entriesOpen || item.reservationSettings?.entriesOpen),
-                reservationLimit: Number(reservationState.reservationLimit || item.reservationSettings?.reservationLimit || DEFAULT_RESERVATION_LIMIT),
-                reservationLimitUpdatedAt: reservationState.reservationLimitUpdatedAt || item.reservationSettings?.reservationLimitUpdatedAt || "",
+                entriesOpen: Boolean(item.reservationSettings?.entriesOpen),
+                reservationLimit: Number(item.reservationSettings?.reservationLimit || item.reservationLimit || DEFAULT_RESERVATION_LIMIT),
+                reservationLimitUpdatedAt: item.reservationSettings?.reservationLimitUpdatedAt || item.reservationLimitUpdatedAt || "",
                 waitlistOnlyNames: reservationState.waitlistOnlyNames || item.reservationSettings?.waitlistOnlyNames || "",
               },
             }
@@ -8426,17 +8666,10 @@ function ReservationsTab({
       setRosterNotice(`${name} could not be added. Registration is full at ${result.limit} entries. Delete someone from Registration first.`);
       return;
     }
-    setReservationState((current) => ({
-      ...current,
-      reservations: (current.reservations || []).map((item) =>
-        item.id === reservation.id
-          ? {
-              ...item,
-              rosterAdded: true,
-              rosterAddedAt: new Date().toISOString(),
-            }
-          : item
-      ),
+    updateReservationRows(reservation.id, (item) => ({
+      ...item,
+      rosterAdded: true,
+      rosterAddedAt: new Date().toISOString(),
     }));
     setRosterNotice(result?.alreadyExists ? `${name} is already on the registration roster. The existing row was updated.` : `${name} was sent to Registration.`);
   };
@@ -8502,6 +8735,7 @@ function ReservationsTab({
     try {
       setDeletingReservationId(reservation.id);
       await Promise.resolve(onDeleteReservation(reservation));
+      onRemoveReservationFromRegistration(reservation);
       setReservationState((current) => {
         const currentKey = reservationKeyFromState(current);
         const nextReservations = (current.reservations || []).filter(
@@ -8522,7 +8756,7 @@ function ReservationsTab({
           reservationsByTournament,
         };
       });
-      setRosterNotice(`${getReservationDisplayName(reservation) || reservation.name || "Reservation"} was deleted.`);
+      setRosterNotice(`${getReservationDisplayName(reservation) || reservation.name || "Reservation"} was deleted and removed from Registration if present.`);
     } catch (error) {
       window.alert(error.message || "Could not delete this reservation from Supabase.");
     } finally {
@@ -8655,68 +8889,32 @@ function ReservationsTab({
 
 <div className="grid gap-4 md:grid-cols-2">
   <div className="space-y-2">
-    <Label>Open Tournament From Schedule</Label>
+    <Label>Current Dashboard Tournament</Label>
 
-    <select
-      value={selectedScheduledTournament ? currentScheduledTournamentKey : ""}
-      onChange={(e) => selectScheduledTournament(e.target.value)}
-      className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
-    >
-      <option value="">Select scheduled tournament</option>
-      {(scheduleItems || []).filter((item) => item.name).map((item, index) => (
-        <option key={`reservation-schedule-${index}`} value={reservationKeyFromScheduleItem(item)}>
-          {item.startDate ? `${item.startDate}${item.startTime ? ` ${formatStartTime(item.startTime)}` : ""} - ` : ""}{item.name}
-        </option>
-      ))}
-    </select>
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-950">
+      <p>{reservationState.tournamentName || tournamentInfo.name || "No tournament selected"}</p>
+      {(reservationState.tournamentDate || reservationState.tournamentStartTime || reservationState.tournamentCenter) && (
+        <p className="mt-1 text-xs font-semibold text-blue-700">
+          {reservationState.tournamentDate || "Date TBD"}
+          {reservationState.tournamentStartTime ? ` - ${formatStartTime(reservationState.tournamentStartTime)}` : ""}
+          {reservationState.tournamentCenter ? ` - ${reservationState.tournamentCenter}` : ""}
+        </p>
+      )}
+    </div>
+    <p className="text-xs font-semibold text-slate-600">
+      Open a different event from Dashboard Tournament Setup to change this page.
+    </p>
   </div>
 
   <div className="space-y-2">
     <Label>Max Entries</Label>
 
-    <Input
-      type="number"
-      value={reservationState.reservationLimit}
-      onChange={(e) => {
-        const nextLimit = Number(e.target.value || 0);
-        const nextUpdatedAt = new Date().toISOString();
-        const selectedKey = reservationKeyFromState(reservationState);
-        if (selectedKey) {
-          setScheduleItems((current) => (current || []).map((item) => (
-            reservationKeyFromScheduleItem(item) === selectedKey || legacyReservationKeyFromScheduleItem(item) === selectedKey
-              ? {
-                  ...item,
-                  reservationSettings: {
-                    ...(item.reservationSettings || {}),
-                    reservationLimit: nextLimit,
-                    reservationLimitUpdatedAt: nextUpdatedAt,
-                    entriesOpen: Boolean(reservationState.entriesOpen || item.reservationSettings?.entriesOpen),
-                    waitlistOnlyNames: reservationState.waitlistOnlyNames || item.reservationSettings?.waitlistOnlyNames || "",
-                  },
-                }
-              : item
-          )));
-        }
-        setReservationState((current) => {
-          const currentKey = reservationKeyFromState(current);
-          const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
-          if (currentKey) {
-            reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
-              ...reservationBucketFromState(current),
-              reservationLimit: nextLimit,
-              reservationLimitUpdatedAt: nextUpdatedAt,
-            });
-          }
-          return {
-            ...current,
-            reservationLimit: nextLimit,
-            reservationLimitUpdatedAt: nextUpdatedAt,
-            reservationsByTournament,
-          };
-        });
-      }}
-      placeholder="Reservation Limit"
-    />
+    <div className="rounded-xl border border-blue-200 bg-slate-50 px-3 py-2 text-sm font-black text-blue-950">
+      {reservationLimit || DEFAULT_RESERVATION_LIMIT}
+    </div>
+    <p className="text-xs font-semibold text-slate-600">
+      Change max entries from the Schedule admin page.
+    </p>
     <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-900">
       Reserved: {reservedCount}
       {reservationLimit > 0 ? ` / ${reservationLimit}` : ""}
@@ -8761,50 +8959,6 @@ function ReservationsTab({
     </p>
   </div>
 
-  <div className="space-y-2 md:col-span-2">
-    <Label>Manual Tournament Name</Label>
-
-    <Input
-      value={reservationState.tournamentName}
-      onChange={(e) =>
-        setReservationState((current) => ({
-          ...current,
-          reservationsByTournament: {
-            ...(current.reservationsByTournament || {}),
-            ...(reservationKeyFromState(current)
-              ? {
-                  [reservationKeyFromState(current)]: reservationBucketFromState(current),
-                }
-              : {}),
-          },
-          tournamentKey: "",
-          tournamentName: e.target.value,
-          tournamentDate: "",
-          tournamentStartTime: "",
-          tournamentCenter: "",
-          tournamentAddress: "",
-          waitlistOnlyNames: "",
-          reservationNextNumber: 1,
-          reservationCount: 0,
-          reservations: [],
-          publicReservations: [],
-          publicTournamentInfo: buildReservationTournamentInfoSnapshot({
-            tournamentInfo,
-            payoutState,
-            reservationState: {
-              ...current,
-              tournamentName: e.target.value,
-              tournamentDate: "",
-              tournamentStartTime: "",
-              tournamentCenter: "",
-              tournamentAddress: "",
-            },
-          }),
-        }))
-      }
-      placeholder="Tournament Name"
-    />
-  </div>
 </div>
 
 {reservationState.tournamentName && (
@@ -8813,8 +8967,8 @@ function ReservationsTab({
     {(reservationState.tournamentDate || reservationState.tournamentStartTime || reservationState.tournamentCenter) && (
       <p className="mt-1 font-semibold">
         {reservationState.tournamentDate || "Date TBD"}
-        {reservationState.tournamentStartTime ? ` • ${formatStartTime(reservationState.tournamentStartTime)}` : ""}
-        {reservationState.tournamentCenter ? ` • ${reservationState.tournamentCenter}` : ""}
+        {reservationState.tournamentStartTime ? ` - ${formatStartTime(reservationState.tournamentStartTime)}` : ""}
+        {reservationState.tournamentCenter ? ` - ${reservationState.tournamentCenter}` : ""}
       </p>
     )}
     {reservationState.tournamentAddress && (
@@ -8988,7 +9142,7 @@ function ReservationsTab({
             </td>
 
             <td className="p-2 font-black text-blue-950 md:p-3">
-              {getReservationRegistrationNumber(reservation, "—")}
+              {getReservationRegistrationNumber(reservation, " - -")}
             </td>
 
             <td className="p-2 font-semibold md:p-3">
@@ -9008,7 +9162,7 @@ function ReservationsTab({
                   onChange={(event) => updateEditingReservation("nickname", event.target.value)}
                   placeholder="Nickname"
                 />
-              ) : reservation.nickname || "—"}
+              ) : reservation.nickname || " - -"}
             </td>
 
             <td className="p-2 md:p-3">
@@ -9018,7 +9172,7 @@ function ReservationsTab({
                   onChange={(event) => updateEditingReservation("phone", event.target.value)}
                   placeholder="Phone"
                 />
-              ) : reservation.phone || "—"}
+              ) : reservation.phone || " - -"}
             </td>
 
             <td className="p-2 md:p-3">
@@ -9028,7 +9182,7 @@ function ReservationsTab({
                   onChange={(event) => updateEditingReservation("email", event.target.value)}
                   placeholder="Email"
                 />
-              ) : reservation.email || "—"}
+              ) : reservation.email || " - -"}
             </td>
 
             <td className="max-w-[180px] p-2 md:max-w-[220px] md:p-3">
@@ -9039,7 +9193,7 @@ function ReservationsTab({
                   onChange={(event) => updateEditingReservation("note", event.target.value)}
                   placeholder="Note"
                 />
-              ) : reservation.note || "—"}
+              ) : reservation.note || " - -"}
             </td>
 
 <td className="p-2 text-[10px] text-slate-500 md:p-3 md:text-xs">
@@ -9047,7 +9201,7 @@ function ReservationsTab({
     ? new Date(
         reservation.createdAt
       ).toLocaleString()
-    : "—"}
+    : " - -"}
 </td>
 
 <td className="sticky right-0 border-l border-blue-100 bg-white p-2 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.8)] md:p-3">
@@ -9689,7 +9843,7 @@ const byLane = lanes.reduce(
         <div className="flex items-start justify-between gap-6 border-b-2 border-slate-900 pb-4 print:border-black">
           <div>
             <h1 className="text-3xl font-black text-slate-950 print:text-black">{tournamentInfo.name || "Tournament"}</h1>
-            <p className="mt-1 text-sm font-semibold text-slate-700 print:text-black">{tournamentInfo.center || ""} {tournamentInfo.date ? `• ${tournamentInfo.date}` : ""}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-700 print:text-black">{tournamentInfo.center || ""} {tournamentInfo.date ? ` - ${tournamentInfo.date}` : ""}</p>
             <h2 className="mt-4 text-5xl font-black text-slate-950 print:text-black">Lanes {pair}</h2>
           </div>
           <div className="text-center">
@@ -9803,7 +9957,7 @@ Lane {lanePairForGame(
             {tournamentInfo.name || "Tournament"}
           </h1>
           <p className="mt-1 text-sm font-semibold text-slate-700 print:text-black">
-            {tournamentInfo.center || ""} {tournamentInfo.date ? `• ${tournamentInfo.date}` : ""}
+            {tournamentInfo.center || ""} {tournamentInfo.date ? ` - ${tournamentInfo.date}` : ""}
           </p>
           <h2 className="mt-4 text-4xl font-black text-slate-950 print:text-black">
             Lane Pair Eliminator
@@ -10364,7 +10518,7 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
   return (
     <TournamentDisplayShell
       title={tournamentInfo.name || "Tournament Finals"}
-      subtitle={`${selectedRound.title || "Current Round"}${champion?.name ? ` • Champion: ${champion.name}` : qualifiers ? ` • ${qualifiers} Qualifiers` : ""}`}
+      subtitle={`${selectedRound.title || "Current Round"}${champion?.name ? ` - Champion: ${champion.name}` : qualifiers ? ` - ${qualifiers} Qualifiers` : ""}`}
     >
       <div className="mx-auto w-full max-w-[1500px]">
         <div className="mb-3 flex flex-col gap-2 rounded-2xl bg-white/10 p-2.5 md:flex-row md:items-center md:justify-between">
@@ -10455,7 +10609,7 @@ function FinalsDisplayView({
   return (
     <TournamentDisplayShell
       title={tournamentInfo.name || "Tournament Finals"}
-      subtitle={`${finalsLabel}${champion?.name ? ` • Leader: ${champion.name}` : finalistCount ? ` • Top ${finalistCount}` : ""}`}
+      subtitle={`${finalsLabel}${champion?.name ? ` - Leader: ${champion.name}` : finalistCount ? ` - Top ${finalistCount}` : ""}`}
     >
       <div className="mx-auto w-full max-w-[1500px]">
         <div className="rounded-3xl bg-white p-3 text-slate-950 shadow-2xl md:p-5">
@@ -10535,7 +10689,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
       direction: current.key === key && current.direction === "desc" ? "asc" : "desc",
     }));
   const sortLabel = (key) =>
-    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ↑" : " ↓") : "";
+    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ?" : " ?") : "";
   const displayedRows = [...filtered].sort((a, b) => {
     const direction = leaderboardSort.direction === "asc" ? 1 : -1;
     if (leaderboardSort.key === "scratch") {
@@ -10626,7 +10780,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     if (tournamentFormat === "bracket" && byeRanks.includes(b.rank)) return <span className={`${base} bg-purple-200 text-purple-900`}>BYE</span>;
     if (tournamentFormat === "eliminator" && b.rank <= 4) return <span className={`${base} bg-yellow-200 text-yellow-900`}>TOP 4</span>;
     if (b.rank <= displayCashers) return <span className={`${base} bg-green-100 text-green-800`}>CASH</span>;
-    if (!cutScore || score <= 0) return <span className="text-blue-400">—</span>;
+    if (!cutScore || score <= 0) return <span className="text-blue-400"> - -</span>;
     const pinsBack = Math.max(0, cutScore - score);
     return <span className={bigScreen ? "whitespace-nowrap text-3xl font-black text-red-600" : "whitespace-nowrap text-sm font-black text-red-600 md:text-base"}>{pinsBack}</span>;
   };
@@ -10709,7 +10863,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                       <td className={scoreCellClass}>{b.scratch}</td>
                       {useHandicapScores && <td className={scoreCellClass}>{earnedHandicap}</td>}
                       {useHandicapScores && <td className={totalCellClass}>{b.handicap}</td>}
-                      <td className={`${diffCellClass} ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? "—" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
+                      <td className={`${diffCellClass} ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? " - -" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className={statusCellClass}>{statusBadge(b)}</td>
                     </tr>
                     {expandedSeed === b.seed && (
@@ -10735,7 +10889,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
     </p>
   )
 ) : (
-  <p className="font-bold text-[10px] text-blue-950 sm:text-xs md:text-sm lg:text-base">—</p>
+  <p className="font-bold text-[10px] text-blue-950 sm:text-xs md:text-sm lg:text-base"> - -</p>
 )}
                               </div>
                             ))}
@@ -10760,10 +10914,10 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                                     const memberEarnedHandicap = handicapPerGame(member) * completedGamesCount(member);
                                     return (
                                       <tr key={`${b.seed}-member-${member.seed || memberIndex}`} className="border-t">
-                                        <td className="p-2 font-semibold text-blue-950">{member.name || "—"}</td>
+                                        <td className="p-2 font-semibold text-blue-950">{member.name || " - -"}</td>
                                         {useHandicapScores && <td className="p-2 text-center">{handicapPerGame(member)}</td>}
                                         {b.games.map((_, gameIndex) => (
-                                          <td key={`${member.seed}-member-game-${gameIndex}`} className="p-2 text-center">{Number(member.games?.[gameIndex] || 0) || "—"}</td>
+                                          <td key={`${member.seed}-member-game-${gameIndex}`} className="p-2 text-center">{Number(member.games?.[gameIndex] || 0) || " - -"}</td>
                                         ))}
                                         <td className="p-2 text-center font-semibold">{scratchTotal(member)}</td>
                                         {useHandicapScores && <td className="p-2 text-center font-semibold">{memberEarnedHandicap}</td>}
@@ -10786,6 +10940,178 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
         </div>
       </CardContent>
     </AppCard>
+  );
+}
+
+function RegularBracketViewerSheet({
+  bracketRounds = [],
+  champion = null,
+  scores = {},
+  scratchScores = {},
+  matchLanes = {},
+  rolloffWinners = {},
+  rolloffScores = {},
+  matchScoring = "total",
+  useHandicapScores = false,
+  tournamentInfo = {},
+}) {
+  const cleanText = (value = "", max = 18) => {
+    const text = String(value || "").trim();
+    return text.length > max ? `${text.slice(0, Math.max(0, max - 1))}.` : text;
+  };
+  const playerLine = (player) => {
+    if (!player) return "TBD";
+    if (player.name === "BYE") return "BYE";
+    const seed = player.rank ? `${player.rank}. ` : "";
+    return `${seed}${player.name || "TBD"}`;
+  };
+  const scoreParts = (match, side, roundIndex) => {
+    if (!match) return { primary: "", secondary: "" };
+    const player = side === "l" ? match.left : match.right;
+    if (!player || player.name === "BYE") return { primary: "", secondary: "" };
+    if (matchScoring === "bestOf3") {
+      const record = getBestOfThreeRecord(scores, match.id);
+      return { primary: side === "l" ? record.left || "" : record.right || "", secondary: "" };
+    }
+    const key = `${match.id}-${side}`;
+    const value = scores[key] ?? "";
+    if (value === "" || value === undefined || value === null) return { primary: "", secondary: "" };
+    if (matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores) {
+      const opponent = side === "l" ? match.right : match.left;
+      const scratch = Number(value || 0);
+      if (!scratch) return { primary: "", secondary: "" };
+      const bonus = roundOneAverageBonus(player, opponent);
+      return { primary: String(scratch + bonus), secondary: bonus ? `Scr ${scratch}` : "" };
+    }
+    const scratchValue = scratchScores[key] ?? "";
+    const handicap = useHandicapScores ? handicapPerGame(player) : 0;
+    const scratch =
+      scratchValue !== undefined && scratchValue !== null && scratchValue !== ""
+        ? Number(scratchValue || 0)
+        : useHandicapScores
+          ? Math.max(0, Number(value || 0) - handicap)
+          : Number(value || 0);
+    if (!scratch) return { primary: "", secondary: "" };
+    const total = useHandicapScores ? scratch + handicap : scratch;
+    return useHandicapScores
+      ? { primary: String(total), secondary: `Scr ${scratch}` }
+      : { primary: String(total), secondary: "" };
+  };
+  const matchWinner = (match, roundIndex) =>
+    match
+      ? winnerFromBracketMatch(match, {
+          scores,
+          matchScoring,
+          roundIndex,
+          rolloffWinners,
+          useHandicapScores,
+        })
+      : null;
+  const sideMatches = (roundIndex, side) => {
+    const matches = bracketRounds[roundIndex]?.matches || [];
+    const half = Math.ceil(matches.length / 2);
+    return side === "left" ? matches.slice(0, half) : matches.slice(half);
+  };
+  const yPositions = (count) => {
+    if (count <= 1) return [255];
+    const top = 78;
+    const bottom = 438;
+    const step = (bottom - top) / (count - 1);
+    return Array.from({ length: count }, (_, index) => top + index * step);
+  };
+  const averagePairs = (values) => {
+    const next = [];
+    for (let index = 0; index < values.length; index += 2) {
+      const a = values[index] ?? values[index + 1] ?? 255;
+      const b = values[index + 1] ?? values[index] ?? 255;
+      next.push((a + b) / 2);
+    }
+    return next.length ? next : [255];
+  };
+  const renderMatchBox = (match, x, y, width, height, side, roundIndex, key) => {
+    const isLeftSide = side === "left";
+    const winner = matchWinner(match, roundIndex);
+    const leftWon = winner?.name && winner.name !== "TIE" && String(winner.seed) === String(match?.left?.seed);
+    const rightWon = winner?.name && winner.name !== "TIE" && String(winner.seed) === String(match?.right?.seed);
+    const rolloffWinner = rolloffWinnerFromMatch(match, rolloffWinners);
+    const rolloffText = match ? rolloffScoreText(match.id, rolloffScores) : "";
+    const leftScore = scoreParts(match, "l", roundIndex);
+    const rightScore = scoreParts(match, "r", roundIndex);
+    const scoreWidth = useHandicapScores ? 34 : width <= 82 ? 24 : 28;
+    const scoreX = isLeftSide ? x + width - scoreWidth : x;
+    const scoreTextX = isLeftSide ? x + width - 4 : x + 4;
+    const nameTextX = isLeftSide ? x + 5 : x + width - 5;
+    const nameAnchor = isLeftSide ? "start" : "end";
+    const scoreAnchor = isLeftSide ? "end" : "start";
+    const displayName = (player) => cleanText(playerLine(player), Math.max(8, Math.floor((width - scoreWidth) / 5.5)));
+    const laneLabel = cleanText(matchLanes?.[match?.id] ? `Lanes ${matchLanes[match.id]}` : "", 16);
+    return (
+      <g key={key}>
+        <rect x={x} y={y} width={width} height={height} rx="4" fill="#f8fbff" stroke="#1f2937" strokeWidth="1.1" />
+        <rect x={scoreX} y={y} width={scoreWidth} height={height} fill="#eef6ff" stroke="#cbd5e1" strokeWidth="0.6" />
+        <line x1={x} y1={y + height / 2} x2={x + width} y2={y + height / 2} stroke="#94a3b8" strokeWidth="0.8" />
+        <line x1={isLeftSide ? scoreX : scoreX + scoreWidth} y1={y} x2={isLeftSide ? scoreX : scoreX + scoreWidth} y2={y + height} stroke="#94a3b8" strokeWidth="0.8" />
+        <text x={nameTextX} y={y + 12} fontSize="8.3" fontWeight={leftWon ? "900" : "600"} textAnchor={nameAnchor} fill={leftWon ? "#166534" : "#0f172a"}>{displayName(match?.left)}</text>
+        <text x={scoreTextX} y={y + 10} fontSize="8.2" fontWeight="900" textAnchor={scoreAnchor} fill="#0f172a">{leftScore.primary}</text>
+        {leftScore.secondary && <text x={scoreTextX} y={y + 18} fontSize="5.6" fontWeight="800" textAnchor={scoreAnchor} fill="#475569">{leftScore.secondary}</text>}
+        <text x={nameTextX} y={y + height - 6} fontSize="8.3" fontWeight={rightWon ? "900" : "600"} textAnchor={nameAnchor} fill={rightWon ? "#166534" : "#0f172a"}>{displayName(match?.right)}</text>
+        <text x={scoreTextX} y={y + height - 10} fontSize="8.2" fontWeight="900" textAnchor={scoreAnchor} fill="#0f172a">{rightScore.primary}</text>
+        {rightScore.secondary && <text x={scoreTextX} y={y + height - 3} fontSize="5.6" fontWeight="800" textAnchor={scoreAnchor} fill="#475569">{rightScore.secondary}</text>}
+        {laneLabel && <text x={x + width / 2} y={y + height + 9} fontSize="7.2" fontWeight="900" textAnchor="middle" fill="#1d4ed8">{laneLabel}</text>}
+        {rolloffWinner && <text x={x + width / 2} y={y - 4} fontSize="7.2" fontWeight="900" textAnchor="middle" fill="#92400e">Rolloff {cleanText(rolloffWinner.name, 12)}{rolloffText ? ` ${rolloffText}` : ""}</text>}
+      </g>
+    );
+  };
+  const renderSide = (side) => {
+    const isLeft = side === "left";
+    const xPositions = isLeft ? [28, 176, 306] : [820, 672, 554];
+    const widths = [130, 112, 94];
+    const elements = [];
+    let previousCenters = [];
+    for (let roundIndex = 0; roundIndex < Math.min(3, bracketRounds.length - 1); roundIndex += 1) {
+      const matches = sideMatches(roundIndex, side);
+      const centers = roundIndex === 0 ? yPositions(Math.max(1, matches.length)) : averagePairs(previousCenters);
+      const count = Math.max(1, matches.length || centers.length);
+      Array.from({ length: count }, (_, index) => matches[index] || null).forEach((match, index) => {
+        const centerY = centers[index] ?? 255;
+        elements.push(renderMatchBox(match, xPositions[roundIndex], centerY - 18, widths[roundIndex], 36, side, roundIndex, `${side}-${roundIndex}-${index}`));
+        if (roundIndex > 0) {
+          const lineStartX = isLeft ? xPositions[roundIndex - 1] + widths[roundIndex - 1] : xPositions[roundIndex - 1];
+          const lineEndX = isLeft ? xPositions[roundIndex] : xPositions[roundIndex] + widths[roundIndex];
+          elements.push(<line key={`${side}-line-${roundIndex}-${index}`} x1={lineStartX} y1={centerY} x2={lineEndX} y2={centerY} stroke="#111827" strokeWidth="1.2" />);
+        }
+      });
+      previousCenters = centers;
+    }
+    return elements;
+  };
+  const finalRoundIndex = Math.max(0, bracketRounds.length - 1);
+  const finalMatch = bracketRounds[finalRoundIndex]?.matches?.[0] || null;
+  const showSheet = bracketRounds.length > 0 && (bracketRounds[0]?.matches || []).length <= 8;
+
+  if (!showSheet) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-300 bg-white p-2 shadow-sm md:p-3">
+      <svg viewBox="0 0 1000 560" className="h-auto min-w-[760px] max-w-none rounded-xl bg-white md:min-w-0 md:w-full" role="img" aria-label="Bracket finals viewer sheet">
+        <rect x="10" y="10" width="980" height="540" rx="8" fill="#ffffff" stroke="#e5e7eb" strokeWidth="5" />
+        <text x="500" y="34" textAnchor="middle" fontSize="21" fontWeight="900" fill="#0f172a">{cleanText(tournamentInfo.name || "Bracket Finals", 48)}</text>
+        <text x="500" y="54" textAnchor="middle" fontSize="10" fontWeight="700" fill="#475569">{[tournamentInfo.date, tournamentInfo.center].filter(Boolean).join(" - ")}</text>
+        {renderSide("left")}
+        {renderSide("right")}
+        {finalMatch ? renderMatchBox(finalMatch, 434, 146, 132, 44, "left", finalRoundIndex, "championship") : (
+          <g>
+            <rect x="434" y="146" width="132" height="44" rx="4" fill="#f8fafc" stroke="#111827" strokeWidth="1.2" />
+            <text x="500" y="172" textAnchor="middle" fontSize="10" fontWeight="900" fill="#0f172a">Championship</text>
+          </g>
+        )}
+        <line x1="500" y1="190" x2="500" y2="338" stroke="#111827" strokeWidth="1.5" />
+        <rect x="426" y="338" width="148" height="46" rx="5" fill={champion?.name ? "#dcfce7" : "#f8fafc"} stroke="#111827" strokeWidth="1.2" />
+        <text x="500" y="356" textAnchor="middle" fontSize="10" fontWeight="900" fill="#0f172a">Winner</text>
+        <text x="500" y="373" textAnchor="middle" fontSize="10" fontWeight="900" fill="#14532d">{champion?.name ? cleanText(champion.name, 26) : "TBD"}</text>
+        <text x="500" y="526" textAnchor="middle" fontSize="16" fontWeight="900" fill="#0f3b73">Bowler Builders Tournament Hub</text>
+      </svg>
+    </div>
   );
 }
 
@@ -10838,7 +11164,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
   };
 
   const renderScore = (player, value, scratchValue) => {
-    if (!player || player.name === "BYE") return "—";
+    if (!player || player.name === "BYE") return " - -";
 
     const handicap = useHandicapScores ? handicapPerGame(player) : 0;
     const scratch =
@@ -10849,7 +11175,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
           : Number(value || 0);
     const total = useHandicapScores ? scratch + handicap : scratch;
 
-    if (!scratch) return "—";
+    if (!scratch) return " - -";
 
     if (!useHandicapScores) return scratch;
 
@@ -10864,9 +11190,9 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
   };
 
   const renderAverageAdvantageScore = (player, opponent, value) => {
-    if (!player || player.name === "BYE") return "—";
+    if (!player || player.name === "BYE") return " - -";
     const scratch = Number(value || 0);
-    if (scratch <= 0) return "—";
+    if (scratch <= 0) return " - -";
     const bonus = roundOneAverageBonus(player, opponent);
     const total = scratch + bonus;
     if (!bonus) return scratch;
@@ -11040,6 +11366,22 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
           </div>
           <div className="rounded-2xl bg-white px-4 py-2 text-sm shadow-sm border border-blue-100">Winner: <span className="font-bold">{champion?.name || "TBD"}</span></div>
         </div>
+        {bracketRounds?.[0]?.matches?.length <= 8 && (
+          <div className="mb-4 overflow-x-auto rounded-2xl bg-blue-50 p-2 md:p-3">
+            <RegularBracketViewerSheet
+              bracketRounds={bracketRounds}
+              champion={champion}
+              scores={scores}
+              scratchScores={scratchScores}
+              matchLanes={matchLanes}
+              rolloffWinners={rolloffWinners}
+              rolloffScores={rolloffScores}
+              matchScoring={matchScoring}
+              useHandicapScores={useHandicapScores}
+              tournamentInfo={tournamentInfo}
+            />
+          </div>
+        )}
         <div className="bb-public-finals-wrap overflow-x-auto rounded-2xl border bg-blue-50 p-4">
           <div className="bb-public-finals-track flex min-w-max items-start gap-8">
             {bracketRounds.map((round, roundIndex) => {
@@ -11066,14 +11408,18 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
       type: "opening",
     }))
   );
-  const openingWinners = openingMatches.map((match) => match.winner).filter(Boolean);
+  const openingWinners = getMatchplayOpeningWinners(pods);
   const winnerBracket = buildMatchplayWinnerRounds(openingWinners, matchplayState);
   const rounds = [
     { title: "Opening Round", matches: openingMatches, type: "opening" },
     ...winnerBracket.rounds.map((round) => ({ ...round, type: "winner" })),
   ].filter((round) => round.matches.length);
 
-  const playerName = (player) => player?.name || (player ? "TBD" : "BYE");
+  const playerName = (player) => {
+    if (!player) return "BYE";
+    const label = player.name || "TBD";
+    return player.matchplaySeed ? `${player.matchplaySeed}. ${label}` : label;
+  };
   const playerLane = (player) => player?.lane ? `Lane ${player.lane}` : "";
   const playerClass = (won) =>
     won
@@ -11106,6 +11452,11 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
           </div>
           <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? match.rightTotal || "-" : "BYE"}</span>
         </div>
+        {match.tied && match.winner && (
+          <p className="mt-2 rounded-lg bg-yellow-50 px-2 py-1 text-[10px] font-black uppercase text-yellow-900">
+            Rolloff winner: {playerName(match.winner)}
+          </p>
+        )}
       </div>
     );
   };
@@ -11116,13 +11467,21 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
 
     return (
       <div className={match.winner ? `${bigScreen ? "min-h-[144px]" : ""} bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm` : `${bigScreen ? "min-h-[144px]" : ""} bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm`}>
-        <div className="mb-2 rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">Match {matchNumber}</div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="rounded-full bg-blue-800 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">Match {matchNumber}</span>
+          {match.lanePair && <span className="text-[10px] font-black uppercase tracking-wide text-blue-700">Lanes {match.lanePair}</span>}
+        </div>
         <div className="grid grid-cols-[1fr_auto] gap-1 text-xs">
           <span className={playerClass(leftWon)}>{playerName(match.left)}</span>
           <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.leftScore || "-"}</span>
           <span className={playerClass(rightWon)}>{playerName(match.right)}</span>
           <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? match.rightScore || "-" : "BYE"}</span>
         </div>
+        {match.tied && match.winner && (
+          <p className="mt-2 rounded-lg bg-yellow-50 px-2 py-1 text-[10px] font-black uppercase text-yellow-900">
+            Rolloff winner: {playerName(match.winner)}
+          </p>
+        )}
       </div>
     );
   };
@@ -11172,12 +11531,25 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
           </div>
         </div>
         {rounds.length ? (
-          <div className="bb-public-finals-wrap overflow-x-auto rounded-2xl border bg-blue-50 p-4">
-            <div className="bb-public-finals-track flex min-w-max items-start gap-8">
-              {rounds.map((round, roundIndex) => {
-                const matchNumberOffset = rounds.slice(0, roundIndex).reduce((sum, previousRound) => sum + previousRound.matches.length, 0);
-                return <MatchplayRoundColumn key={`public-matchplay-round-${round.title}`} round={round} roundIndex={roundIndex} matchNumberOffset={matchNumberOffset} />;
-              })}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-2 md:p-3">
+              <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                <p className="text-sm font-black text-blue-950">Viewer Sheet</p>
+                <p className="text-[11px] font-semibold text-blue-700">Pinch or scroll to zoom on mobile</p>
+              </div>
+              <div className="overflow-x-auto rounded-xl bg-white">
+                <div className="min-w-[900px]">
+                  <MatchplayViewerBracketSheet pods={pods} winnerBracket={winnerBracket} tournamentInfo={tournamentInfo} />
+                </div>
+              </div>
+            </div>
+            <div className="bb-public-finals-wrap overflow-x-auto rounded-2xl border bg-blue-50 p-4">
+              <div className="bb-public-finals-track flex min-w-max items-start gap-8">
+                {rounds.map((round, roundIndex) => {
+                  const matchNumberOffset = rounds.slice(0, roundIndex).reduce((sum, previousRound) => sum + previousRound.matches.length, 0);
+                  return <MatchplayRoundColumn key={`public-matchplay-round-${round.title}`} round={round} roundIndex={roundIndex} matchNumberOffset={matchNumberOffset} />;
+                })}
+              </div>
             </div>
           </div>
         ) : (
@@ -11382,7 +11754,7 @@ function PublicViewTab({
             <div>
               <p className="text-xs uppercase tracking-wide text-blue-200 md:text-sm">Public Display</p>
               <h2 className="text-2xl font-bold md:text-4xl">{tournamentInfo.name}</h2>
-              <p className="mt-1 text-sm text-blue-100 md:mt-2">{tournamentInfo.center} • {tournamentInfo.date} • {tournamentInfo.stage}</p>
+              <p className="mt-1 text-sm text-blue-100 md:mt-2">{tournamentInfo.center} - {tournamentInfo.date} - {tournamentInfo.stage}</p>
             </div>
 <div className="flex flex-wrap gap-2">
 <div className="flex rounded-2xl bg-white/10 p-1 ring-1 ring-white/15">
@@ -11414,7 +11786,7 @@ function PublicViewTab({
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2 md:mt-5 md:gap-3">
             <div className="rounded-xl bg-white/10 p-3 md:rounded-2xl md:p-4"><p className="text-xs text-blue-100 md:text-sm">Cut</p><p className="text-xl font-bold md:text-3xl">Top {displayCashers}</p></div>
-            <div className="rounded-xl bg-white/10 p-3 md:rounded-2xl md:p-4"><p className="text-xs text-blue-100 md:text-sm">Cut Score</p><p className="text-xl font-bold md:text-3xl">{cutScore ?? "—"}</p></div>
+            <div className="rounded-xl bg-white/10 p-3 md:rounded-2xl md:p-4"><p className="text-xs text-blue-100 md:text-sm">Cut Score</p><p className="text-xl font-bold md:text-3xl">{cutScore ?? " - -"}</p></div>
             <div className="rounded-xl bg-white/10 p-3 md:rounded-2xl md:p-4"><p className="text-xs text-blue-100 md:text-sm">{styleConfig.label}</p><p className="text-xl font-bold md:text-3xl">{useHandicapScores ? "Hdcp" : "Scratch"}</p></div>
           </div>
         </CardContent>
@@ -11659,7 +12031,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
         <div>
           <h3 className="text-xl font-black text-blue-950">{archive.name}</h3>
           <p className="text-sm font-semibold text-blue-700">
-            {archive.date || "Date TBD"} • {archive.center || archive.location || "Center TBD"}
+            {archive.date || "Date TBD"} - {archive.center || archive.location || "Center TBD"}
           </p>
         </div>
         <div className="rounded-full bg-green-100 px-3 py-1 text-sm font-black text-green-800">
@@ -11756,7 +12128,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
 
                   {isCompleted && (
                     <p className="mt-2 text-sm font-bold text-green-800">
-                      Completed{winnerName ? ` • Winner: ${winnerName}` : ""}
+                      Completed{winnerName ? ` - Winner: ${winnerName}` : ""}
                     </p>
                   )}
 
@@ -12089,7 +12461,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   .map((row) => ({
     ...row,
     displayName: publicRealNameFor(row.bowler) || row.bowler,
-    nickname: publicRealNameFor(row.bowler) ? row.bowler : "—",
+    nickname: publicRealNameFor(row.bowler) ? row.bowler : " - -",
     titleList: [...row.titleList].sort(
       (a, b) =>
         String(b.date || "").localeCompare(String(a.date || "")) ||
@@ -12204,7 +12576,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   };
 
   const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
-  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ↑" : " ↓") : "";
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ?" : " ?") : "";
   useEffect(() => {
     if (statsMode === "handicap" && statsSort.key === "titles") {
       setStatsSort({ key: "default", direction: "desc" });
@@ -12749,7 +13121,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               </td>
 
               <td className="p-3 font-semibold text-blue-900">
-                {publicRealNameFor(title.bowler) ? title.bowler : "—"}
+                {publicRealNameFor(title.bowler) ? title.bowler : " - -"}
               </td>
 
               <td className="p-3">
@@ -12819,7 +13191,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         {sortedPublicHofTitles.map((title) => (
           <tr key={`public-hof-${title.id}`} className="border-t">
             <td className="p-3 font-bold text-blue-950">{publicRealNameFor(title.bowler) || title.bowler}</td>
-            <td className="p-3 font-semibold text-blue-900">{publicRealNameFor(title.bowler) ? title.bowler : "—"}</td>
+            <td className="p-3 font-semibold text-blue-900">{publicRealNameFor(title.bowler) ? title.bowler : " - -"}</td>
             <td className="p-3 text-blue-900">{title.season || "-"}</td>
           </tr>
         ))}
@@ -12917,7 +13289,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                   {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0)}</td>}
                   <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
-                  <td className="p-2 text-sm text-blue-800 md:p-3">{result.adjustmentNote || "—"}</td>
+                  <td className="p-2 text-sm text-blue-800 md:p-3">{result.adjustmentNote || " - -"}</td>
                 </tr>
               ))}
             </tbody>
@@ -13692,7 +14064,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
             </select>
           </div>
           <StatCard label="Bracket Size" value={size} />
-          <StatCard label="Byes Needed" value={typeof size === "number" ? Math.max(0, size - qualifiers) : "—"} />
+          <StatCard label="Byes Needed" value={typeof size === "number" ? Math.max(0, size - qualifiers) : " - -"} />
           <StatCard label="Scoring Mode" value={useHandicapScores ? "Handicap" : "Scratch"} />
           {getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}
         </div>
@@ -13767,7 +14139,7 @@ function EliminatorScoreInput({ value, onChange, locked = false, maxScore = 300 
         className="w-20 rounded-xl border border-blue-200 bg-blue-50 px-2 py-2 text-center font-bold text-blue-950"
         title="Click to edit saved score"
       >
-        {value || "—"}
+        {value || " - -"}
       </button>
     );
   }
@@ -13965,7 +14337,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   finalsScoreMode={finalsScoreMode}
   memberScores={game1MemberScores}
   onMemberScoreChange={updateGame1Members}
-/></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">
+/></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : " - -"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? "ADVANCE" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">
 </h2>
 
 <p className="mb-4 text-sm text-blue-700">
@@ -13985,7 +14357,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : "—"}</td><td className="p-2 text-center"><TeamFinalsScoreInput
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : " - -"}</td><td className="p-2 text-center"><TeamFinalsScoreInput
   player={row}
   scoreKey={row.seed}
   value={game2Scores[row.seed] ?? ""}
@@ -13995,7 +14367,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   finalsScoreMode={finalsScoreMode}
   memberScores={game2MemberScores}
   onMemberScoreChange={updateGame2Members}
-/></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : "—"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard></>}<AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">
+/></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : " - -"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard></>}<AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">
 </p>
 
 <div className="mb-4">
@@ -14094,7 +14466,7 @@ function LanePairEliminatorTab({ entries, bowlers, useHandicapScores, laneElimin
     updateState({ scores: {}, memberScores: {} });
   };
   const displayScore = (row) => {
-    if (!Number(row.score || 0)) return "—";
+    if (!Number(row.score || 0)) return " - -";
     if (!useHandicapScores && !row.bonus) return row.score;
     if (!useHandicapScores) return `${row.score} + ${row.bonus} = ${row.adjusted}`;
     return finalsScoreDisplay(row, row.score, true);
@@ -14234,7 +14606,7 @@ function LanePairEliminatorTab({ entries, bowlers, useHandicapScores, laneElimin
                                       />
                                     )}
                                   </td>
-                                  <td className="p-2 text-right font-black">{row.adjusted || "—"}</td>
+                                  <td className="p-2 text-right font-black">{row.adjusted || " - -"}</td>
                                   <td className="p-2 text-right font-black">{isWinner ? "WINNER" : isOut ? "OUT" : round.complete ? "ADVANCE" : "ACTIVE"}</td>
                                 </tr>
                               );
@@ -14731,10 +15103,126 @@ function EliminatorTournamentTab({ bowlers, setBowlers, eliminatorTournamentStat
   );
 }
 
+function MatchplayViewerBracketSheet({ pods = [], winnerBracket = { rounds: [], champion: null }, tournamentInfo = {} }) {
+  const openingMatches = pods.flatMap((pod) =>
+    (pod.matches || []).map((match) => ({
+      ...match,
+      lanePair: pod.pair,
+      label: `Lanes ${pod.pair}`,
+      roundType: "opening",
+    }))
+  );
+  const rounds = [
+    { title: "Opening", matches: openingMatches },
+    ...(winnerBracket.rounds || []),
+  ];
+  const sliceRound = (roundIndex, side) => {
+    const round = rounds[roundIndex] || { matches: [] };
+    const half = Math.ceil((round.matches || []).length / 2);
+    return side === "left" ? (round.matches || []).slice(0, half) : (round.matches || []).slice(half);
+  };
+  const cleanText = (value = "", max = 20) => {
+    const text = String(value || "").trim();
+    return text.length > max ? `${text.slice(0, Math.max(0, max - 1))}.` : text;
+  };
+  const playerLine = (player) => {
+    if (!player) return "BYE";
+    const seed = player.matchplaySeed ? `${player.matchplaySeed}. ` : player.seed ? `${player.seed}. ` : "";
+    return `${seed}${player.name || "TBD"}`;
+  };
+  const playerScore = (match, side) => {
+    if (match.roundType === "opening") {
+      return side === "left" ? match.leftTotal || "" : match.right ? match.rightTotal || "" : "BYE";
+    }
+    return side === "left" ? match.leftScore || "" : match.right ? match.rightScore || "" : "BYE";
+  };
+  const matchLaneLabel = (match) => cleanText(match?.lanePair ? `Lanes ${match.lanePair}` : "", 14);
+  const roundLabel = (match) => match?.tied && match?.winner ? "Rolloff" : "";
+  const renderMatchBox = (match, x, y, width, height, side = "left", key) => {
+    const leftWon = match.winner && String(match.winner.seed) === String(match.left?.seed);
+    const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
+    const scoreWidth = 24;
+    const scoreX = side === "left" ? x + width - scoreWidth : x;
+    const nameX = side === "left" ? x : x + scoreWidth;
+    const nameWidth = width - scoreWidth;
+    const scoreTextX = side === "left" ? x + width - 4 : x + 4;
+    const nameTextX = side === "left" ? x + 4 : x + scoreWidth + 4;
+    const nameAnchor = "start";
+    const scoreAnchor = side === "left" ? "end" : "start";
+    const laneTextX = side === "left" ? x + width - scoreWidth - 4 : x + width - 4;
+    const displayName = (player) => cleanText(playerLine(player), Math.max(8, Math.floor((nameWidth - 20) / 5.4)));
+    const playerLane = (player) => cleanText(player?.lane || "", 5);
+    return (
+      <g key={key}>
+        <rect x={x} y={y} width={width} height={height} rx="3" fill="#f8fbff" stroke="#1f2937" strokeWidth="1" />
+        <rect x={scoreX} y={y} width={scoreWidth} height={height} fill="#eef6ff" stroke="#cbd5e1" strokeWidth="0.5" />
+        <line x1={x} y1={y + height / 2} x2={x + width} y2={y + height / 2} stroke="#94a3b8" strokeWidth="0.8" />
+        <line x1={side === "left" ? scoreX : scoreX + scoreWidth} y1={y} x2={side === "left" ? scoreX : scoreX + scoreWidth} y2={y + height} stroke="#94a3b8" strokeWidth="0.8" />
+        <text x={nameTextX} y={y + 11} fontSize="7.4" fontWeight={leftWon ? "800" : "500"} textAnchor={nameAnchor} fill={leftWon ? "#166534" : "#0f172a"}>{displayName(match.left)}</text>
+        {playerLane(match.left) && <text x={laneTextX} y={y + 11} fontSize="6.8" fontWeight="900" textAnchor="end" fill="#1d4ed8">{playerLane(match.left)}</text>}
+        <text x={scoreTextX} y={y + 11} fontSize="7.8" fontWeight="900" textAnchor={scoreAnchor} fill="#0f172a">{playerScore(match, "left")}</text>
+        <text x={nameTextX} y={y + height - 5} fontSize="7.4" fontWeight={rightWon ? "800" : "500"} textAnchor={nameAnchor} fill={rightWon ? "#166534" : "#0f172a"}>{displayName(match.right)}</text>
+        {playerLane(match.right) && <text x={laneTextX} y={y + height - 5} fontSize="6.8" fontWeight="900" textAnchor="end" fill="#1d4ed8">{playerLane(match.right)}</text>}
+        <text x={scoreTextX} y={y + height - 5} fontSize="7.8" fontWeight="900" textAnchor={scoreAnchor} fill="#0f172a">{playerScore(match, "right")}</text>
+        {matchLaneLabel(match) && <text x={x + width / 2} y={y + height + 8} fontSize="7" fontWeight="800" textAnchor="middle" fill="#1d4ed8">{matchLaneLabel(match)}</text>}
+        {roundLabel(match) && <text x={x + width / 2} y={y - 3} fontSize="7" fontWeight="800" textAnchor="middle" fill="#92400e">{roundLabel(match)}</text>}
+      </g>
+    );
+  };
+  const renderSide = (side) => {
+    const isLeft = side === "left";
+    const xPositions = isLeft ? [20, 145, 258, 365, 462] : [1060, 935, 822, 715, 618];
+    const widths = [118, 118, 118, 118, 118];
+    const elements = [];
+    const opening = sliceRound(0, side);
+    opening.forEach((match, index) => {
+      elements.push(renderMatchBox(match, xPositions[0], 34 + index * 43, widths[0], 28, side, `${side}-opening-${index}`));
+    });
+    for (let roundIndex = 1; roundIndex <= 4; roundIndex += 1) {
+      const matches = sliceRound(roundIndex, side);
+      const count = matches.length || Math.max(1, Math.ceil(opening.length / (2 ** roundIndex)));
+      const startY = 34 + (2 ** roundIndex - 1) * 21.5;
+      const gap = 43 * (2 ** roundIndex);
+      Array.from({ length: count }, (_, index) => matches[index] || {}).forEach((match, index) => {
+        const y = startY + index * gap;
+        elements.push(renderMatchBox(match, xPositions[roundIndex], y - 1, widths[roundIndex], 28, side, `${side}-round-${roundIndex}-${index}`));
+        const lineStartX = isLeft ? xPositions[roundIndex - 1] + widths[roundIndex - 1] : xPositions[roundIndex - 1];
+        const lineEndX = isLeft ? xPositions[roundIndex] : xPositions[roundIndex] + widths[roundIndex];
+        elements.push(<line key={`${side}-line-${roundIndex}-${index}`} x1={lineStartX} y1={y + 14} x2={lineEndX} y2={y + 14} stroke="#111827" strokeWidth="1" />);
+      });
+    }
+    return elements;
+  };
+  const championshipMatch = (rounds[5]?.matches || [])[0];
+  const champion = winnerBracket.champion;
+  return (
+    <div className="bb-matchplay-viewer-print rounded-2xl border border-slate-300 bg-white p-3 shadow-sm">
+      <svg viewBox="0 0 1200 760" className="h-auto w-full rounded-xl bg-white" role="img" aria-label="Matchplay viewer bracket">
+        <rect x="10" y="10" width="1180" height="740" rx="8" fill="#ffffff" stroke="#e5e7eb" strokeWidth="6" />
+        <text x="600" y="30" textAnchor="middle" fontSize="21" fontWeight="900" fill="#0f172a">{cleanText(tournamentInfo.name || "Matchplay Tournament", 56)}</text>
+        <text x="600" y="50" textAnchor="middle" fontSize="10" fontWeight="700" fill="#475569">{[tournamentInfo.date, tournamentInfo.center].filter(Boolean).join(" - ")}</text>
+        {renderSide("left")}
+        {renderSide("right")}
+        {championshipMatch ? renderMatchBox(championshipMatch, 544, 300, 112, 34, "left", "championship-match") : (
+          <g>
+            <rect x="544" y="300" width="112" height="34" rx="4" fill="#f8fafc" stroke="#111827" strokeWidth="1.2" />
+            <text x="600" y="320" textAnchor="middle" fontSize="9" fontWeight="900" fill="#0f172a">Final Match</text>
+          </g>
+        )}
+        <line x1="600" y1="334" x2="600" y2="428" stroke="#111827" strokeWidth="1.5" />
+        <rect x="548" y="428" width="104" height="34" rx="4" fill={champion ? "#dcfce7" : "#f8fafc"} stroke="#111827" strokeWidth="1.2" />
+        <text x="600" y="442" textAnchor="middle" fontSize="9" fontWeight="900" fill="#0f172a">Winner</text>
+        <text x="600" y="455" textAnchor="middle" fontSize="9" fontWeight="900" fill="#14532d">{champion?.name ? cleanText(champion.name, 22) : "TBD"}</text>
+        <text x="600" y="735" textAnchor="middle" fontSize="16" fontWeight="900" fill="#0f3b73">Bowler Builders Tournament Hub</text>
+      </svg>
+    </div>
+  );
+}
+
 function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, tournamentInfo = {} }) {
   const pods = buildMatchplayOpeningPods(bowlers, matchplayState);
   const assignedCount = pods.reduce((sum, pod) => sum + pod.players.length, 0);
-  const openingWinners = pods.flatMap((pod) => pod.matches.map((match) => match.winner).filter(Boolean));
+  const openingWinners = getMatchplayOpeningWinners(pods);
   const allOpeningPodsComplete = pods.length > 0 && pods.every((pod) => pod.matches.every((match) => Boolean(match.winner)));
   const winnerBracket = allOpeningPodsComplete ? buildMatchplayWinnerRounds(openingWinners, matchplayState) : { rounds: [], champion: null };
   const updateOpeningScore = (scoreKey, value, player, gameIndex) => {
@@ -14835,6 +15323,36 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
       },
     }));
   };
+  const updateOpeningTiebreaker = (matchId, winnerSide) => {
+    setMatchplayState((current) => ({
+      ...DEFAULT_MATCHPLAY_STATE,
+      ...(current || {}),
+      openingTiebreakers: {
+        ...(current?.openingTiebreakers || {}),
+        [matchId]: winnerSide,
+      },
+    }));
+  };
+  const updateRoundTiebreaker = (matchId, winnerSide) => {
+    setMatchplayState((current) => ({
+      ...DEFAULT_MATCHPLAY_STATE,
+      ...(current || {}),
+      roundTiebreakers: {
+        ...(current?.roundTiebreakers || {}),
+        [matchId]: winnerSide,
+      },
+    }));
+  };
+  const updateRoundLane = (laneKey, value) => {
+    setMatchplayState((current) => ({
+      ...DEFAULT_MATCHPLAY_STATE,
+      ...(current || {}),
+      roundLanes: {
+        ...(current?.roundLanes || {}),
+        [laneKey]: value,
+      },
+    }));
+  };
   const saveWinnerRound = (roundIndex) => {
     setMatchplayState((current) => ({
       ...DEFAULT_MATCHPLAY_STATE,
@@ -14905,6 +15423,13 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
     </div>
   );
   const playerLabel = (player) => player ? `${player.lane || ""} ${player.name || "TBD"}`.trim() : "BYE";
+  const printMatchplayViewerSheet = () => {
+    document.body.classList.add("bb-print-matchplay-sheet");
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(() => document.body.classList.remove("bb-print-matchplay-sheet"), 250);
+    }, 100);
+  };
 
   return (
     <div className="space-y-3 md:space-y-4" data-matchplay-tab-scope="true">
@@ -14934,6 +15459,23 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
               Assign bowlers to lane spots in Registration first. This screen will build the opening matches from those lane draws.
             </p>
           )}
+        </CardContent>
+      </AppCard>
+
+      <AppCard>
+        <CardContent className="p-3 md:p-5">
+          <div className="mb-3 flex flex-col gap-2 print:hidden md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-blue-900">Viewer Bracket Sheet</h2>
+              <p className="text-sm text-blue-700">
+                One-page bracket for viewers. It fills names, seeds, lanes, scores, rolloffs, and winners as rounds are saved.
+              </p>
+            </div>
+            <Button variant="outline" className="rounded-2xl" onClick={printMatchplayViewerSheet}>
+              Print / Save Viewer Bracket
+            </Button>
+          </div>
+          <MatchplayViewerBracketSheet pods={pods} winnerBracket={winnerBracket} tournamentInfo={tournamentInfo} />
         </CardContent>
       </AppCard>
 
@@ -15017,21 +15559,35 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                     const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
                     const matchLabel = `Match ${match.matchNumber}`;
                     const winnerCellClass = "bg-green-100 font-black text-green-950";
+                    const tiedNeedsWinner = match.tied && !match.winner;
+                    const openingRolloffButton = (side) => (
+                      <Button
+                        variant="outline"
+                        className="mt-1 rounded-xl border-yellow-300 bg-yellow-50 px-2 py-1 text-[10px] text-yellow-900 hover:bg-yellow-100"
+                        onClick={() => updateOpeningTiebreaker(match.id, side)}
+                      >
+                        Wins Rolloff
+                      </Button>
+                    );
 
                     return (
                       <React.Fragment key={`matchplay-${pod.pair}-${match.matchIndex}`}>
                         <tr className={leftWon ? "border-t bg-green-100" : "border-t"}>
                           <td className={`p-3 font-black text-blue-950 ${leftWon || rightWon ? "bg-green-50" : ""}`} rowSpan={2}>{matchLabel}</td>
                           <td className={`p-3 font-semibold text-blue-950 ${leftWon ? winnerCellClass : ""}`}>{playerLabel(match.left)}</td>
-                          <td className={`p-2 text-center ${leftWon ? winnerCellClass : ""}`}>{match.left ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "left", match.leftGames, match.left, podSaved, savedPodGames) : "—"}</td>
-                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{match.leftTotal || "—"}</td>
-                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{leftWon ? "ADVANCE" : match.complete ? "OUT" : "ACTIVE"}</td>
+                          <td className={`p-2 text-center ${leftWon ? winnerCellClass : ""}`}>{match.left ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "left", match.leftGames, match.left, podSaved, savedPodGames) : " - -"}</td>
+                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{match.leftTotal || " - -"}</td>
+                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>
+                            {leftWon ? "ADVANCE" : tiedNeedsWinner ? openingRolloffButton("left") : match.complete ? "OUT" : "ACTIVE"}
+                          </td>
                         </tr>
                         <tr className={rightWon ? "border-t bg-green-100" : "border-t"}>
                           <td className={`p-3 font-semibold text-blue-950 ${rightWon ? winnerCellClass : ""}`}>{playerLabel(match.right)}</td>
                           <td className={`p-2 text-center ${rightWon ? winnerCellClass : ""}`}>{match.right ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "right", match.rightGames, match.right, podSaved, savedPodGames) : "BYE"}</td>
-                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{match.rightTotal || "—"}</td>
-                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{rightWon ? "ADVANCE" : match.complete ? "OUT" : match.winner && !match.right ? "BYE" : "ACTIVE"}</td>
+                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{match.rightTotal || " - -"}</td>
+                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>
+                            {rightWon ? "ADVANCE" : tiedNeedsWinner && match.right ? openingRolloffButton("right") : match.complete ? "OUT" : match.winner && !match.right ? "BYE" : "ACTIVE"}
+                          </td>
                         </tr>
                       </React.Fragment>
                     );
@@ -15080,6 +15636,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                       <thead className="bg-blue-800 text-white">
                         <tr>
                           <th className="p-2 text-left md:p-3">Match</th>
+                          {round.playerCount <= 8 && <th className="p-2 text-left md:p-3">Lanes</th>}
                           <th className="p-2 text-left md:p-3">Bowler</th>
                           <th className="p-2 text-center md:p-3">Score</th>
                           <th className="p-2 text-right md:p-3">Result</th>
@@ -15090,11 +15647,35 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                           const leftWon = match.winner && String(match.winner.seed) === String(match.left?.seed);
                           const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
                           const winnerCellClass = "bg-green-100 font-black text-green-950";
+                          const tiedNeedsWinner = match.tied && !match.winner;
+                          const roundRolloffButton = (side) => (
+                            <Button
+                              variant="outline"
+                              className="mt-1 rounded-xl border-yellow-300 bg-yellow-50 px-2 py-1 text-[10px] text-yellow-900 hover:bg-yellow-100"
+                              onClick={() => updateRoundTiebreaker(match.id, side)}
+                            >
+                              Wins Rolloff
+                            </Button>
+                          );
+                          const showManualLanes = round.playerCount <= 8;
 
                           return (
                             <React.Fragment key={match.id}>
                               <tr className={leftWon ? "border-t bg-green-100" : "border-t"}>
-                                <td className={`p-3 font-black text-blue-950 ${leftWon || rightWon ? "bg-green-50" : ""}`} rowSpan={2}>Match {match.matchNumber}</td>
+                                <td className={`p-3 font-black text-blue-950 ${leftWon || rightWon ? "bg-green-50" : ""}`} rowSpan={2}>
+                                  <div>Match {match.matchNumber}</div>
+                                  {match.lanePair && <div className="mt-1 text-[11px] font-black uppercase text-blue-700">Lanes {match.lanePair}</div>}
+                                </td>
+                                {showManualLanes && (
+                                  <td className="p-2" rowSpan={2}>
+                                    <Input
+                                      className="h-8 w-24 text-center text-xs font-bold uppercase"
+                                      placeholder="1-2"
+                                      value={matchplayState.roundLanes?.[match.laneKey] ?? match.lanePair ?? ""}
+                                      onChange={(event) => updateRoundLane(match.laneKey, event.target.value)}
+                                    />
+                                  </td>
+                                )}
                                 <td className={`p-3 font-semibold text-blue-950 ${leftWon ? winnerCellClass : ""}`}>{match.left?.name || "TBD"}</td>
                                 <td className={`p-2 text-center ${leftWon ? winnerCellClass : ""}`}>
                                   {match.left ? (
@@ -15108,9 +15689,11 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                                       value={matchplayState.roundScores?.[match.leftKey] ?? ""}
                                       onChange={(event) => updateRoundScore(match.leftKey, event.target.value)}
                                     />
-                                  ) : "—"}
+                                  ) : " - -"}
                                 </td>
-                                <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{leftWon ? "ADVANCE" : match.complete ? "OUT" : "ACTIVE"}</td>
+                                <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>
+                                  {leftWon ? "ADVANCE" : tiedNeedsWinner ? roundRolloffButton("left") : match.complete ? "OUT" : "ACTIVE"}
+                                </td>
                               </tr>
                               <tr className={rightWon ? "border-t bg-green-100" : "border-t"}>
                                 <td className={`p-3 font-semibold text-blue-950 ${rightWon ? winnerCellClass : ""}`}>{match.right?.name || "BYE"}</td>
@@ -15128,7 +15711,9 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                                     />
                                   ) : "BYE"}
                                 </td>
-                                <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{rightWon ? "ADVANCE" : match.complete ? "OUT" : match.winner && !match.right ? "BYE" : "ACTIVE"}</td>
+                                <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>
+                                  {rightWon ? "ADVANCE" : tiedNeedsWinner && match.right ? roundRolloffButton("right") : match.complete ? "OUT" : match.winner && !match.right ? "BYE" : "ACTIVE"}
+                                </td>
                               </tr>
                             </React.Fragment>
                           );
@@ -15193,9 +15778,9 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
         <CardContent className="p-5 print:p-0">
           <div className="mb-4 hidden print:block">
             <h1 className="text-2xl font-bold">{tournamentInfo.name || "Tournament"} Cash Sheet</h1>
-            <p>{tournamentInfo.center} {tournamentInfo.date ? `• ${tournamentInfo.date}` : ""}</p>
+            <p>{tournamentInfo.center} {tournamentInfo.date ? ` - ${tournamentInfo.date}` : ""}</p>
             <p>
-  Prize Fund: {currency(dashboardPrizeFund)} • Cashers: {financials.cashers}
+  Prize Fund: {currency(dashboardPrizeFund)} - Cashers: {financials.cashers}
 </p>
           </div>
           <h2 className="mb-4 text-xl font-semibold text-blue-900 print:text-black">Cashers</h2>
@@ -15388,7 +15973,7 @@ current.results.push(result);
   };
 
   const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
-  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ↑" : " ↓") : "";
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ?" : " ?") : "";
   useEffect(() => {
     if (statsMode === "handicap" && statsSort.key === "titles") {
       setStatsSort({ key: "default", direction: "desc" });
@@ -15628,7 +16213,7 @@ current.results.push(result);
     <td className="bb-mobile-hide p-2 text-right md:p-3">
       {p.finalsGames > 0
         ? p.finalsAverage.toFixed(2)
-        : "—"}
+        : " - -"}
     </td>
 
     <td className="bb-mobile-hide p-2 text-right md:p-3">
@@ -15638,7 +16223,7 @@ current.results.push(result);
 )}
 
   <td className="p-2 text-right md:p-3">
-    {p.highGame || "—"}
+    {p.highGame || " - -"}
   </td>
 
   {statsMode === "scratch" && <td className="p-2 text-right font-bold text-yellow-700 md:p-3">
@@ -15654,7 +16239,7 @@ current.results.push(result);
   </td>
 
   <td className="bb-mobile-hide p-2 text-right md:p-3">
-    {p.bestFinish ? `#${p.bestFinish}` : "—"}
+    {p.bestFinish ? `#${p.bestFinish}` : " - -"}
   </td>
 </tr>
                 ))}
@@ -15738,7 +16323,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 
   const archiveTournament = () => {
     const archiveName = tournamentInfo.name || "Tournament";
-    const archiveDetails = [tournamentInfo.date, tournamentInfo.center || tournamentInfo.location].filter(Boolean).join(" • ");
+    const archiveDetails = [tournamentInfo.date, tournamentInfo.center || tournamentInfo.location].filter(Boolean).join(" - ");
     const existingArchive = tournamentHistory.some((tournament) =>
       normalizeMatchText(tournament.name || "") === normalizeMatchText(archiveName) &&
       String(tournament.date || "") === String(tournamentInfo.date || "")
@@ -15865,7 +16450,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     const getMatchplayScoresForEntry = (entry) => {
       const scores = [];
       const pods = buildMatchplayOpeningPods(bowlers, matchplayState);
-      const openingWinners = pods.flatMap((pod) => pod.matches.map((match) => match.winner).filter(Boolean));
+      const openingWinners = getMatchplayOpeningWinners(pods);
       const winnerBracket = buildMatchplayWinnerRounds(openingWinners, matchplayState);
 
       winnerBracket.rounds.forEach((round) => {
@@ -16074,11 +16659,11 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                     <td className="p-2 font-bold text-blue-950 md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => { setSelectedArchivedTournamentId(t.id); setArchivedDetailSection("results"); }}>{t.name}</button></td>
                     <td className="p-2 text-blue-900 md:p-3">{t.season || "Unassigned"}</td>
                     <td className="p-2 text-blue-900 md:p-3">{t.date}</td>
-                    <td className="bb-mobile-hide p-2 text-blue-900 md:p-3">{t.center || t.location || "—"}</td>
+                    <td className="bb-mobile-hide p-2 text-blue-900 md:p-3">{t.center || t.location || " - -"}</td>
                     <td className="bb-mobile-hide p-2 text-center font-bold md:p-3">{t.titleEligible ? "Yes" : "No"}</td>
                     <td className="p-2 text-right font-semibold md:p-3">{t.entries}</td>
                     <td className="bb-mobile-hide p-2 text-right font-semibold md:p-3">{t.cashers}</td>
-                    <td className="p-2 font-semibold text-green-700 md:p-3">{getArchivedWinnerName(t) || "—"}</td>
+                    <td className="p-2 font-semibold text-green-700 md:p-3">{getArchivedWinnerName(t) || " - -"}</td>
                     <td className="p-2 text-right md:p-3"><div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-700 md:text-xs" onClick={() => restoreTournament(t)}>Restore</Button>{isOwnerAdmin && <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteTournament(t.id)}>Delete</Button>}</div></td>
                   </tr>
                 ))}
@@ -16095,7 +16680,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between print:hidden">
               <div>
                 <h2 className="text-xl font-semibold text-blue-900">{selectedArchivedTournament.name}</h2>
-                <p className="text-sm text-blue-700">{selectedArchivedTournament.date} • {selectedArchivedTournament.center || selectedArchivedTournament.location || "No center"} • Season {selectedArchivedTournament.season || "Unassigned"}</p>
+                <p className="text-sm text-blue-700">{selectedArchivedTournament.date} - {selectedArchivedTournament.center || selectedArchivedTournament.location || "No center"} - Season {selectedArchivedTournament.season || "Unassigned"}</p>
               </div>
               <Button variant="outline" className="rounded-2xl" onClick={() => setSelectedArchivedTournamentId(null)}>Close Tournament</Button>
             </div>
@@ -16128,7 +16713,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   }
 >
   Place
-</th> <th
+</th><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
     setArchiveSort((current) => ({
@@ -16141,7 +16726,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
   }
 >
   Bowler
-</th> <th className="p-2 text-right md:p-3">
+</th><th className="p-2 text-right md:p-3">
   Games
 </th>
 
@@ -16347,7 +16932,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} bracketState={selectedSnapshot.bracketState || { manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "eliminator" && <PublicEliminatorView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} eliminatorState={selectedSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} laneEliminatorState={selectedSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
-            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format — no finals bracket.</p>}
+            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format - - no finals bracket.</p>}
             {archivedDetailSection === "finals" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Finals view is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "sideaction" && selectedSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} sidePotState={selectedSnapshot.sidePotState} qualifyingGames={selectedSnapshot.qualifyingGames || 4} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "sideaction" && !selectedSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
@@ -16474,7 +17059,7 @@ else current.nonFkmTitles += titleCount;
     .map((row) => ({
       ...row,
       displayName: realNameFor(row.bowler) || row.bowler,
-      nickname: realNameFor(row.bowler) ? row.bowler : "—",
+      nickname: realNameFor(row.bowler) ? row.bowler : " - -",
       seasonsText: Array.from(row.seasons).sort((a, b) => String(b).localeCompare(String(a))).join(", "),
       titleList: [...row.titleList].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || String(a.tournament || "").localeCompare(String(b.tournament || ""))),
     }))
@@ -16599,7 +17184,7 @@ else current.nonFkmTitles += titleCount;
   };
 
   const identitySortLabel = (column) =>
-    identitySort.column === column ? (identitySort.direction === "asc" ? " ↑" : " ↓") : "";
+    identitySort.column === column ? (identitySort.direction === "asc" ? " ?" : " ?") : "";
 
   const sortedBowlerIdentities = [...(bowlerIdentities || [])].sort((a, b) => {
     const direction = identitySort.direction === "asc" ? 1 : -1;
@@ -16827,7 +17412,7 @@ else current.nonFkmTitles += titleCount;
                   <tr key={identity.id || identity.nickname} className="border-t">
                     <td className="p-2 font-semibold md:p-3">{identity.nickname}</td>
                     <td className="p-2 text-blue-900 md:p-3">{identity.realName}</td>
-                    <td className="p-2 text-blue-900 md:p-3">{(identity.aliases || []).join(", ") || "—"}</td>
+                    <td className="p-2 text-blue-900 md:p-3">{(identity.aliases || []).join(", ") || " - -"}</td>
                     {isOwnerAdmin && (
                       <td className="p-2 text-right md:p-3">
                         <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteBowlerIdentity(identity.nickname)}>Delete</Button>
@@ -16899,7 +17484,7 @@ else current.nonFkmTitles += titleCount;
                 {hofTitles.map((title) => (
                   <tr key={title.id} className="border-t">
                     <td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td>
-                    <td className="p-2 font-semibold text-blue-900 md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td>
+                    <td className="p-2 font-semibold text-blue-900 md:p-3">{realNameFor(title.bowler) ? title.bowler : " - -"}</td>
                     <td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td>
                     {isOwnerAdmin && (
                       <td className="p-2 text-right md:p-3">
@@ -16939,7 +17524,7 @@ else current.nonFkmTitles += titleCount;
   }
 >
   Name
-</th> <th
+</th><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
@@ -16952,7 +17537,7 @@ else current.nonFkmTitles += titleCount;
   }
 >
   Nickname
-</th> <th
+</th><th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
@@ -16981,7 +17566,7 @@ else current.nonFkmTitles += titleCount;
 >
   Majors
 </th>
- <th
+<th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
@@ -16994,7 +17579,7 @@ else current.nonFkmTitles += titleCount;
   }
 >
   FKM
-</th> <th
+</th><th
   className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
@@ -17007,7 +17592,7 @@ else current.nonFkmTitles += titleCount;
   }
 >
   Non-FKM
-</th> <th
+</th><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
@@ -17020,7 +17605,7 @@ else current.nonFkmTitles += titleCount;
   }
 >
   Seasons
-</th> <th
+</th><th
   className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3"
   onClick={() =>
     setTitleSort((current) => ({
@@ -17259,7 +17844,7 @@ else current.nonFkmTitles += titleCount;
                 }
 
                 return (
-                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : "—"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-800 md:text-xs" onClick={() => startEditManualTitle(title)}>Edit</Button>{isOwnerAdmin && <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>}</div> : <span className="text-blue-400">—</span>}</td></tr>
+                  <tr key={title.id} className="border-t"><td className="p-2 font-bold text-blue-950 md:p-3">{realNameFor(title.bowler) || title.bowler}</td><td className="p-2 font-semibold md:p-3">{realNameFor(title.bowler) ? title.bowler : " - -"}</td><td className="p-2 text-blue-900 md:p-3">{title.tournament}</td><td className="p-2 text-blue-900 md:p-3">{title.date || "-"}</td><td className="p-2 text-blue-900 md:p-3">{title.season || "-"}</td><td className="p-2 text-right font-black text-blue-900 md:p-3">{getTitleCount(title)}</td><td className="p-2 font-semibold text-blue-900 md:p-3">{getTitleCategoryLabel(title)}</td><td className="p-2 text-right md:p-3">{isManualTitle ? <div className="flex justify-end gap-1.5"><Button variant="outline" className="rounded-lg border-blue-200 bg-blue-50 px-2 py-1 text-[10px] text-blue-800 md:text-xs" onClick={() => startEditManualTitle(title)}>Edit</Button>{isOwnerAdmin && <Button variant="outline" className="rounded-lg border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 md:text-xs" onClick={() => deleteManualTitle(title.id)}>Delete</Button>}</div> : <span className="text-blue-400"> - -</span>}</td></tr>
                 );
               })}{titleDetailRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No title history yet.</td></tr>}</tbody>
             </table>
@@ -17657,7 +18242,7 @@ return (
 
       <div className="min-w-[48px] rounded-lg bg-white px-2 py-1 text-center shadow-sm">
         <span className="text-sm font-black text-blue-950">
-          {player.name === "BYE" ? "—" : score || "—"}
+          {player.name === "BYE" ? " - -" : score || " - -"}
         </span>
       </div>
     </div>
@@ -17685,7 +18270,7 @@ return (
     };
     brackets.forEach((bracket) => {
       const { r1Matches, r1Winners, r2Matches, r2Winners, finalPlayers, champions } = getBracketRounds(bracket);
-      const rounds = [{ label: `Bracket ${bracket.number} • Game ${gameOffset + 1}`, roundIndex: 0, matches: r1Matches }, { label: `Bracket ${bracket.number} • Game ${gameOffset + 2}`, roundIndex: 1, matches: r2Matches }, { label: `Bracket ${bracket.number} • Game ${gameOffset + 3}`, roundIndex: 2, matches: finalPlayers.length ? [finalPlayers] : [] }];
+      const rounds = [{ label: `Bracket ${bracket.number} - Game ${gameOffset + 1}`, roundIndex: 0, matches: r1Matches }, { label: `Bracket ${bracket.number} - Game ${gameOffset + 2}`, roundIndex: 1, matches: r2Matches }, { label: `Bracket ${bracket.number} - Game ${gameOffset + 3}`, roundIndex: 2, matches: finalPlayers.length ? [finalPlayers] : [] }];
       rounds.forEach((round) => round.matches.forEach((match) => {
         const realPlayers = match.map(resolvePlayer).filter((player) => player && player.name !== "BYE");
         const winners = advancePlayers(realPlayers, round.roundIndex, gameOffset);
@@ -17695,13 +18280,13 @@ return (
           if (!row) return;
           const opponents = realPlayers.filter((other) => other.seed !== player.seed);
           const opponentText = opponents.length ? opponents.map((other) => other.name).join(" / ") : "BYE";
-          const opponentScoreText = opponents.length ? opponents.map((other) => playerScore(other, round.roundIndex, gameOffset) || "—").join(" / ") : "—";
+          const opponentScoreText = opponents.length ? opponents.map((other) => playerScore(other, round.roundIndex, gameOffset) || " - -").join(" / ") : " - -";
           const playerAdvanced = winners.some((winner) => winner.seed === player.seed);
           const tied = winners.length > 1 && playerAdvanced;
           const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
 const playerScratch = Number(player.games?.[gameOffset + round.roundIndex] || 0);
 const playerHandicap = handicapPerGame(player);
-const playerTotal = playerScore(player, round.roundIndex, gameOffset) || "—";
+const playerTotal = playerScore(player, round.roundIndex, gameOffset) || " - -";
 const opponentBreakdownText = opponents.length
   ? opponents.map((other) => {
       const scratch = Number(
@@ -17751,7 +18336,7 @@ row.matches.push({
     return Object.values(playerMap).sort((a, b) => b.alive - a.alive || a.name.localeCompare(b.name));
   })();
 
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={generateBrackets} disabled={hasGeneratedBrackets}>{hasGeneratedBrackets ? "Brackets Locked" : "Generate Brackets"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Leftover Entries" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div><div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50"}><div className="flex-1"><h3 className="font-bold text-blue-950">{plan.label}</h3>{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}</div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Leftover:</strong> {plan.leftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p></div><p className="mt-2 text-xs text-blue-600">Full: {currency(25)} / {currency(10)} • With bye: {currency(20)} / {currency(10)}</p></button>)}</div></CardContent></AppCard>}
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={generateBrackets} disabled={hasGeneratedBrackets}>{hasGeneratedBrackets ? "Brackets Locked" : "Generate Brackets"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Leftover Entries" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div><div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50"}><div className="flex-1"><h3 className="font-bold text-blue-950">{plan.label}</h3>{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}</div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Leftover:</strong> {plan.leftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p></div><p className="mt-2 text-xs text-blue-600">Full: {currency(25)} / {currency(10)} - With bye: {currency(20)} / {currency(10)}</p></button>)}</div></CardContent></AppCard>}
       {!hasGeneratedBrackets && selectedPlan && (
         <AppCard>
           <CardContent className="p-3 md:p-5">
@@ -17868,7 +18453,7 @@ row.matches.push({
                                           : "p-2 text-center text-blue-400"
                                   }
                                 >
-                                  {match.result || "—"}
+                                  {match.result || " - -"}
                                 </td>
 <td className="p-2 text-right font-bold">
   {match.opponentBreakdown ? (
@@ -18022,7 +18607,7 @@ const teamHighGamePayoutPerGame = Math.floor(teamHighGamePot / gameCount);
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-blue-900">{title}</h2>
-            <p className="text-sm text-blue-700">Pays the top score each qualifying game. Ties split that game’s payout evenly.</p>
+            <p className="text-sm text-blue-700">Pays the top score each qualifying game. Ties split that game's payout evenly.</p>
           </div>
         </div>
         <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -18036,7 +18621,7 @@ const teamHighGamePayoutPerGame = Math.floor(teamHighGamePot / gameCount);
             <div key={`${title}-${game.gameIndex}`} className="rounded-2xl border border-blue-200 bg-white p-3 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="font-bold text-blue-950">Game {game.gameIndex + 1}</h3>
-                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-800">Pays {game.winners.length ? currency(game.payoutEach) : "—"}</span>
+                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-800">Pays {game.winners.length ? currency(game.payoutEach) : " - -"}</span>
               </div>
               <div className="space-y-2">
                 {game.scores.map((item, index) => {
@@ -18152,9 +18737,9 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
         const finalPlayers = [...r2Winners[0], ...r2Winners[1]];
         const champions = advancePlayers(finalPlayers, offset + 2);
         const rounds = [
-          { label: `${bracketSetMeta[setKey]?.label || "Bracket"} • Bracket ${bracket.number} • Game ${offset + 1}`, gameIndex: offset, matches: r1Matches },
-          { label: `${bracketSetMeta[setKey]?.label || "Bracket"} • Bracket ${bracket.number} • Game ${offset + 2}`, gameIndex: offset + 1, matches: r2Matches },
-          { label: `${bracketSetMeta[setKey]?.label || "Bracket"} • Bracket ${bracket.number} • Game ${offset + 3}`, gameIndex: offset + 2, matches: finalPlayers.length ? [finalPlayers] : [] },
+          { label: `${bracketSetMeta[setKey]?.label || "Bracket"} - Bracket ${bracket.number} - Game ${offset + 1}`, gameIndex: offset, matches: r1Matches },
+          { label: `${bracketSetMeta[setKey]?.label || "Bracket"} - Bracket ${bracket.number} - Game ${offset + 2}`, gameIndex: offset + 1, matches: r2Matches },
+          { label: `${bracketSetMeta[setKey]?.label || "Bracket"} - Bracket ${bracket.number} - Game ${offset + 3}`, gameIndex: offset + 2, matches: finalPlayers.length ? [finalPlayers] : [] },
         ];
 
         rounds.forEach((round) => {
@@ -18167,7 +18752,7 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
               if (!row) return;
               const opponents = realPlayers.filter((other) => String(other.seed) !== String(player.seed));
               const opponentText = opponents.length ? opponents.map((other) => other.name).join(" / ") : "BYE";
-              const opponentScoreText = opponents.length ? opponents.map((other) => scoreForGame(other, round.gameIndex) || "—").join(" / ") : "—";
+              const opponentScoreText = opponents.length ? opponents.map((other) => scoreForGame(other, round.gameIndex) || " - -").join(" / ") : " - -";
               const playerAdvanced = winners.some((winner) => String(winner.seed) === String(player.seed));
               const tied = winners.length > 1 && playerAdvanced;
               const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
@@ -18175,7 +18760,7 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
 
 const playerScratch = Number(player.games?.[round.gameIndex] || 0);
 const playerHandicap = isHandicapBracket ? handicapPerGame(player) : 0;
-const playerTotal = scoreForGame(player, round.gameIndex) || "—";
+const playerTotal = scoreForGame(player, round.gameIndex) || " - -";
 
 const opponentBreakdownText = isHandicapBracket && opponents.length
   ? opponents.map((other) => {
@@ -18333,7 +18918,7 @@ row.matches.push({
                   {bracketRows.map((row) => (
                     <React.Fragment key={`public-side-action-${row.seed}`}>
                       <tr className="border-t"><td className="p-2 font-semibold md:p-3"><button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedSeed((current) => String(current) === String(row.seed) ? null : row.seed)}>{row.name}</button></td><td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td></tr>
-                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table bb-side-mobile-score-table w-full text-[11px] md:hidden"><tbody>{row.matches.map((match, matchIndex) => <React.Fragment key={`public-side-match-mobile-${row.seed}-${matchIndex}`}><tr className="border-t bb-side-mobile-label-row"><td colSpan={2} className="bb-side-round-cell p-1.5"><span className="bb-side-mobile-match-label"><span>{compactSideActionRoundLabel(match.round)}</span><span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "—"}</span></span></td></tr><tr className="border-t bb-side-mobile-opponent-row"><td colSpan={2} className="p-1.5 font-semibold text-blue-950">Opponent: {match.opponent}</td></tr><tr className="border-t"><td className="bb-side-mobile-score-cell p-1.5 text-right font-bold"><span className="bb-side-mobile-score-label">Opp Score</span>
+                      {String(expandedSeed) === String(row.seed) && <tr className="border-t bg-blue-50"><td colSpan={2} className="p-1.5 md:p-3"><div className="overflow-auto rounded-xl border border-blue-100 bg-white"><table className="bb-public-side-detail-table bb-side-mobile-score-table w-full text-[11px] md:hidden"><tbody>{row.matches.map((match, matchIndex) => <React.Fragment key={`public-side-match-mobile-${row.seed}-${matchIndex}`}><tr className="border-t bb-side-mobile-label-row"><td colSpan={2} className="bb-side-round-cell p-1.5"><span className="bb-side-mobile-match-label"><span>{compactSideActionRoundLabel(match.round)}</span><span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || " - -"}</span></span></td></tr><tr className="border-t bb-side-mobile-opponent-row"><td colSpan={2} className="p-1.5 font-semibold text-blue-950">Opponent: {match.opponent}</td></tr><tr className="border-t"><td className="bb-side-mobile-score-cell p-1.5 text-right font-bold"><span className="bb-side-mobile-score-label">Opp Score</span>
     {match.opponentBreakdown ? (
     <span className="bb-side-mobile-score-value">
       <span className="bb-side-mobile-score-breakdown font-semibold">
@@ -18357,7 +18942,7 @@ row.matches.push({
   ) : (
     match.playerScore
   )}
-</td></tr></React.Fragment>)}</tbody></table><table className="hidden w-full min-w-[520px] text-sm md:table"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-desktop-${row.seed}-${matchIndex}`} className="border-t"><td className="max-w-[92px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "—"}</td><td className="p-2 text-right font-bold">
+</td></tr></React.Fragment>)}</tbody></table><table className="hidden w-full min-w-[520px] text-sm md:table"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead><tbody>{row.matches.map((match, matchIndex) => <tr key={`public-side-match-desktop-${row.seed}-${matchIndex}`} className="border-t"><td className="max-w-[92px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || " - -"}</td><td className="p-2 text-right font-bold">
     {match.opponentBreakdown ? (
     <span className="inline-flex items-center gap-2 justify-end">
       <span className="text-xs font-semibold text-blue-700">
@@ -18418,7 +19003,7 @@ row.matches.push({
                       <div key={`${section.title}-${game.gameIndex}`} className="rounded-xl border border-blue-100 bg-blue-50 p-2">
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <h4 className="text-sm font-black text-blue-950">Game {game.gameIndex + 1}</h4>
-                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-800">{game.winners.length ? currency(game.payoutEach) : "—"}</span>
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-800">{game.winners.length ? currency(game.payoutEach) : " - -"}</span>
                         </div>
                         <div className="space-y-1">
                           {game.scores.map((item, index) => {
@@ -18450,7 +19035,7 @@ row.matches.push({
             <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
               <table className="bb-public-side-payout-table w-full min-w-[640px] text-xs md:text-sm">
                 <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Brackets</th><th className="p-2 text-right md:p-3">High Game</th><th className="p-2 text-right md:p-3">Total</th><th className="bb-public-side-details-col p-2 text-left md:p-3">Details</th></tr></thead>
-                <tbody>{payoutRows.map((row) => <tr key={`public-side-payout-${row.seed}`} className="border-t"><td className="max-w-[96px] truncate p-2 font-semibold md:p-3">{row.name}</td><td className="p-2 text-right md:p-3">{currency(row.bracket)}</td><td className="p-2 text-right md:p-3">{currency(row.highGame)}</td><td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td><td className="bb-public-side-details-col p-2 text-xs text-blue-800 md:p-3">{row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" • ")}</td></tr>)}{payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={5}>No side-action payouts calculated yet.</td></tr>}</tbody>
+                <tbody>{payoutRows.map((row) => <tr key={`public-side-payout-${row.seed}`} className="border-t"><td className="max-w-[96px] truncate p-2 font-semibold md:p-3">{row.name}</td><td className="p-2 text-right md:p-3">{currency(row.bracket)}</td><td className="p-2 text-right md:p-3">{currency(row.highGame)}</td><td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td><td className="bb-public-side-details-col p-2 text-xs text-blue-800 md:p-3">{row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" - ")}</td></tr>)}{payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={5}>No side-action payouts calculated yet.</td></tr>}</tbody>
               </table>
             </div>
           </CardContent>
@@ -18626,7 +19211,7 @@ function SideActionPayoutsTab({
     <td className="p-2 text-right md:p-3">{currency(row.highGame)}</td>
     <td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td>
     <td className="p-2 text-xs text-blue-800 md:p-3">
-      {row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" • ")}
+      {row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" - ")}
     </td>
     <td className="p-2 text-center md:p-3">
       <button
@@ -19008,8 +19593,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         .sort((a, b) => new Date(b?.savedAt || 0).getTime() - new Date(a?.savedAt || 0).getTime())
         .map((draft) => draft?.snapshot),
     ].filter((snapshot) => snapshot?.tournamentInfo);
-    const publicInfoSnapshotForKey = (tournamentKey) =>
-      publicInfoSnapshots.find((snapshot) => tournamentInfoMatchesReservationKey(snapshot.tournamentInfo || {}, tournamentKey)) || null;
+    const publicInfoSnapshotForKey = (tournamentKey) => {
+      const exact = publicInfoSnapshots.find((snapshot) =>
+        snapshot?.tournamentInfo?.scheduleEventId &&
+        String(snapshot.tournamentInfo.scheduleEventId) === String(tournamentKey)
+      );
+      if (exact) return exact;
+      return publicInfoSnapshots.find((snapshot) => tournamentInfoMatchesReservationKey(snapshot.tournamentInfo || {}, tournamentKey)) || null;
+    };
 
     const syncTable = async (table, records, { removeStale = true } = {}) => {
       setSupabaseSaveStatus(`Saving ${table}...`);
@@ -19593,6 +20184,92 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (navigateToDashboard) setActiveTab("dashboard");
   };
 
+  const openScheduledTournamentWorkspace = (scheduledItem = {}) => {
+    const eventKey = reservationKeyFromScheduleItem(scheduledItem);
+    const savedSetup = scheduledItem.eventSetup || {};
+    const savedInfo = scheduleEventInfoBelongsToItem(savedSetup.tournamentInfo, scheduledItem)
+      ? savedSetup.tournamentInfo || {}
+      : {};
+    const setupSnapshot = savedSetup.snapshot &&
+      tournamentInfoMatchesReservationKey(savedSetup.snapshot?.tournamentInfo || {}, eventKey)
+      ? savedSetup.snapshot
+      : null;
+    const exactDraft = [...(savedTournamentDrafts || [])]
+      .sort((a, b) => new Date(b?.savedAt || 0).getTime() - new Date(a?.savedAt || 0).getTime())
+      .find((draft) => String(draft?.snapshot?.tournamentInfo?.scheduleEventId || "") === String(eventKey))?.snapshot || null;
+    const matchingDraft = exactDraft || findTournamentDraftForReservationKey(savedTournamentDrafts, eventKey)?.snapshot || null;
+    const baseTournamentInfo = {
+      name: scheduledItem.name || savedInfo.name || "Tournament",
+      date: scheduledItem.startDate || savedInfo.date || "",
+      startTime: scheduledItem.startTime || savedInfo.startTime || "",
+      center: scheduledItem.center || savedInfo.center || "",
+      location: scheduledItem.address || savedInfo.location || "",
+      director: savedInfo.director || DEFAULT_TOURNAMENT_DIRECTOR,
+      directorEmail: savedInfo.directorEmail || DEFAULT_TOURNAMENT_DIRECTOR_EMAIL,
+      lanesUsed: savedInfo.lanesUsed || "",
+      season: savedInfo.season || new Date().getFullYear().toString(),
+      movementMode: savedInfo.movementMode || "custom",
+      customRotation: savedInfo.customRotation || "",
+      evenCustomRotation: savedInfo.evenCustomRotation || "",
+      streamLink: savedInfo.streamLink || "",
+      bbtvYoutubeLink: savedInfo.bbtvYoutubeLink || "",
+      facebookLink: savedInfo.facebookLink || "",
+      recentVideoLink: savedInfo.recentVideoLink || "",
+      sponsors: savedInfo.sponsors || "",
+      logoLinks: savedInfo.logoLinks || "",
+      videoLinks: savedInfo.videoLinks || "",
+      notes: savedInfo.notes || "",
+      finalsTeamScoring: savedInfo.finalsTeamScoring || "full",
+      titleEligible: typeof scheduledItem.fkmTitle === "boolean" ? scheduledItem.fkmTitle : savedInfo.titleEligible ?? true,
+      major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : Boolean(savedInfo.major),
+      series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
+      reservationEligibility: savedInfo.reservationEligibility || "open",
+      tournamentStyle: savedInfo.tournamentStyle || "singles",
+      announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
+      lanePatternImages: Array.isArray(savedInfo.lanePatternImages) ? savedInfo.lanePatternImages : [],
+      scheduleEventId: eventKey,
+    };
+    const basePayoutState = {
+      ...DEFAULT_PAYOUT_STATE,
+      ...(savedSetup.payoutState || {}),
+      entryFee: Number(savedSetup.payoutState?.entryFee ?? savedInfo.entryFee ?? DEFAULT_PAYOUT_STATE.entryFee ?? 0),
+    };
+    const blankSnapshot = {
+      qualifyingGames: Number(savedSetup.qualifyingGames || 4),
+      savedScoreGames: {},
+      savedFinalsRounds: {},
+      qualifyingAdjustments: {},
+      bowlers: [],
+      useHandicapScores: false,
+      tournamentFormat: savedSetup.tournamentFormat || scheduledItem.tournamentFormat || "tbd",
+      tournamentInfo: baseTournamentInfo,
+      tournamentRecap: {},
+      payoutState: basePayoutState,
+      bracketState: {},
+      eliminatorState: {},
+      laneEliminatorState: {},
+      matchplayState: {},
+      eliminatorTournamentState: {},
+      sidePotState: {},
+      paidPayouts: {},
+      paidSideActionPayouts: {},
+    };
+    const snapshot = setupSnapshot || matchingDraft || blankSnapshot;
+    applyActiveTournamentSnapshot({
+      ...snapshot,
+      tournamentInfo: {
+        ...baseTournamentInfo,
+        ...(snapshot.tournamentInfo || {}),
+        name: scheduledItem.name || snapshot.tournamentInfo?.name || baseTournamentInfo.name,
+        date: scheduledItem.startDate || snapshot.tournamentInfo?.date || baseTournamentInfo.date,
+        startTime: scheduledItem.startTime || snapshot.tournamentInfo?.startTime || baseTournamentInfo.startTime,
+        center: scheduledItem.center || snapshot.tournamentInfo?.center || baseTournamentInfo.center,
+        location: scheduledItem.address || snapshot.tournamentInfo?.location || baseTournamentInfo.location,
+        scheduleEventId: eventKey,
+      },
+    });
+  };
+
   const refreshActiveTournamentSnapshotForDisplay = async ({ signal } = {}) => {
     if (!supabase) return;
     const rows = await withTimeout(
@@ -19667,63 +20344,62 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     });
   };
 
-  const saveTournamentDraft = () => {
+  const saveCurrentTournament = () => {
     if (document.activeElement && typeof document.activeElement.blur === "function") {
       document.activeElement.blur();
     }
 
     window.setTimeout(() => {
       const snapshot = buildActiveTournamentSnapshot();
-      const defaultName = snapshot.tournamentInfo?.name || "Saved Tournament";
-      const name = window.prompt("Save this tournament as:", defaultName);
-      if (!name) return;
-      const now = new Date().toISOString();
-      const draft = {
-        id: `draft-${Date.now()}`,
-        name,
-        savedAt: now,
-        snapshot,
-      };
-      const snapshotKey = snapshot.tournamentInfo?.scheduleEventId || reservationTournamentKey({
-        name: snapshot.tournamentInfo?.name,
-        date: snapshot.tournamentInfo?.date,
-        center: snapshot.tournamentInfo?.center,
+      const snapshotInfo = snapshot.tournamentInfo || {};
+      const snapshotKey = snapshotInfo.scheduleEventId || reservationTournamentKey({
+        name: snapshotInfo.name,
+        date: snapshotInfo.date,
+        center: snapshotInfo.center,
       });
       const snapshotLegacyKey = reservationTournamentKey({
-        name: snapshot.tournamentInfo?.name,
-        date: snapshot.tournamentInfo?.date,
-        center: snapshot.tournamentInfo?.center,
+        name: snapshotInfo.name,
+        date: snapshotInfo.date,
+        center: snapshotInfo.center,
       });
-      const scheduleSetup = buildScheduleEventSetupFromSnapshot(snapshot);
-      if (snapshotKey) {
-        setScheduleItems((current) => (current || []).map((item) => (
-          reservationKeyFromScheduleItem(item) === snapshotKey ||
-          legacyReservationKeyFromScheduleItem(item) === snapshotKey ||
-          legacyReservationKeyFromScheduleItem(item) === snapshotLegacyKey
-            ? {
-                ...item,
-                ...scheduleSetup,
-                name: item.name || scheduleSetup.publicInfo.name || "",
-                startDate: item.startDate || scheduleSetup.publicInfo.date || "",
-                startTime: item.startTime || scheduleSetup.publicInfo.startTime || "",
-                center: item.center || scheduleSetup.publicInfo.center || "",
-                address: item.address || scheduleSetup.publicInfo.location || "",
-                series: scheduleSetup.publicInfo.series || item.series || DEFAULT_TOURNAMENT_SERIES,
-                fkmTitle: typeof scheduleSetup.publicInfo.titleEligible === "boolean" ? scheduleSetup.publicInfo.titleEligible : item.fkmTitle,
-                major: typeof scheduleSetup.publicInfo.major === "boolean" ? scheduleSetup.publicInfo.major : item.major,
-              }
-            : item
-        )));
+
+      if (!snapshotKey) {
+        window.alert("Select a scheduled tournament in Tournament Setup before saving.");
+        return;
       }
+
+      const matchingScheduleItem = (scheduleItems || []).find((item) => (
+        reservationKeyFromScheduleItem(item) === snapshotKey ||
+        legacyReservationKeyFromScheduleItem(item) === snapshotKey ||
+        legacyReservationKeyFromScheduleItem(item) === snapshotLegacyKey
+      ));
+
+      if (!matchingScheduleItem) {
+        window.alert("This tournament is not matched to a schedule event yet. Select it from the Tournament Name dropdown, then save again.");
+        return;
+      }
+
+      const scheduleSetup = buildScheduleEventSetupFromSnapshot(snapshot);
+      setScheduleItems((current) => (current || []).map((item) => (
+        reservationKeyFromScheduleItem(item) === snapshotKey ||
+        legacyReservationKeyFromScheduleItem(item) === snapshotKey ||
+        legacyReservationKeyFromScheduleItem(item) === snapshotLegacyKey
+          ? {
+              ...item,
+              ...scheduleSetup,
+              name: item.name || scheduleSetup.publicInfo.name || "",
+              startDate: item.startDate || scheduleSetup.publicInfo.date || "",
+              startTime: item.startTime || scheduleSetup.publicInfo.startTime || "",
+              center: item.center || scheduleSetup.publicInfo.center || "",
+              address: item.address || scheduleSetup.publicInfo.location || "",
+              series: scheduleSetup.publicInfo.series || item.series || DEFAULT_TOURNAMENT_SERIES,
+              fkmTitle: typeof scheduleSetup.publicInfo.titleEligible === "boolean" ? scheduleSetup.publicInfo.titleEligible : item.fkmTitle,
+              major: typeof scheduleSetup.publicInfo.major === "boolean" ? scheduleSetup.publicInfo.major : item.major,
+            }
+          : item
+      )));
       refreshOpenReservationPublicInfoFromSnapshot(snapshot);
-      setSavedTournamentDrafts((current) => [draft, ...current.filter((item) =>
-        item.name !== name &&
-        !tournamentInfoMatchesReservationKey(item?.snapshot?.tournamentInfo || {}, reservationTournamentKey({
-          name: snapshot.tournamentInfo?.name,
-          date: snapshot.tournamentInfo?.date,
-          center: snapshot.tournamentInfo?.center,
-        }))
-      )]);
+      setSupabaseSaveStatus(`Tournament saved locally to ${matchingScheduleItem.name || snapshotInfo.name || "selected event"}. Use Save Setup Now to save it to Supabase.`);
     }, 0);
   };
 
@@ -19732,7 +20408,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     if (!draft) return;
     const draftInfo = draft.snapshot?.tournamentInfo || {};
     const activeName = tournamentInfo.name || "the current active tournament";
-    const draftDetails = [draftInfo.date, draftInfo.startTime ? formatStartTime(draftInfo.startTime) : "", draftInfo.center].filter(Boolean).join(" • ");
+    const draftDetails = [draftInfo.date, draftInfo.startTime ? formatStartTime(draftInfo.startTime) : "", draftInfo.center].filter(Boolean).join(" - ");
     const confirmed = window.confirm(
       `Open saved tournament "${draft.name || draftInfo.name || "Saved Tournament"}"${draftDetails ? ` (${draftDetails})` : ""}?\n\nThis will replace "${activeName}" in the active workspace. Saved drafts, reservations, archives, schedule, and titles will stay.`
     );
@@ -19769,8 +20445,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       const existingIndex = current.findIndex((bowler) => {
         return reservation.id && String(bowler.reservationId || "") === String(reservation.id);
       });
+      const blankAssignedLaneIndex = existingIndex >= 0
+        ? -1
+        : current.findIndex((bowler) =>
+            !String(bowler.name || "").trim() &&
+            String(bowler.lane || "").trim()
+          );
+      const targetIndex = existingIndex >= 0 ? existingIndex : blankAssignedLaneIndex;
+      const targetBowler = targetIndex >= 0 ? current[targetIndex] : null;
       alreadyExists = existingIndex >= 0;
-      if (!alreadyExists && rosterLimit > 0 && current.length >= rosterLimit) {
+      const namedRosterCount = current.filter((bowler) => String(bowler.name || "").trim()).length;
+      if (!alreadyExists && targetIndex < 0 && rosterLimit > 0 && namedRosterCount >= rosterLimit) {
         rosterFull = true;
         return current;
       }
@@ -19780,18 +20465,16 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           .map((bowler) => Number(bowler.seed || 0))
           .filter((seed) => Number.isFinite(seed))
       );
-      const nextLane = existingIndex >= 0
-        ? current[existingIndex]?.lane || ""
-        : "";
+      const nextLane = targetBowler?.lane || "";
       const nextBowler = {
-        ...(existingIndex >= 0 ? current[existingIndex] : makeBowler(maxSeed + 1, qualifyingGames)),
+        ...(targetBowler || makeBowler(maxSeed + 1, qualifyingGames)),
         name: displayName,
         lane: nextLane,
         phone: formatPhoneNumber(reservation.phone || ""),
         email: reservation.email || "",
         reservationId: reservation.id || "",
         reservationTournamentKey: currentReservationKey,
-        registrationNumber: getReservationRegistrationNumber(reservation, existingIndex >= 0 ? current[existingIndex]?.registrationNumber : maxSeed + 1),
+        registrationNumber: getReservationRegistrationNumber(reservation, targetBowler?.registrationNumber || maxSeed + 1),
         average: archivedData?.eligible ? archivedData.average : "",
         handicap: archivedHandicap,
         handicapPerGame: archivedHandicap,
@@ -19802,14 +20485,41 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
             : "Average required manually",
       };
 
-      if (existingIndex >= 0) {
-        return current.map((bowler, index) => index === existingIndex ? nextBowler : bowler);
+      if (targetIndex >= 0) {
+        return current.map((bowler, index) => index === targetIndex ? nextBowler : bowler);
       }
 
       return [...current, nextBowler];
     });
 
     return { name: displayName, alreadyExists, rosterFull, limit: rosterLimit };
+  };
+
+  const clearRegistrationSlotForReservation = (reservation) => {
+    if (!reservation?.id) return;
+    setBowlers((current) => {
+      const removedSeeds = current
+        .filter((bowler) => String(bowler.reservationId || "") === String(reservation.id))
+        .map((bowler) => bowler.seed)
+        .filter((seed) => seed !== undefined && seed !== null);
+      if (removedSeeds.length) {
+        window.setTimeout(() => {
+          setSidePotState((sideCurrent) => {
+            const nextBracketSets = { ...(sideCurrent.bracketSets || {}) };
+            Object.keys(nextBracketSets).forEach((key) => {
+              nextBracketSets[key] = { ...(nextBracketSets[key] || {}) };
+              removedSeeds.forEach((seed) => delete nextBracketSets[key][seed]);
+            });
+            return { ...sideCurrent, bracketSets: nextBracketSets };
+          });
+        }, 0);
+      }
+      return current.map((bowler) =>
+        String(bowler.reservationId || "") === String(reservation.id)
+          ? blankRegistrationBowlerSlot(bowler, Array.isArray(bowler.games) ? bowler.games.length : qualifyingGames)
+          : bowler
+      );
+    });
   };
 
   const submitReservationToSupabase = async (reservation) => {
@@ -19895,7 +20605,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   };
 
   const restoreTournament = (archivedTournament) => {
-    const archiveDetails = [archivedTournament?.date, archivedTournament?.center || archivedTournament?.location].filter(Boolean).join(" • ");
+    const archiveDetails = [archivedTournament?.date, archivedTournament?.center || archivedTournament?.location].filter(Boolean).join(" - ");
     const confirmed = window.confirm(
       `Restore archived tournament "${archivedTournament?.name || "this tournament"}"${archiveDetails ? ` (${archiveDetails})` : ""} as the active workspace?\n\nThis will replace "${tournamentInfo.name || "the current active tournament"}". Archives, saved drafts, reservations, schedule, and titles will stay.`
     );
@@ -19968,9 +20678,20 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     : getAutoFinalsLineageGames({ entries, tournamentFormat, tournamentStyle });
   const financials = useMemo(() => calculateFinancials({ entries, lineageEntries: bowlers.length, ...payoutState, finalsGames: financialFinalsGames, totalLineageGames: financialLineageGames }), [entries, bowlers.length, payoutState, financialFinalsGames, financialLineageGames]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides }), [financials, payoutState]);
-  const headerEventLabel = isTournamentDayOrLater(tournamentInfo.date || reservationState.tournamentDate)
+  const publicHeaderReservationOptions = openReservationOptions(reservationState, scheduleItems);
+  const publicHeaderOpenOption = publicHeaderReservationOptions[0] || null;
+  const publicHeaderScheduleItem = selectedPublicEventKey
+    ? scheduleItemForReservationKey(scheduleItems, selectedPublicEventKey)
+    : publicHeaderOpenOption?.scheduleItem || nextUpcomingScheduleItem(scheduleItems);
+  const publicHeaderInfo = publicHeaderScheduleItem ? getScheduleEventPublicInfo(publicHeaderScheduleItem) : null;
+  const usePublicHeaderContext = PUBLIC_TAB_IDS.has(activeTab);
+  const headerTournamentInfo = usePublicHeaderContext ? publicHeaderInfo || tournamentInfo : tournamentInfo;
+  const headerEventLabel = usePublicHeaderContext && publicHeaderOpenOption
+    ? "Entries Open"
+    : isTournamentDayOrLater(headerTournamentInfo.date || reservationState.tournamentDate)
     ? "Active Event"
     : "Upcoming Event";
+  const headerTournamentName = headerTournamentInfo.name || "Tournament";
   const isOwnerAdmin = Boolean(
     isAdminMode &&
     isOwnerAdminEmail(supabaseSession?.user?.email || supabaseAdminProfile?.email || "")
@@ -20010,6 +20731,17 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       bowlerIdentities,
       savedTournamentDrafts,
     });
+  };
+  const restoreLocalActiveSnapshot = async () => {
+    try {
+      setSupabaseLoadStatus("Restoring staging active snapshot...");
+      supabaseSaveSkipRef.current = true;
+      await refreshActiveTournamentSnapshotForDisplay();
+      setActiveTab("matchplay");
+      setSupabaseLoadStatus("Restored staging active snapshot.");
+    } catch (error) {
+      setSupabaseLoadStatus(`Restore issue: ${error.message || "Could not restore active snapshot."}`);
+    }
   };
 
   useEffect(() => {
@@ -20076,6 +20808,19 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       window.clearInterval(timerId);
     };
   }, [isDisplayMode, supabaseLoadReady, supabaseSession]);
+
+  const publicMaintenanceMode = isMaintenanceModeEnabled() && !isAdminMode;
+  if (publicMaintenanceMode) {
+    return (
+      <MaintenanceModeScreen
+        session={supabaseSession}
+        adminProfile={supabaseAdminProfile}
+        authLoading={supabaseAuthLoading}
+        onSignIn={signInSupabaseAdmin}
+        onSignOut={signOutSupabaseAdmin}
+      />
+    );
+  }
 
   return (
     <div ref={appTopRef} className={`bb-stage min-h-screen ${isDisplayMode ? "p-0" : "p-2 md:p-8"}`}>
@@ -20146,7 +20891,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         {headerEventLabel}
       </p>
       <p className="font-bold text-white">
-        {tournamentInfo.name || "Tournament"}
+        {headerTournamentName}
       </p>
     </div>
   </div>
@@ -20183,6 +20928,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
                     {isOwnerAdmin && (
                       <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={exportFullBackup}>
                         Export Full Backup
+                      </Button>
+                    )}
+                    {isOwnerAdmin && import.meta.env.DEV && (
+                      <Button variant="outline" className="rounded-2xl border-yellow-200 bg-yellow-50 text-yellow-900 hover:bg-yellow-100" onClick={restoreLocalActiveSnapshot}>
+                        Restore Staging Snapshot
                       </Button>
                     )}
                     {supabaseSession?.user && (
@@ -20255,10 +21005,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         });
       }}
       setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
-      savedTournamentDrafts={savedTournamentDrafts}
-      onSaveTournamentDraft={saveTournamentDraft}
-      onLoadTournamentDraft={loadTournamentDraft}
-      onDeleteTournamentDraft={deleteTournamentDraft}
+      onSaveCurrentTournament={saveCurrentTournament}
+      onOpenScheduledTournament={openScheduledTournamentWorkspace}
 
     />
   </AppErrorBoundary>
@@ -20300,6 +21048,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   supabaseSession={supabaseSession}
   onAddReservationToRegistration={addReservationToRegistration}
   onDeleteReservation={deleteReservationFromSupabase}
+  onRemoveReservationFromRegistration={clearRegistrationSlotForReservation}
   onRemoveHiddenReservation={removeHiddenReservationFromSupabase}
 />
 )}
@@ -20506,4 +21255,8 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     </div>
   );
 }
+
+
+
+
 
