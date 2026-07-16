@@ -3757,28 +3757,28 @@ function PublicHomeTab({
         </section>
 
         {latestArchive && (
-          <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-center">
-              {latestArchiveWinnerPhotoUrl && (
-                <img
-                  src={latestArchiveWinnerPhotoUrl}
-                  alt={`${latestArchiveWinner || latestArchive.name} winner`}
-                  className="h-32 w-full rounded-2xl border border-blue-100 bg-white object-cover shadow-sm sm:w-44"
-                  loading="lazy"
-                />
-              )}
-              <div className="min-w-0">
+          <div className="mt-5 flex flex-col gap-5 rounded-2xl border border-blue-100 bg-blue-50 p-5 md:flex-row md:items-stretch md:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col justify-center">
               <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
-              <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
+              <p className="mt-2 text-2xl font-black text-blue-950">{latestArchive.name}</p>
               <p className="mt-1 text-sm font-semibold text-blue-800">
                 {latestArchive.date || "Date TBD"}{latestArchive.center ? ` - ${latestArchive.center}` : ""}
               </p>
-              </div>
             </div>
             {latestArchiveWinner && (
-              <div className="rounded-2xl border border-green-200 bg-white px-4 py-3 text-left shadow-sm md:min-w-[220px] md:text-right">
-                <p className="text-xs font-black uppercase tracking-wide text-green-700">Winner</p>
-                <p className="mt-1 text-xl font-black text-green-900">{latestArchiveWinner}</p>
+              <div className="flex flex-col gap-4 rounded-2xl border border-green-200 bg-white p-4 text-left shadow-sm sm:flex-row sm:items-center md:min-w-[420px] md:justify-end">
+                <div className="min-w-0 sm:text-right">
+                  <p className="text-xs font-black uppercase tracking-wide text-green-700">Winner</p>
+                  <p className="mt-1 text-2xl font-black text-green-900">{latestArchiveWinner}</p>
+                </div>
+                {latestArchiveWinnerPhotoUrl && (
+                  <img
+                    src={latestArchiveWinnerPhotoUrl}
+                    alt={`${latestArchiveWinner || latestArchive.name} winner`}
+                    className="h-44 w-full rounded-2xl border border-green-100 bg-green-50 object-cover shadow-sm sm:w-56"
+                    loading="lazy"
+                  />
+                )}
               </div>
             )}
           </div>
