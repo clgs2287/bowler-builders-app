@@ -17972,7 +17972,8 @@ function FinanceTab({ entries, lineageEntries = entries, payoutState, financials
           <h2 className="text-xl font-semibold text-blue-900">Finance / Accounting</h2>
           <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => downloadCsv("tournament-finance.csv", [["Item", "Amount"], ...rows.map(([label, value]) => [label, value])])}>Export Finance CSV</Button>
         </div>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Entry Fee" value={currency(payoutState.entryFee || 0)} />
           <StatCard label="Total Collected" value={currency(totalCollected)} />
           <StatCard label="Lineage" value={currency(lineage)} />
           <StatCard label="Ball Raffle" value={currency(ballRaffle)} />
