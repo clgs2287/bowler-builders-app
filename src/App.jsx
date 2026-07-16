@@ -3557,8 +3557,6 @@ function PublicHomeTab({
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
   const latestArchiveWinner = latestArchive ? getArchivedWinnerName(latestArchive) : "";
-  const latestArchiveRecap = latestArchive?.tournamentRecap || latestArchive?.activeSnapshot?.tournamentRecap || {};
-  const latestArchiveWinnerPhotoUrl = latestArchiveRecap.winnerPhotoUrl || latestArchive?.winnerPhotoUrl || "";
   const reservationCount = Number(nextEventReservation?.state?.reservationCount || nextEventReservation?.state?.reservations?.length || 0);
   const reservationLimit = Number(nextEventReservation?.state?.reservationLimit || 0);
   const reservationSummary = nextEventReservation
@@ -3757,28 +3755,18 @@ function PublicHomeTab({
         </section>
 
         {latestArchive && (
-          <div className="mt-5 flex flex-col gap-5 rounded-2xl border border-blue-100 bg-blue-50 p-5 md:flex-row md:items-stretch md:justify-between">
-            <div className="flex min-w-0 flex-1 flex-col justify-center">
+          <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 md:flex-row md:items-center md:justify-between">
+            <div>
               <p className="text-xs font-black uppercase tracking-wide text-blue-700">Latest Archived Event</p>
-              <p className="mt-2 text-2xl font-black text-blue-950">{latestArchive.name}</p>
+              <p className="mt-1 text-lg font-black text-blue-950">{latestArchive.name}</p>
               <p className="mt-1 text-sm font-semibold text-blue-800">
                 {latestArchive.date || "Date TBD"}{latestArchive.center ? ` - ${latestArchive.center}` : ""}
               </p>
             </div>
             {latestArchiveWinner && (
-              <div className="flex flex-col gap-4 rounded-2xl border border-green-200 bg-white p-4 text-left shadow-sm sm:flex-row sm:items-center md:min-w-[420px] md:justify-end">
-                <div className="min-w-0 sm:text-right">
-                  <p className="text-xs font-black uppercase tracking-wide text-green-700">Winner</p>
-                  <p className="mt-1 text-2xl font-black text-green-900">{latestArchiveWinner}</p>
-                </div>
-                {latestArchiveWinnerPhotoUrl && (
-                  <img
-                    src={latestArchiveWinnerPhotoUrl}
-                    alt={`${latestArchiveWinner || latestArchive.name} winner`}
-                    className="h-44 w-full rounded-2xl border border-green-100 bg-green-50 object-cover shadow-sm sm:w-56"
-                    loading="lazy"
-                  />
-                )}
+              <div className="rounded-2xl border border-green-200 bg-white px-4 py-3 text-left shadow-sm md:min-w-[220px] md:text-right">
+                <p className="text-xs font-black uppercase tracking-wide text-green-700">Winner</p>
+                <p className="mt-1 text-xl font-black text-green-900">{latestArchiveWinner}</p>
               </div>
             )}
           </div>
@@ -11840,7 +11828,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
   const hasRecap = (archive) => {
     const snapshotRecap = archive?.activeSnapshot?.tournamentRecap || {};
     const recap = archive?.tournamentRecap || snapshotRecap;
-    return Boolean(recap.winner || recap.runnerUp || recap.highGame || recap.recapNotes);
+    return Boolean(recap.winner || recap.runnerUp || recap.highGame || recap.winnerPhotoUrl || recap.recapNotes);
   };
 
   const renderArchiveRecap = (archive) => {
@@ -11861,6 +11849,14 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
           <div className="rounded-2xl bg-blue-50 p-4">
             <p className="text-sm font-semibold text-blue-700">Champion</p>
             <p className="mt-2 text-xl font-black text-blue-950">{recap.winner || "TBD"}</p>
+            {recap.winnerPhotoUrl && (
+              <img
+                src={recap.winnerPhotoUrl}
+                alt={`${recap.winner || "Champion"} photo`}
+                className="mt-3 h-48 w-full rounded-2xl border border-blue-100 bg-white object-cover shadow-sm"
+                loading="lazy"
+              />
+            )}
           </div>
           <div className="rounded-2xl bg-blue-50 p-4">
             <p className="text-sm font-semibold text-blue-700">Runner Up</p>
@@ -12248,6 +12244,14 @@ function PublicTournamentRecap({
             <p className="mt-2 text-xl font-black text-blue-950">
               {tournamentRecap.winner || "TBD"}
             </p>
+            {tournamentRecap.winnerPhotoUrl && (
+              <img
+                src={tournamentRecap.winnerPhotoUrl}
+                alt={`${tournamentRecap.winner || "Champion"} photo`}
+                className="mt-3 h-48 w-full rounded-2xl border border-blue-100 bg-white object-cover shadow-sm"
+                loading="lazy"
+              />
+            )}
           </div>
 
           <div className="rounded-2xl bg-blue-50 p-4">
@@ -13338,8 +13342,8 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       {publicArchiveSection === "sideaction" && selectedPublicArchiveSnapshot?.sidePotState && <PublicSideActionTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} sidePotState={selectedPublicArchiveSnapshot.sidePotState} qualifyingGames={selectedPublicArchiveSnapshot.qualifyingGames || 4} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
       {publicArchiveSection === "sideaction" && !selectedPublicArchiveSnapshot?.sidePotState && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Side action is only available for tournaments archived with side-action snapshots.</p>}
       {publicArchiveSection === "lanePattern" && <LanePatternImagesView images={selectedPublicArchiveLanePatternImages} />}
-      {publicArchiveSection === "recap" && (selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedPublicArchiveRecap} />}
-      {publicArchiveSection === "recap" && !(selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
+      {publicArchiveSection === "recap" && (selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.winnerPhotoUrl || selectedPublicArchiveRecap.recapNotes) && <PublicTournamentRecap tournamentRecap={selectedPublicArchiveRecap} />}
+      {publicArchiveSection === "recap" && !(selectedPublicArchiveRecap.winner || selectedPublicArchiveRecap.runnerUp || selectedPublicArchiveRecap.highGame || selectedPublicArchiveRecap.winnerPhotoUrl || selectedPublicArchiveRecap.recapNotes) && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">No recap was saved for this archived tournament.</p>}
     </div>
   )}
 
