@@ -3527,7 +3527,6 @@ function PublicHomeTab({
   onEventDetails = () => {},
 }) {
   const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
-  const primaryOpenReservation = publicReservationOptions[0] || null;
   const upcomingEvents = [...(scheduleItems || [])]
     .filter((item) => item?.name && item?.startDate && scheduleDateTimeValue(item) !== Number.POSITIVE_INFINITY)
     .filter((item) => {
@@ -3592,20 +3591,19 @@ function PublicHomeTab({
               <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-blue-100 md:text-base">
                 Reserve tournament entries, follow season schedules, view live scores, track finals, and browse tournament history.
               </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Button className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={() => onNavigate("publicschedule")}>
-                  View Schedule
-                </Button>
-                <Button
-                  variant="outline"
-                  className="rounded-2xl border-blue-300 bg-blue-800 text-white hover:bg-blue-700"
-                  onClick={() => primaryOpenReservation ? onReserve(primaryOpenReservation.key) : onNavigate("publicreservations")}
-                >
+              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm font-black uppercase tracking-wide text-blue-100">
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-blue-300" />
+                  Schedules
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-green-300" />
                   Reservations
-                </Button>
-                <Button variant="outline" className="rounded-2xl border-blue-300 bg-blue-950 text-white hover:bg-blue-900" onClick={() => onNavigate("public")}>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-white" />
                   Live Scores
-                </Button>
+                </span>
               </div>
             </div>
             <div className="rounded-2xl border border-blue-700 bg-slate-950/50 p-4">
