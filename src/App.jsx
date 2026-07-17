@@ -8434,6 +8434,7 @@ function ReservationsTab({
       ? tournamentInfo.announcementImages
       : [];
   const announcementFlyer = selectedAnnouncementImages.find((image) => image?.src) || null;
+  const canSendAnnouncementEmails = Boolean(supabaseSession?.access_token);
 
   useEffect(() => {
     if (!activeDashboardTournamentKey || activeDashboardTournamentKey === currentScheduledTournamentKey) return;
@@ -8816,8 +8817,8 @@ function ReservationsTab({
       window.alert("Enter a test email address first.");
       return;
     }
-    if (!supabaseSession?.access_token) {
-      window.alert("Sign in as owner before sending announcement emails.");
+    if (!canSendAnnouncementEmails) {
+      window.alert("Sign in as an approved admin before sending announcement emails.");
       return;
     }
 
@@ -8840,8 +8841,8 @@ function ReservationsTab({
   };
 
   const sendAnnouncementToPastBowlers = async () => {
-    if (!supabaseSession?.access_token) {
-      window.alert("Sign in as owner before sending announcement emails.");
+    if (!canSendAnnouncementEmails) {
+      window.alert("Sign in as an approved admin before sending announcement emails.");
       return;
     }
     if (!announcementRecipients.length) {
@@ -9041,7 +9042,7 @@ function ReservationsTab({
           </p>
         </div>
 
-        {isOwnerAdmin && (
+        {canSendAnnouncementEmails && (
           <div className="mt-5 rounded-2xl border border-blue-200 bg-white p-4">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
@@ -9051,7 +9052,7 @@ function ReservationsTab({
                 </p>
               </div>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
-                Owner only
+                Admin access
               </span>
             </div>
 
