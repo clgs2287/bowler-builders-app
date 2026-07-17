@@ -5782,7 +5782,7 @@ function DashboardTab({
     <div className="flex items-center justify-between border-b pb-2">
       <span className="font-semibold text-blue-900">Entry Fee</span>
       <span className="font-bold text-slate-900">
-        {currency(financials.grossRevenue / Math.max(entries, 1))}
+        {currency(Number(payoutState.entryFee || 0))}
       </span>
     </div>
 
