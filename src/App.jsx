@@ -3575,6 +3575,7 @@ function PublicHomeTab({
   reservationState = {},
   scheduleItems = [],
   tournamentHistory = [],
+  latestArchiveOverride = null,
   onNavigate = () => {},
   onReserve = () => {},
   onEventDetails = () => {},
@@ -3606,7 +3607,11 @@ function PublicHomeTab({
     { label: "Bowler Builders Facebook", href: "https://www.facebook.com/bowlerbuildersproshops", type: "facebook" },
     { label: "BBTV YouTube", href: DEFAULT_BBTV_YOUTUBE_LINK, type: "youtube" },
   ];
-  const latestArchive = [...(tournamentHistory || [])]
+  const latestArchiveCandidates = [
+    latestArchiveOverride,
+    ...(tournamentHistory || []),
+  ].filter((event) => event?.name);
+  const latestArchive = latestArchiveCandidates
     .filter((event) => event?.name)
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))[0] || null;
   const latestArchiveWinner = latestArchive ? getArchivedWinnerName(latestArchive) : "";
@@ -19398,6 +19403,7 @@ export default function BowlingPayoutApp() {
   const [sidePotState, setSidePotState] = useState({ gameWindow: "1-3", activeBracketSet: "early", enabledBracketSets: { early: true, handicapEarly: false, middle: false, late: false }, bracketPrice: DEFAULT_BRACKET_PRICE, teamBracketPrice: DEFAULT_BRACKET_PRICE, highGamePrice: 10, handicapHighGamePrice: 10, teamHighGamePrice: 10, teamBracketEntries: {}, teamHighGameEntries: {}, entries: {}, bracketSets: { early: {}, handicapEarly: {}, middle: {}, late: {}, team: {} }, brackets: [], bracketGroups: { early: [], handicapEarly: [], middle: [], late: [], team: [] }, leftovers: 0, leftoversBySet: { early: 0, handicapEarly: 0, middle: 0, late: 0, team: 0 }, refunds: [], refundsBySet: { early: [], handicapEarly: [], middle: [], late: [], team: [] }, selectedPlanIds: { early: "full-only", handicapEarly: "full-only", middle: "full-only", late: "full-only", team: "full-only" } });
   const [hasLoadedSavedData, setHasLoadedSavedData] = useState(false);
   const [tournamentHistory, setTournamentHistory] = useState([]);
+  const [publicLatestArchive, setPublicLatestArchive] = useState(null);
   const [manualTitles, setManualTitles] = useState([]);
   const [bowlerIdentities, setBowlerIdentities] = useState([]);
   const [savedTournamentDrafts, setSavedTournamentDrafts] = useState([]);
@@ -19918,6 +19924,9 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         const archiveRead = shouldLoadArchiveData
           ? loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal)
           : Promise.resolve([]);
+        const latestArchiveRead = shouldLoadArchiveData
+          ? Promise.resolve([])
+          : loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc&limit=1", controller.signal);
         const reads = await Promise.allSettled([
           loadSupabaseRestRows("schedule_events", "?select=id,data,sort_date&order=sort_date.asc", controller.signal),
           loadSupabaseRestRows("public_app_settings", "?select=id,value&id=in.(schedule_locked,reservation_state)", controller.signal),
@@ -19929,13 +19938,14 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           archiveRead,
           loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
           draftRead,
+          latestArchiveRead,
         ]);
 
-        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "public roster", "archive", "active snapshot", "draft"];
+        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "public roster", "archive", "active snapshot", "draft", "latest archive"];
         const failedReads = reads
           .map((result, index) => result.status === "rejected" ? `${readNames[index]}: ${result.reason?.message || "failed"}` : "")
           .filter(Boolean);
-        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, reservationRosterRows, archiveRows, activeSnapshotRows, draftRows] = reads.map((result) =>
+        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, reservationRosterRows, archiveRows, activeSnapshotRows, draftRows, latestArchiveRows] = reads.map((result) =>
           result.status === "fulfilled" ? result.value : []
         );
 
@@ -19966,6 +19976,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
           return groups;
         }, {});
         const nextArchives = (archiveRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
+        const nextLatestArchive = (latestArchiveRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }))[0] || null;
         const nextActiveSnapshot = dataFromRow((activeSnapshotRows || [])[0] || {});
         const nextDrafts = (draftRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
 
@@ -19974,6 +19985,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         if (nextTitles.length) setManualTitles(nextTitles);
         if (nextIdentities.length) setBowlerIdentities(nextIdentities);
         if (nextArchives.length) setTournamentHistory(nextArchives);
+        if (nextLatestArchive) setPublicLatestArchive(nextLatestArchive);
         if (adminAccessToken) setSavedTournamentDrafts(nextDrafts);
         if (Object.keys(nextActiveSnapshot).length) applyActiveTournamentSnapshot(nextActiveSnapshot);
         if (reservationSettings && typeof reservationSettings === "object") {
@@ -21246,6 +21258,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       reservationState={reservationState}
       scheduleItems={scheduleItems}
       tournamentHistory={tournamentHistory}
+      latestArchiveOverride={publicLatestArchive}
       onNavigate={setActiveTab}
       onReserve={(reservationKey) => {
         setSelectedPublicReservationKey(reservationKey || "");
