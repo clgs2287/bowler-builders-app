@@ -8388,6 +8388,7 @@ function ReservationsTab({
 }) {
   const [rosterNotice, setRosterNotice] = useState("");
   const [deletingReservationId, setDeletingReservationId] = useState(null);
+  const [resendingReservationId, setResendingReservationId] = useState(null);
   const [editingReservationId, setEditingReservationId] = useState(null);
   const [editingReservation, setEditingReservation] = useState(null);
   const [announcementSubject, setAnnouncementSubject] = useState("");
@@ -8724,6 +8725,33 @@ function ReservationsTab({
       rosterAddedAt: new Date().toISOString(),
     }));
     setRosterNotice(result?.alreadyExists ? `${name} is already on the registration roster. The existing row was updated.` : `${name} was sent to Registration.`);
+  };
+
+  const resendReservationEmail = async (reservation) => {
+    const displayName = getReservationDisplayName(reservation) || reservation.name || "Reservation";
+    if (!String(reservation.email || "").trim()) {
+      setRosterNotice(`${displayName} does not have an email address saved.`);
+      return;
+    }
+
+    try {
+      setResendingReservationId(reservation.id);
+      const emailResult = await sendReservationConfirmationEmail({
+        reservation,
+        reservationState,
+        tournamentInfo: reservationState.publicTournamentInfo || tournamentInfo,
+      });
+      setRosterNotice(
+        emailResult?.skipped
+          ? `Confirmation email is not configured, so ${displayName} was not emailed.`
+          : `Confirmation email resent to ${displayName}.`
+      );
+    } catch (error) {
+      setRosterNotice(`Email resend failed for ${displayName}: ${error.message || "unknown email issue"}`);
+      console.warn("Reservation email resend failed", error);
+    } finally {
+      setResendingReservationId(null);
+    }
   };
 
   const clearAllReservations = () => {
@@ -9314,6 +9342,14 @@ function ReservationsTab({
     onClick={() => addReservationToRoster(reservation)}
   >
     {rosterAdded ? "Added" : "Add"}
+  </Button>
+  <Button
+    variant="outline"
+    className="rounded-xl border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-800 hover:bg-blue-100 md:px-3 md:py-2"
+    disabled={resendingReservationId === reservation.id}
+    onClick={() => resendReservationEmail(reservation)}
+  >
+    {resendingReservationId === reservation.id ? "Sending..." : "Resend Email"}
   </Button>
   <Button
     variant="outline"
