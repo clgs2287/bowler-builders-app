@@ -8565,9 +8565,9 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     const competition = event.squadMode === "mixed"
       ? entry.competition || squad?.competition || "Singles"
       : squad?.competition || "Singles";
-    if (competition === "Singles") return 1;
-    if (competition === "Doubles") return 2;
-    return Number(event.teamSize || 5);
+    const expectedCount = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(event.teamSize || 5);
+    const actualCount = Math.max(entry.memberDetails?.length || 0, entry.members?.length || 0);
+    return Math.max(expectedCount, Math.min(actualCount || expectedCount, Number(event.teamSize || 5)));
   };
   const getSquadBowlerCount = (squad, event = multiDayEvent, excludeEntryId = "") =>
     (squad?.entries || []).reduce((sum, entry) => (
@@ -8632,7 +8632,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
         secondChoiceSquadId: entry.secondChoiceSquadId || "",
         assignedSquadId: targetSquadId,
       };
-      return {
+      const nextEvent = {
         ...current,
         squads: currentSquads.map((squad) => {
           const withoutEntry = (squad.entries || []).filter((item) => item.id !== entryId);
@@ -8641,6 +8641,14 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
             : { ...squad, entries: withoutEntry };
         }),
       };
+      const nextTargetSquad = nextEvent.squads.find((squad) => squad.id === targetSquadId);
+      const capacity = Number(nextTargetSquad?.capacity || nextEvent.maxBowlersPerSquad || 0);
+      const finalCount = getSquadBowlerCount(nextTargetSquad, nextEvent);
+      if (capacity && finalCount > capacity) {
+        blockedMessage = `That squad only has ${Math.max(0, capacity - (finalCount - getEntryMemberCountForSquad(placedEntry, nextTargetSquad, nextEvent)))} spot${capacity === 1 ? "" : "s"} left. This entry needs ${getEntryMemberCountForSquad(placedEntry, nextTargetSquad, nextEvent)}.`;
+        return current;
+      }
+      return nextEvent;
     });
     if (blockedMessage) {
       setTestDraftNotice(blockedMessage);
