@@ -8401,32 +8401,6 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     ? entry.memberScores.flat().reduce((sum, score) => sum + Number(score || 0), 0)
     : (entry.scores || []).reduce((sum, score) => sum + Number(score || 0), 0);
   const getEntryCompetition = (entry) => mixedSquads ? entry.competition || (entry.squad.competition === "Mixed" ? "Singles" : entry.squad.competition) || "Singles" : entry.squad.competition || "Singles";
-  const singlesRows = squadEntries
-    .filter((entry) => getEntryCompetition(entry) === "Singles")
-    .map((entry) => ({ name: entry.name || entry.members?.[0] || "Singles Entry", members: [entry.name || entry.members?.[0]].filter(Boolean), scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
-    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
-  const doublesRows = squadEntries
-    .filter((entry) => getEntryCompetition(entry) === "Doubles")
-    .map((entry) => ({ name: entry.name || (entry.members || []).filter(Boolean).join(" / ") || "Doubles Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
-    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
-  const teamRows = squadEntries
-    .filter((entry) => getEntryCompetition(entry) === "Team")
-    .map((entry) => ({ name: entry.name || "Team Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
-    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
-  const allEventsByBowler = squadEntries.reduce((totals, entry) => {
-    const competition = getEntryCompetition(entry);
-    const members = competition === "Singles" ? [entry.name || entry.members?.[0]] : entry.members || [];
-    members.filter(Boolean).forEach((name) => {
-      totals[name] = totals[name] || { name, members: [name], singles: null, doubles: null, team: null };
-      const key = competition === "Singles" ? "singles" : competition === "Doubles" ? "doubles" : "team";
-      if (!totals[name][key]) totals[name][key] = entryTotal(entry);
-    });
-    return totals;
-  }, {});
-  const allEventsRows = Object.values(allEventsByBowler)
-    .map((row) => ({ ...row, total: seriesValue(row.singles) + seriesValue(row.doubles) + seriesValue(row.team) }))
-    .filter((row) => row.total > 0)
-    .sort((a, b) => b.total - a.total);
   const getSquadEntryCompetition = (entry, squad = activeSquad) =>
     mixedSquads ? entry.competition || squad?.competition || "Singles" : squad?.competition || "Singles";
   const getEntryMemberCount = (entry, squad = activeSquad) => {
@@ -8478,6 +8452,32 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     entryHandicapPerGame(entry, squad) * 3;
   const entryHandicapSeries = (entry, squad = activeSquad) =>
     entryScratchTotal(entry, squad) + entryHandicapTotal(entry, squad);
+  const singlesRows = squadEntries
+    .filter((entry) => getEntryCompetition(entry) === "Singles")
+    .map((entry) => ({ name: entry.name || entry.members?.[0] || "Singles Entry", members: [entry.name || entry.members?.[0]].filter(Boolean), scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
+    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
+  const doublesRows = squadEntries
+    .filter((entry) => getEntryCompetition(entry) === "Doubles")
+    .map((entry) => ({ name: entry.name || (entry.members || []).filter(Boolean).join(" / ") || "Doubles Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
+    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
+  const teamRows = squadEntries
+    .filter((entry) => getEntryCompetition(entry) === "Team")
+    .map((entry) => ({ name: entry.name || "Team Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
+    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
+  const allEventsByBowler = squadEntries.reduce((totals, entry) => {
+    const competition = getEntryCompetition(entry);
+    const members = competition === "Singles" ? [entry.name || entry.members?.[0]] : entry.members || [];
+    members.filter(Boolean).forEach((name) => {
+      totals[name] = totals[name] || { name, members: [name], singles: null, doubles: null, team: null };
+      const key = competition === "Singles" ? "singles" : competition === "Doubles" ? "doubles" : "team";
+      if (!totals[name][key]) totals[name][key] = entryTotal(entry);
+    });
+    return totals;
+  }, {});
+  const allEventsRows = Object.values(allEventsByBowler)
+    .map((row) => ({ ...row, total: seriesValue(row.singles) + seriesValue(row.doubles) + seriesValue(row.team) }))
+    .filter((row) => row.total > 0)
+    .sort((a, b) => b.total - a.total);
   const bowlerIdentityKey = (value) => normalizeMatchText(value).replace(/\s+/g, " ");
   const knownBowlerProfiles = squads.reduce((profiles, squad) => {
     (squad.entries || []).forEach((entry) => {
