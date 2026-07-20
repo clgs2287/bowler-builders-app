@@ -8390,6 +8390,10 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       return next;
     });
   };
+  const confirmRemoveSquadEntry = (squadId, entryId) => {
+    if (typeof window !== "undefined" && !window.confirm("Delete this entry? This cannot be undone.")) return;
+    removeSquadEntry(squadId, entryId);
+  };
   const removeBowler = (id) => setMultiDayEvent((current) => ({ ...current, bowlers: (current.bowlers || []).filter((bowler) => bowler.id !== id) }));
   const bowlers = multiDayEvent.bowlers || [];
   const squads = multiDayEvent.squads || [];
@@ -8576,10 +8580,28 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     if (!capacity) return true;
     return getSquadBowlerCount(squad, event, entry.id) + getEntryMemberCountForSquad(entry, squad, event) <= capacity;
   };
+  const entryBowlerKeys = (entry, squad = activeSquad) =>
+    entryMembers(entry, squad).map((member) => bowlerIdentityKey(member.name)).filter(Boolean);
+  const squadCanHostEntry = (squad, entry, event = multiDayEvent) => {
+    if (!squad) return false;
+    if (event.squadMode === "mixed" || squad.competition === "Mixed") return true;
+    return !entry.competition || entry.competition === squad.competition;
+  };
+  const squadHasBowlerConflict = (squad, entry, event = multiDayEvent) => {
+    const nextKeys = new Set(entryBowlerKeys(entry, squad));
+    if (!nextKeys.size) return false;
+    return (squad?.entries || []).some((existing) => {
+      if (String(existing.id) === String(entry.id)) return false;
+      return entryBowlerKeys(existing, squad).some((key) => nextKeys.has(key));
+    });
+  };
   const saveEntryByChoices = (squadId, entryId) => {
     let placedSquadId = squadId;
     let placedLabel = "";
     let wasFull = false;
+    let hadConflict = false;
+    let usedAutoSquad = false;
+    let blockedMessage = "";
 
     setMultiDayEvent((current) => {
       const currentSquads = current.squads || [];
@@ -8591,15 +8613,27 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       const secondChoiceId = entry.secondChoiceSquadId || "";
       const firstChoice = currentSquads.find((squad) => squad.id === firstChoiceId);
       const secondChoice = currentSquads.find((squad) => squad.id === secondChoiceId);
-      const targetSquad = squadHasRoomForEntry(firstChoice, entry, current)
-        ? firstChoice
-        : squadHasRoomForEntry(secondChoice, entry, current)
-          ? secondChoice
-          : firstChoice || sourceSquad;
+      const candidateSquads = [firstChoice, secondChoice, ...currentSquads]
+        .filter(Boolean)
+        .filter((squad, index, list) => list.findIndex((item) => item.id === squad.id) === index)
+        .filter((squad) => squadCanHostEntry(squad, entry, current));
+      const firstChoiceBlocked = firstChoice && (
+        !squadHasRoomForEntry(firstChoice, entry, current) || squadHasBowlerConflict(firstChoice, entry, current)
+      );
+      const targetSquad = candidateSquads.find((squad) =>
+        squadHasRoomForEntry(squad, entry, current) && !squadHasBowlerConflict(squad, entry, current)
+      );
+
+      if (!targetSquad) {
+        blockedMessage = "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
+        return current;
+      }
 
       placedSquadId = targetSquad?.id || squadId;
       placedLabel = squadLabel(targetSquad || sourceSquad);
-      wasFull = Boolean(firstChoice && targetSquad?.id !== firstChoice.id);
+      wasFull = Boolean(firstChoiceBlocked && firstChoice && !squadHasRoomForEntry(firstChoice, entry, current));
+      hadConflict = Boolean(firstChoiceBlocked && firstChoice && squadHasBowlerConflict(firstChoice, entry, current));
+      usedAutoSquad = Boolean(firstChoice && secondChoice && targetSquad.id !== firstChoice.id && targetSquad.id !== secondChoice.id);
 
       const placedEntry = {
         ...entry,
@@ -8619,9 +8653,13 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       };
     });
 
+    if (blockedMessage) {
+      setTestDraftNotice(blockedMessage);
+      return;
+    }
     setSelectedSquadId(placedSquadId);
     setCollapsedEntryIds((current) => ({ ...current, [entryId]: true }));
-    setTestDraftNotice(`${wasFull ? "First choice was full. " : ""}Saved entry to ${placedLabel || "selected squad"}.`);
+    setTestDraftNotice(`${wasFull ? "First choice was full. " : ""}${hadConflict ? "First choice already had one of these bowlers. " : ""}${usedAutoSquad ? "Found the next available squad. " : ""}Saved entry to ${placedLabel || "selected squad"}.`);
   };
   const saveMultiDayTestDraft = () => {
     if (typeof window === "undefined") return;
@@ -8894,7 +8932,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                             Save Entry
                           </Button>
                         )}
-                        <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => removeSquadEntry(activeSquad.id, entry.id)}>
+                        <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => confirmRemoveSquadEntry(activeSquad.id, entry.id)}>
                           Delete Entry
                         </Button>
                       </div>
