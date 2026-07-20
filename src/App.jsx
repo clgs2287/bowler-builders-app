@@ -8673,47 +8673,33 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const saveEntryByChoices = (squadId, entryId) => {
     let wasFull = false;
     let hadConflict = false;
-    let blockedMessage = "";
-    let choiceTargetId = "";
-    let fallbackOptions = [];
-
-    setMultiDayEvent((current) => {
-      const currentSquads = current.squads || [];
-      const sourceSquad = currentSquads.find((squad) => squad.id === squadId);
-      const entry = sourceSquad?.entries?.find((item) => item.id === entryId);
-      if (!entry) return current;
-
-      const firstChoiceId = entry.firstChoiceSquadId || squadId;
-      const firstChoice = currentSquads.find((squad) => squad.id === firstChoiceId);
-      const firstChoiceBlocked = firstChoice && (
-        !squadHasRoomForEntry(firstChoice, entry, current) || squadHasBowlerConflict(firstChoice, entry, current)
-      );
-      if (firstChoice && entryCanBePlacedInSquad(firstChoice, entry, current)) {
-        choiceTargetId = firstChoice.id;
-        return current;
-      }
-
-      if (firstChoiceBlocked) {
-        wasFull = Boolean(!squadHasRoomForEntry(firstChoice, entry, current));
-        hadConflict = Boolean(squadHasBowlerConflict(firstChoice, entry, current));
-      }
-
-      {
-        fallbackOptions = availablePlacementOptions(currentSquads, entry, current);
-        blockedMessage = fallbackOptions.length
-          ? `${wasFull ? "First choice is full. " : ""}${hadConflict ? "First choice already has one of these bowlers. " : ""}Pick where to place this entry.`
-          : "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
-        return current;
-      }
-    });
-
-    if (blockedMessage) {
-      setTestDraftNotice(blockedMessage);
-      setPendingPlacement(fallbackOptions.length ? { sourceSquadId: squadId, entryId, options: fallbackOptions } : null);
+    const currentEvent = multiDayEvent;
+    const currentSquads = currentEvent.squads || [];
+    const sourceSquad = currentSquads.find((squad) => squad.id === squadId);
+    const entry = sourceSquad?.entries?.find((item) => item.id === entryId);
+    if (!entry) {
+      setTestDraftNotice("Could not find that entry. Refresh and try again.");
       return;
     }
-    setPendingPlacement(null);
-    placeEntryInSquad(squadId, entryId, choiceTargetId, `${wasFull ? "First choice was full. " : ""}${hadConflict ? "First choice already had one of these bowlers. " : ""}`);
+
+    const firstChoiceId = entry.firstChoiceSquadId || squadId;
+    const firstChoice = currentSquads.find((squad) => squad.id === firstChoiceId);
+    if (firstChoice && entryCanBePlacedInSquad(firstChoice, entry, currentEvent)) {
+      setPendingPlacement(null);
+      placeEntryInSquad(squadId, entryId, firstChoice.id);
+      return;
+    }
+
+    if (firstChoice) {
+      wasFull = Boolean(!squadHasRoomForEntry(firstChoice, entry, currentEvent));
+      hadConflict = Boolean(squadHasBowlerConflict(firstChoice, entry, currentEvent));
+    }
+    const fallbackOptions = availablePlacementOptions(currentSquads, entry, currentEvent);
+    const blockedMessage = fallbackOptions.length
+      ? `${wasFull ? "First choice is full. " : ""}${hadConflict ? "First choice already has one of these bowlers. " : ""}Pick where to place this entry.`
+      : "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
+    setTestDraftNotice(blockedMessage);
+    setPendingPlacement(fallbackOptions.length ? { sourceSquadId: squadId, entryId, options: fallbackOptions } : null);
   };
   const saveMultiDayTestDraft = () => {
     if (typeof window === "undefined") return;
