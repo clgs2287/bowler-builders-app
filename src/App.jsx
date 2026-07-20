@@ -8437,7 +8437,6 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
           usbc: member.usbc || existing.usbc || "",
           average: member.average || existing.average || "",
           league: member.league || existing.league || "",
-          allEvents: Boolean(existing.allEvents || member.allEvents),
           youth: Boolean(existing.youth || member.youth),
         };
       });
@@ -8454,7 +8453,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       usbc: member.usbc || profile.usbc || "",
       average: member.average || profile.average || "",
       league: member.league || profile.league || "",
-      allEvents: Boolean(member.allEvents || profile.allEvents),
+      allEvents: Boolean(member.allEvents),
       youth: Boolean(member.youth || profile.youth),
     };
   };
