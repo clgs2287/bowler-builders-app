@@ -8425,9 +8425,10 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   ].filter(Boolean).join(" - ");
   const entryMembers = (entry, squad = activeSquad) => {
     const count = getEntryMemberCount(entry, squad);
+    const competition = getSquadEntryCompetition(entry, squad);
     return Array.from({ length: count }, (_, index) => {
       const detail = entry.memberDetails?.[index] || {};
-      const name = detail.name || entry.members?.[index] || "";
+      const name = detail.name || entry.members?.[index] || (competition === "Singles" && index === 0 ? entry.name : "") || "";
       return { ...detail, name };
     });
   };
@@ -8506,13 +8507,12 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     const profile = knownBowlerProfiles[bowlerIdentityKey(nameValue)];
     if (!profile) return { ...member, name: nameValue };
     return {
-      ...member,
       name: nameValue,
-      usbc: member.usbc || profile.usbc || "",
-      average: member.average || profile.average || "",
-      league: member.league || profile.league || "",
-      allEvents: Boolean(member.allEvents),
-      youth: Boolean(member.youth || profile.youth),
+      usbc: profile.usbc || "",
+      average: profile.average || "",
+      league: profile.league || "",
+      allEvents: false,
+      youth: Boolean(profile.youth),
     };
   };
   const updateEntryName = (squadId, entryId, competition, value) => updateSquadEntry(squadId, entryId, (current) => {
