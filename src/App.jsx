@@ -8659,6 +8659,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
             <div className="space-y-4">
               {(activeSquad.entries || []).map((entry, entryIndex) => {
                 const competition = getSquadEntryCompetition(entry, activeSquad);
+                const isTeamEntry = competition === "Team";
                 const members = entryMembers(entry, activeSquad);
                 const feeEstimate = entryFeeEstimate(entry, activeSquad);
 
@@ -8695,18 +8696,6 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                         <Input value={entry.name || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, name: e.target.value }))} placeholder={competition === "Singles" ? "Bowler name" : "Team name"} />
                       </div>
                       <div>
-                        <Label>Captain</Label>
-                        <Input value={entry.captain || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, captain: e.target.value }))} />
-                      </div>
-                      <div>
-                        <Label>Phone</Label>
-                        <Input value={entry.phone || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, phone: formatPhoneNumber(e.target.value) }))} />
-                      </div>
-                      <div>
-                        <Label>Email</Label>
-                        <Input value={entry.email || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, email: e.target.value }))} />
-                      </div>
-                      <div>
                         <Label>First Choice Squad</Label>
                         <select
                           value={entry.firstChoiceSquadId || activeSquad.id}
@@ -8732,6 +8721,30 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                         <Switch checked={Boolean(entry.paid)} onCheckedChange={(checked) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, paid: checked }))} />
                       </label>
                     </div>
+
+                    {isTeamEntry && (
+                      <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                        <h4 className="mb-3 text-sm font-black uppercase tracking-wide text-blue-900">Team Contact</h4>
+                        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                          <div>
+                            <Label>Captain</Label>
+                            <Input value={entry.captain || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, captain: e.target.value }))} />
+                          </div>
+                          <div>
+                            <Label>Phone</Label>
+                            <Input value={entry.phone || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, phone: formatPhoneNumber(e.target.value) }))} />
+                          </div>
+                          <div>
+                            <Label>Email</Label>
+                            <Input value={entry.email || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, email: e.target.value }))} />
+                          </div>
+                          <div>
+                            <Label>Address</Label>
+                            <Input value={entry.address || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, address: e.target.value }))} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-4 overflow-auto rounded-2xl border border-blue-100">
                       <table className="w-full min-w-[920px] text-sm">
