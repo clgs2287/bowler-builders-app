@@ -8568,6 +8568,8 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     (squad?.entries || []).reduce((sum, entry) => (
       String(entry.id) === String(excludeEntryId) ? sum : sum + getEntryMemberCountForSquad(entry, squad, event)
     ), 0);
+  const activeSquadBowlerCount = activeSquad ? getSquadBowlerCount(activeSquad) : 0;
+  const activeSquadCapacity = Number(activeSquad?.capacity || multiDayEvent.maxBowlersPerSquad || 0);
   const squadHasRoomForEntry = (squad, entry, event = multiDayEvent) => {
     if (!squad) return false;
     const capacity = Number(squad.capacity || event.maxBowlersPerSquad || 0);
@@ -8838,9 +8840,14 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               </select>
             </div>
             <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
-              {activeSquad
-                ? `${activeCompetition} squad${activeSquad.lanes ? ` on lanes ${activeSquad.lanes}` : ""}${activeSquad.capacity ? ` - capacity ${activeSquad.capacity} bowlers` : ""}`
-                : "Add squads first on the Squads tab."}
+              {activeSquad ? (
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <span>{`${activeCompetition} squad${activeSquad.lanes ? ` on lanes ${activeSquad.lanes}` : ""}`}</span>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-900">
+                    {activeSquadCapacity ? `${activeSquadBowlerCount}/${activeSquadCapacity} bowlers` : `${activeSquadBowlerCount} bowlers`}
+                  </span>
+                </div>
+              ) : "Add squads first on the Squads tab."}
             </div>
           </div>
           <datalist id="multi-day-known-bowlers">
