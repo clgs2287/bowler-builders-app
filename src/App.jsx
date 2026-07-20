@@ -8318,6 +8318,7 @@ function makeMultiDaySquadEntry(competition = "Singles") {
 function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const [selectedSquadId, setSelectedSquadId] = useState("");
   const [testDraftNotice, setTestDraftNotice] = useState("");
+  const [collapsedEntryIds, setCollapsedEntryIds] = useState({});
   const updateEvent = (field, value) => setMultiDayEvent((current) => ({ ...current, [field]: value }));
   const updateScoringDivision = (field, value) => setMultiDayEvent((current) => ({
     ...current,
@@ -8353,20 +8354,42 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     setMultiDayEvent((current) => ({ ...current, squads: [...(current.squads || []), squad] }));
     setSelectedSquadId(squad.id);
   };
-  const addSquadEntry = (squadId) => setMultiDayEvent((current) => ({
-    ...current,
-    squads: (current.squads || []).map((squad) =>
-      squad.id === squadId ? { ...squad, entries: [...(squad.entries || []), makeMultiDaySquadEntry(squad.competition === "Mixed" ? "Singles" : squad.competition)] } : squad
-    ),
-  }));
+  const addSquadEntry = (squadId) => {
+    const entryId = `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setMultiDayEvent((current) => ({
+      ...current,
+      squads: (current.squads || []).map((squad) => {
+        if (squad.id !== squadId) return squad;
+        return {
+          ...squad,
+          entries: [
+            ...(squad.entries || []),
+            {
+              ...makeMultiDaySquadEntry(squad.competition === "Mixed" ? "Singles" : squad.competition),
+              id: entryId,
+              firstChoiceSquadId: squadId,
+            },
+          ],
+        };
+      }),
+    }));
+    setCollapsedEntryIds((current) => ({ ...current, [entryId]: false }));
+  };
   const addBowler = () => setMultiDayEvent((current) => ({ ...current, bowlers: [...(current.bowlers || []), makeMultiDayBowler()] }));
   const removeSquad = (id) => setMultiDayEvent((current) => ({ ...current, squads: (current.squads || []).filter((squad) => squad.id !== id) }));
-  const removeSquadEntry = (squadId, entryId) => setMultiDayEvent((current) => ({
-    ...current,
-    squads: (current.squads || []).map((squad) =>
-      squad.id === squadId ? { ...squad, entries: (squad.entries || []).filter((entry) => entry.id !== entryId) } : squad
-    ),
-  }));
+  const removeSquadEntry = (squadId, entryId) => {
+    setMultiDayEvent((current) => ({
+      ...current,
+      squads: (current.squads || []).map((squad) =>
+        squad.id === squadId ? { ...squad, entries: (squad.entries || []).filter((entry) => entry.id !== entryId) } : squad
+      ),
+    }));
+    setCollapsedEntryIds((current) => {
+      const next = { ...current };
+      delete next[entryId];
+      return next;
+    });
+  };
   const removeBowler = (id) => setMultiDayEvent((current) => ({ ...current, bowlers: (current.bowlers || []).filter((bowler) => bowler.id !== id) }));
   const bowlers = multiDayEvent.bowlers || [];
   const squads = multiDayEvent.squads || [];
@@ -8532,6 +8555,71 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
         : Number(multiDayEvent.teamPrice || 0);
     const allEventsTotal = members.filter((member) => member.allEvents).length * Number(multiDayEvent.allEventsPrice || 0);
     return members.length * basePrice + allEventsTotal;
+  };
+  const getEntryMemberCountForSquad = (entry, squad, event = multiDayEvent) => {
+    const competition = event.squadMode === "mixed"
+      ? entry.competition || squad?.competition || "Singles"
+      : squad?.competition || "Singles";
+    if (competition === "Singles") return 1;
+    if (competition === "Doubles") return 2;
+    return Number(event.teamSize || 5);
+  };
+  const getSquadBowlerCount = (squad, event = multiDayEvent, excludeEntryId = "") =>
+    (squad?.entries || []).reduce((sum, entry) => (
+      String(entry.id) === String(excludeEntryId) ? sum : sum + getEntryMemberCountForSquad(entry, squad, event)
+    ), 0);
+  const squadHasRoomForEntry = (squad, entry, event = multiDayEvent) => {
+    if (!squad) return false;
+    const capacity = Number(squad.capacity || event.maxBowlersPerSquad || 0);
+    if (!capacity) return true;
+    return getSquadBowlerCount(squad, event, entry.id) + getEntryMemberCountForSquad(entry, squad, event) <= capacity;
+  };
+  const saveEntryByChoices = (squadId, entryId) => {
+    let placedSquadId = squadId;
+    let placedLabel = "";
+    let wasFull = false;
+
+    setMultiDayEvent((current) => {
+      const currentSquads = current.squads || [];
+      const sourceSquad = currentSquads.find((squad) => squad.id === squadId);
+      const entry = sourceSquad?.entries?.find((item) => item.id === entryId);
+      if (!entry) return current;
+
+      const firstChoiceId = entry.firstChoiceSquadId || squadId;
+      const secondChoiceId = entry.secondChoiceSquadId || "";
+      const firstChoice = currentSquads.find((squad) => squad.id === firstChoiceId);
+      const secondChoice = currentSquads.find((squad) => squad.id === secondChoiceId);
+      const targetSquad = squadHasRoomForEntry(firstChoice, entry, current)
+        ? firstChoice
+        : squadHasRoomForEntry(secondChoice, entry, current)
+          ? secondChoice
+          : firstChoice || sourceSquad;
+
+      placedSquadId = targetSquad?.id || squadId;
+      placedLabel = squadLabel(targetSquad || sourceSquad);
+      wasFull = Boolean(firstChoice && targetSquad?.id !== firstChoice.id);
+
+      const placedEntry = {
+        ...entry,
+        firstChoiceSquadId: firstChoiceId,
+        secondChoiceSquadId: secondChoiceId,
+        assignedSquadId: placedSquadId,
+      };
+
+      return {
+        ...current,
+        squads: currentSquads.map((squad) => {
+          const withoutEntry = (squad.entries || []).filter((item) => item.id !== entryId);
+          return squad.id === placedSquadId
+            ? { ...squad, entries: [...withoutEntry, placedEntry] }
+            : { ...squad, entries: withoutEntry };
+        }),
+      };
+    });
+
+    setSelectedSquadId(placedSquadId);
+    setCollapsedEntryIds((current) => ({ ...current, [entryId]: true }));
+    setTestDraftNotice(`${wasFull ? "First choice was full. " : ""}Saved entry to ${placedLabel || "selected squad"}.`);
   };
   const saveMultiDayTestDraft = () => {
     if (typeof window === "undefined") return;
@@ -8774,6 +8862,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                 const isTeamEntry = competition === "Team";
                 const members = entryMembers(entry, activeSquad);
                 const feeEstimate = entryFeeEstimate(entry, activeSquad);
+                const isCollapsed = Boolean(collapsedEntryIds[entry.id]);
 
                 return (
                   <div key={entry.id} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
@@ -8781,15 +8870,31 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                       <div>
                         <p className="text-xs font-black uppercase tracking-wide text-blue-700">Entry {entryIndex + 1}</p>
                         <h3 className="mt-1 text-lg font-black text-blue-950">{entry.name || members.map((member) => member.name).filter(Boolean).join(" / ") || `${competition} Entry`}</h3>
+                        {isCollapsed && (
+                          <p className="mt-1 text-sm font-semibold text-blue-700">
+                            {competition} - {members.map((member) => member.name).filter(Boolean).join(", ") || "No bowlers entered"} - {squadLabel(activeSquad)}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">Estimated ${feeEstimate.toFixed(2)}</span>
+                        {isCollapsed ? (
+                          <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100" onClick={() => setCollapsedEntryIds((current) => ({ ...current, [entry.id]: false }))}>
+                            Edit Entry
+                          </Button>
+                        ) : (
+                          <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => saveEntryByChoices(activeSquad.id, entry.id)}>
+                            Save Entry
+                          </Button>
+                        )}
                         <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => removeSquadEntry(activeSquad.id, entry.id)}>
                           Delete Entry
                         </Button>
                       </div>
                     </div>
 
+                    {isCollapsed ? null : (
+                    <>
                     <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       {mixedSquads && (
                         <div>
@@ -8891,6 +8996,8 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                         </tbody>
                       </table>
                     </div>
+                    </>
+                    )}
                   </div>
                 );
               })}
