@@ -8425,14 +8425,52 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       return { ...detail, name };
     });
   };
+  const bowlerIdentityKey = (value) => normalizeMatchText(value).replace(/\s+/g, " ");
+  const knownBowlerProfiles = squads.reduce((profiles, squad) => {
+    (squad.entries || []).forEach((entry) => {
+      entryMembers(entry, squad).forEach((member) => {
+        const key = bowlerIdentityKey(member.name);
+        if (!key) return;
+        const existing = profiles[key] || {};
+        profiles[key] = {
+          name: member.name || existing.name || "",
+          usbc: member.usbc || existing.usbc || "",
+          average: member.average || existing.average || "",
+          league: member.league || existing.league || "",
+          allEvents: Boolean(existing.allEvents || member.allEvents),
+          youth: Boolean(existing.youth || member.youth),
+        };
+      });
+    });
+    return profiles;
+  }, {});
+  const knownBowlerOptions = Object.values(knownBowlerProfiles).sort((a, b) => a.name.localeCompare(b.name));
+  const backfillKnownBowler = (member = {}, nameValue = "") => {
+    const profile = knownBowlerProfiles[bowlerIdentityKey(nameValue)];
+    if (!profile) return { ...member, name: nameValue };
+    return {
+      ...member,
+      name: nameValue,
+      usbc: member.usbc || profile.usbc || "",
+      average: member.average || profile.average || "",
+      league: member.league || profile.league || "",
+      allEvents: Boolean(member.allEvents || profile.allEvents),
+      youth: Boolean(member.youth || profile.youth),
+    };
+  };
+  const updateEntryName = (squadId, entryId, competition, value) => updateSquadEntry(squadId, entryId, (current) => {
+    if (competition !== "Singles") return { ...current, name: value };
+    const members = [...(current.members || [])];
+    const memberDetails = [...(current.memberDetails || [])];
+    members[0] = value;
+    memberDetails[0] = backfillKnownBowler(memberDetails[0] || {}, value);
+    return { ...current, name: value, members, memberDetails };
+  });
   const updateEntryMemberName = (squadId, entryId, memberIndex, value) => updateSquadEntry(squadId, entryId, (current) => {
     const members = [...(current.members || [])];
     const memberDetails = [...(current.memberDetails || [])];
     members[memberIndex] = value;
-    memberDetails[memberIndex] = {
-      ...(memberDetails[memberIndex] || {}),
-      name: value,
-    };
+    memberDetails[memberIndex] = backfillKnownBowler(memberDetails[memberIndex] || {}, value);
     return { ...current, members, memberDetails };
   });
   const updateEntryMemberDetail = (squadId, entryId, memberIndex, field, value) => updateSquadEntry(squadId, entryId, (current) => {
@@ -8648,6 +8686,11 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                 : "Add squads first on the Squads tab."}
             </div>
           </div>
+          <datalist id="multi-day-known-bowlers">
+            {knownBowlerOptions.map((bowler) => (
+              <option key={bowlerIdentityKey(bowler.name)} value={bowler.name} />
+            ))}
+          </datalist>
 
           {!activeSquad && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
@@ -8693,7 +8736,12 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                       )}
                       <div>
                         <Label>{competition === "Singles" ? "Bowler Name" : `${competition} / Team Name`}</Label>
-                        <Input value={entry.name || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, name: e.target.value }))} placeholder={competition === "Singles" ? "Bowler name" : "Team name"} />
+                        <Input
+                          value={entry.name || ""}
+                          list={competition === "Singles" ? "multi-day-known-bowlers" : undefined}
+                          onChange={(e) => updateEntryName(activeSquad.id, entry.id, competition, e.target.value)}
+                          placeholder={competition === "Singles" ? "Bowler name" : "Team name"}
+                        />
                       </div>
                       <div>
                         <Label>First Choice Squad</Label>
@@ -8763,7 +8811,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                           {members.map((member, memberIndex) => (
                             <tr key={`${entry.id}-member-${memberIndex}`} className="border-t">
                               <td className="p-3 font-black text-blue-950">{memberIndex + 1}</td>
-                              <td className="p-2"><Input value={member.name || ""} onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
+                              <td className="p-2"><Input value={member.name || ""} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
                               <td className="p-2"><Input value={member.usbc || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", e.target.value)} /></td>
                               <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
                               <td className="p-2"><Input value={member.league || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "league", e.target.value)} placeholder="League / center" /></td>
