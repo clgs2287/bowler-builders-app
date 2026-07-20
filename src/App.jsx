@@ -8368,6 +8368,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               ...makeMultiDaySquadEntry(squad.competition === "Mixed" ? "Singles" : squad.competition),
               id: entryId,
               firstChoiceSquadId: squadId,
+              draft: true,
             },
             ...(squad.entries || []),
           ],
@@ -8571,7 +8572,9 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   };
   const getSquadBowlerCount = (squad, event = multiDayEvent, excludeEntryId = "") =>
     (squad?.entries || []).reduce((sum, entry) => (
-      String(entry.id) === String(excludeEntryId) ? sum : sum + getEntryMemberCountForSquad(entry, squad, event)
+      String(entry.id) === String(excludeEntryId) || entry.draft
+        ? sum
+        : sum + getEntryMemberCountForSquad(entry, squad, event)
     ), 0);
   const activeSquadBowlerCount = activeSquad ? getSquadBowlerCount(activeSquad) : 0;
   const activeSquadCapacity = Number(activeSquad?.capacity || multiDayEvent.maxBowlersPerSquad || 0);
@@ -8631,6 +8634,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
         firstChoiceSquadId: entry.firstChoiceSquadId || sourceSquadId,
         secondChoiceSquadId: entry.secondChoiceSquadId || "",
         assignedSquadId: targetSquadId,
+        draft: false,
       };
       const nextEvent = {
         ...current,
