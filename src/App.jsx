@@ -8175,6 +8175,74 @@ function TournamentRecapTab({
   );
 }
 
+const MULTI_EVENT_COMPETITION_TYPES = ["Singles", "Doubles", "Team"];
+
+const DEFAULT_MULTI_EVENT_DEFINITIONS = [
+  { id: "singles", label: "Singles", competition: "Singles", teamSize: 1, games: 3, enabled: true },
+  { id: "doubles", label: "Doubles", competition: "Doubles", teamSize: 2, games: 3, enabled: true },
+  { id: "team", label: "Team", competition: "Team", teamSize: 3, games: 3, enabled: true },
+  { id: "allEvents", label: "All Events", competition: "All Events", teamSize: 1, games: 9, enabled: true },
+  { id: "youth", label: "Youth", competition: "Singles", teamSize: 1, games: 3, enabled: false },
+];
+
+function makeMultiDaySquad(overrides = {}) {
+  return {
+    id: `squad-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    date: "",
+    time: "",
+    competition: "Singles",
+    lanes: "",
+    capacity: "",
+    entries: [],
+    ...overrides,
+  };
+}
+
+function createStrikefestMultiDayEvent() {
+  const base = createDefaultMultiDayEvent();
+  return {
+    ...base,
+    name: "Strikefest '26",
+    season: "2026",
+    startDate: "2026-01-31",
+    endDate: "2026-02-01",
+    center: "Just-In-Time Recreation",
+    address: "24 Mollison Way, Lewiston, ME 04240",
+    teamSize: 3,
+    squadMode: "mixed",
+    singlesPrice: 35,
+    doublesPrice: 35,
+    teamPrice: 35,
+    allEventsPrice: 7,
+    maxBowlersPerSquad: 48,
+    checkInMinutes: 30,
+    entriesCloseDate: "2026-01-24",
+    handicapBase: 240,
+    handicapPercent: 100,
+    handicapMax: "",
+    scoringDivisions: { scratch: true, handicap: true, youthScratch: true, youthHandicap: true },
+    allEventsRule: "First singles, first doubles, and first team/trios appearance count toward All Events.",
+    notes: "Bowl any event on any squad time. Re-entries allowed at tournament manager discretion and lane availability.",
+    eventDefinitions: [
+      { id: "trios", label: "Trios", competition: "Team", teamSize: 3, games: 3, enabled: true },
+      { id: "doubles", label: "Doubles", competition: "Doubles", teamSize: 2, games: 3, enabled: true },
+      { id: "singles", label: "Singles", competition: "Singles", teamSize: 1, games: 3, enabled: true },
+      { id: "allEvents", label: "All Events", competition: "All Events", teamSize: 1, games: 9, enabled: true },
+      { id: "youth", label: "Youth", competition: "Singles", teamSize: 1, games: 3, enabled: true },
+    ],
+    squads: [
+      makeMultiDaySquad({ date: "2026-01-31", time: "08:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-01-31", time: "10:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-01-31", time: "13:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-01-31", time: "15:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-02-01", time: "08:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-02-01", time: "10:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-02-01", time: "13:00", competition: "Mixed", lanes: "", capacity: 48 }),
+      makeMultiDaySquad({ date: "2026-02-01", time: "15:00", competition: "Mixed", lanes: "", capacity: 48 }),
+    ],
+  };
+}
+
 function createDefaultMultiDayEvent() {
   return {
     name: "Multi-Day Event",
@@ -8189,19 +8257,18 @@ function createDefaultMultiDayEvent() {
     doublesPrice: 0,
     teamPrice: 0,
     allEventsPrice: 0,
+    maxBowlersPerSquad: 48,
+    checkInMinutes: 30,
+    entriesCloseDate: "",
+    handicapBase: 240,
+    handicapPercent: 100,
+    handicapMax: "",
+    scoringDivisions: { scratch: true, handicap: true, youthScratch: false, youthHandicap: false },
+    allEventsRule: "First singles, first doubles, and first team appearance count toward All Events.",
+    notes: "",
+    eventDefinitions: DEFAULT_MULTI_EVENT_DEFINITIONS,
     squads: [],
     bowlers: [],
-  };
-}
-
-function makeMultiDaySquad() {
-  return {
-    id: `squad-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    date: "",
-    time: "",
-    competition: "Singles",
-    lanes: "",
-    capacity: "",
   };
 }
 
@@ -8232,6 +8299,19 @@ function makeMultiDaySquadEntry(competition = "Singles") {
 function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const [selectedSquadId, setSelectedSquadId] = useState("");
   const updateEvent = (field, value) => setMultiDayEvent((current) => ({ ...current, [field]: value }));
+  const updateScoringDivision = (field, value) => setMultiDayEvent((current) => ({
+    ...current,
+    scoringDivisions: {
+      ...(current.scoringDivisions || {}),
+      [field]: value,
+    },
+  }));
+  const updateEventDefinition = (id, field, value) => setMultiDayEvent((current) => ({
+    ...current,
+    eventDefinitions: (current.eventDefinitions || DEFAULT_MULTI_EVENT_DEFINITIONS).map((eventType) =>
+      eventType.id === id ? { ...eventType, [field]: value } : eventType
+    ),
+  }));
   const updateCenter = (centerName) => {
     const center = BOWLING_CENTERS.find((item) => item.name === centerName);
     setMultiDayEvent((current) => ({ ...current, center: centerName, address: center?.address || current.address || "" }));
@@ -8256,7 +8336,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const addSquadEntry = (squadId) => setMultiDayEvent((current) => ({
     ...current,
     squads: (current.squads || []).map((squad) =>
-      squad.id === squadId ? { ...squad, entries: [...(squad.entries || []), makeMultiDaySquadEntry(squad.competition)] } : squad
+      squad.id === squadId ? { ...squad, entries: [...(squad.entries || []), makeMultiDaySquadEntry(squad.competition === "Mixed" ? "Singles" : squad.competition)] } : squad
     ),
   }));
   const addBowler = () => setMultiDayEvent((current) => ({ ...current, bowlers: [...(current.bowlers || []), makeMultiDayBowler()] }));
@@ -8275,7 +8355,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const activeSquad = squads.find((squad) => squad.id === selectedSquadId) || squads[0] || null;
   const squadEntries = squads.flatMap((squad) => (squad.entries || []).map((entry) => ({ ...entry, squad })));
   const entryTotal = (entry) => (entry.scores || []).reduce((sum, score) => sum + Number(score || 0), 0);
-  const getEntryCompetition = (entry) => mixedSquads ? entry.competition || entry.squad.competition || "Singles" : entry.squad.competition || "Singles";
+  const getEntryCompetition = (entry) => mixedSquads ? entry.competition || (entry.squad.competition === "Mixed" ? "Singles" : entry.squad.competition) || "Singles" : entry.squad.competition || "Singles";
   const singlesRows = squadEntries
     .filter((entry) => getEntryCompetition(entry) === "Singles")
     .map((entry) => ({ name: entry.name || entry.members?.[0] || "Singles Entry", members: [entry.name || entry.members?.[0]].filter(Boolean), total: entryTotal(entry), squadDate: entry.squad.date }))
@@ -8329,24 +8409,132 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   );
 
   if (mode === "setup") {
-    return <AppCard><CardContent className="space-y-5 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Multi-Day Event Setup</h2><p className="text-sm font-semibold text-blue-700">Separate from the regular tournament workflow.</p></div><div className="grid gap-4 md:grid-cols-2">
-      <div><Label>Event Name</Label><Input value={multiDayEvent.name || ""} onChange={(e) => updateEvent("name", e.target.value)} /></div>
-      <div><Label>Season</Label><Input value={multiDayEvent.season || ""} onChange={(e) => updateEvent("season", e.target.value)} /></div>
-      <div><Label>Start Date</Label><Input type="date" value={multiDayEvent.startDate || ""} onChange={(e) => updateEvent("startDate", e.target.value)} /></div>
-      <div><Label>End Date</Label><Input type="date" value={multiDayEvent.endDate || ""} onChange={(e) => updateEvent("endDate", e.target.value)} /></div>
-      <div><Label>Bowling Center</Label><select value={multiDayEvent.center || ""} onChange={(e) => updateCenter(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="">Select center</option>{BOWLING_CENTERS.map((center) => <option key={center.name} value={center.name}>{center.name}</option>)}</select></div>
-      <div><Label>Address</Label><Input value={multiDayEvent.address || ""} onChange={(e) => updateEvent("address", e.target.value)} /></div>
-      <div><Label>Team Size</Label><select value={multiDayEvent.teamSize || 5} onChange={(e) => updateEvent("teamSize", Number(e.target.value))} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value={3}>3 Person Teams</option><option value={4}>4 Person Teams</option><option value={5}>5 Person Teams</option></select></div>
-      <div><Label>Squad Format</Label><select value={multiDayEvent.squadMode || "fixed"} onChange={(e) => updateEvent("squadMode", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="fixed">Each squad is one event type</option><option value="mixed">Any event in any squad</option></select></div>
-      <div><Label>All Events Price</Label><Input type="number" value={multiDayEvent.allEventsPrice || ""} onChange={(e) => updateEvent("allEventsPrice", e.target.value)} /></div>
-      <div><Label>Singles Price</Label><Input type="number" value={multiDayEvent.singlesPrice || ""} onChange={(e) => updateEvent("singlesPrice", e.target.value)} /></div>
-      <div><Label>Doubles Price</Label><Input type="number" value={multiDayEvent.doublesPrice || ""} onChange={(e) => updateEvent("doublesPrice", e.target.value)} /></div>
-      <div><Label>Team Price</Label><Input type="number" value={multiDayEvent.teamPrice || ""} onChange={(e) => updateEvent("teamPrice", e.target.value)} /></div>
-    </div></CardContent></AppCard>;
+    const scoringDivisions = multiDayEvent.scoringDivisions || {};
+    const eventDefinitions = multiDayEvent.eventDefinitions || DEFAULT_MULTI_EVENT_DEFINITIONS;
+    const enabledEvents = eventDefinitions.filter((eventType) => eventType.enabled);
+
+    return (
+      <AppCard>
+        <CardContent className="space-y-5 p-4 md:p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-blue-950">Multi-Event Tournament Setup</h2>
+              <p className="text-sm font-semibold text-blue-700">
+                Built for tournaments with squads, singles, doubles, trios/teams, scratch and handicap divisions, and optional All Events.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100"
+              onClick={() => setMultiDayEvent(createStrikefestMultiDayEvent())}
+            >
+              Load Strikefest Template
+            </Button>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="rounded-2xl border border-blue-200 bg-white p-4">
+              <h3 className="mb-3 text-lg font-black text-blue-950">Tournament Details</h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div><Label>Event Name</Label><Input value={multiDayEvent.name || ""} onChange={(e) => updateEvent("name", e.target.value)} /></div>
+                <div><Label>Season</Label><Input value={multiDayEvent.season || ""} onChange={(e) => updateEvent("season", e.target.value)} /></div>
+                <div><Label>Start Date</Label><Input type="date" value={multiDayEvent.startDate || ""} onChange={(e) => updateEvent("startDate", e.target.value)} /></div>
+                <div><Label>End Date</Label><Input type="date" value={multiDayEvent.endDate || ""} onChange={(e) => updateEvent("endDate", e.target.value)} /></div>
+                <div><Label>Entries Close</Label><Input type="date" value={multiDayEvent.entriesCloseDate || ""} onChange={(e) => updateEvent("entriesCloseDate", e.target.value)} /></div>
+                <div><Label>Check-In Minutes</Label><Input type="number" value={multiDayEvent.checkInMinutes || ""} onChange={(e) => updateEvent("checkInMinutes", e.target.value)} /></div>
+                <div><Label>Bowling Center</Label><select value={multiDayEvent.center || ""} onChange={(e) => updateCenter(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="">Select center</option>{BOWLING_CENTERS.map((center) => <option key={center.name} value={center.name}>{center.name}</option>)}</select></div>
+                <div><Label>Address</Label><Input value={multiDayEvent.address || ""} onChange={(e) => updateEvent("address", e.target.value)} /></div>
+                <div><Label>Team Size</Label><select value={multiDayEvent.teamSize || 3} onChange={(e) => updateEvent("teamSize", Number(e.target.value))} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value={3}>3 Person Teams / Trios</option><option value={4}>4 Person Teams</option><option value={5}>5 Person Teams</option></select></div>
+                <div><Label>Squad Format</Label><select value={multiDayEvent.squadMode || "fixed"} onChange={(e) => updateEvent("squadMode", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="fixed">Each squad is one event type</option><option value="mixed">Any event in any squad</option></select></div>
+                <div><Label>Max Bowlers Per Squad</Label><Input type="number" value={multiDayEvent.maxBowlersPerSquad || ""} onChange={(e) => updateEvent("maxBowlersPerSquad", e.target.value)} /></div>
+                <div><Label>Handicap</Label><div className="grid grid-cols-[1fr_1fr_1fr] gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="%" /><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="Base" /><Input type="number" value={multiDayEvent.handicapMax || ""} onChange={(e) => updateEvent("handicapMax", e.target.value)} placeholder="Max" /></div></div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <h3 className="text-lg font-black text-blue-950">Setup Snapshot</h3>
+              <div className="mt-3 grid gap-3 text-sm font-semibold text-blue-900">
+                <div className="rounded-xl border border-blue-100 bg-white p-3"><span className="font-black">Events:</span> {enabledEvents.map((eventType) => eventType.label).join(", ") || "None selected"}</div>
+                <div className="rounded-xl border border-blue-100 bg-white p-3"><span className="font-black">Squads:</span> {squads.length} block{squads.length === 1 ? "" : "s"} {multiDayEvent.squadMode === "mixed" ? "(any event in any squad)" : "(fixed event squads)"}</div>
+                <div className="rounded-xl border border-blue-100 bg-white p-3"><span className="font-black">Divisions:</span> {[
+                  scoringDivisions.scratch ? "Scratch" : "",
+                  scoringDivisions.handicap ? "Handicap" : "",
+                  scoringDivisions.youthScratch ? "Youth Scratch" : "",
+                  scoringDivisions.youthHandicap ? "Youth Handicap" : "",
+                ].filter(Boolean).join(", ") || "None selected"}</div>
+                <div className="rounded-xl border border-blue-100 bg-white p-3"><span className="font-black">All Events:</span> {multiDayEvent.allEventsRule || "Not configured"}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-white p-4">
+            <h3 className="mb-3 text-lg font-black text-blue-950">Entry Fees</h3>
+            <div className="grid gap-4 md:grid-cols-4">
+              <div><Label>Singles Per Bowler</Label><Input type="number" value={multiDayEvent.singlesPrice || ""} onChange={(e) => updateEvent("singlesPrice", e.target.value)} /></div>
+              <div><Label>Doubles Per Bowler</Label><Input type="number" value={multiDayEvent.doublesPrice || ""} onChange={(e) => updateEvent("doublesPrice", e.target.value)} /></div>
+              <div><Label>Team/Trios Per Bowler</Label><Input type="number" value={multiDayEvent.teamPrice || ""} onChange={(e) => updateEvent("teamPrice", e.target.value)} /></div>
+              <div><Label>All Events Optional</Label><Input type="number" value={multiDayEvent.allEventsPrice || ""} onChange={(e) => updateEvent("allEventsPrice", e.target.value)} /></div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-white p-4">
+            <h3 className="mb-3 text-lg font-black text-blue-950">Events and Divisions</h3>
+            <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+              <div className="overflow-auto rounded-2xl border border-blue-100">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="bg-blue-800 text-white">
+                    <tr>
+                      <th className="p-3 text-left">Use</th>
+                      <th className="p-3 text-left">Event</th>
+                      <th className="p-3 text-left">Type</th>
+                      <th className="p-3 text-right">Bowlers</th>
+                      <th className="p-3 text-right">Games</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eventDefinitions.map((eventType) => (
+                      <tr key={eventType.id} className="border-t">
+                        <td className="p-3"><Switch checked={Boolean(eventType.enabled)} onCheckedChange={(checked) => updateEventDefinition(eventType.id, "enabled", checked)} /></td>
+                        <td className="p-2"><Input value={eventType.label || ""} onChange={(e) => updateEventDefinition(eventType.id, "label", e.target.value)} /></td>
+                        <td className="p-2"><select value={eventType.competition || "Singles"} onChange={(e) => updateEventDefinition(eventType.id, "competition", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option>Singles</option><option>Doubles</option><option>Team</option><option>All Events</option></select></td>
+                        <td className="p-2"><Input className="text-right" type="number" value={eventType.teamSize || ""} onChange={(e) => updateEventDefinition(eventType.id, "teamSize", Number(e.target.value))} /></td>
+                        <td className="p-2"><Input className="text-right" type="number" value={eventType.games || ""} onChange={(e) => updateEventDefinition(eventType.id, "games", Number(e.target.value))} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                {[
+                  ["scratch", "Scratch"],
+                  ["handicap", "Handicap"],
+                  ["youthScratch", "Youth Scratch"],
+                  ["youthHandicap", "Youth Handicap"],
+                ].map(([id, label]) => (
+                  <label key={id} className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-white p-3 text-sm font-black text-blue-950">
+                    {label}
+                    <Switch checked={Boolean(scoringDivisions[id])} onCheckedChange={(checked) => updateScoringDivision(id, checked)} />
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-white p-4">
+            <h3 className="mb-3 text-lg font-black text-blue-950">All Events Rule and Notes</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div><Label>All Events Rule</Label><textarea className="min-h-[96px] w-full rounded-2xl border border-blue-200 p-3 text-sm font-semibold text-blue-950" value={multiDayEvent.allEventsRule || ""} onChange={(e) => updateEvent("allEventsRule", e.target.value)} /></div>
+              <div><Label>Tournament Notes</Label><textarea className="min-h-[96px] w-full rounded-2xl border border-blue-200 p-3 text-sm font-semibold text-blue-950" value={multiDayEvent.notes || ""} onChange={(e) => updateEvent("notes", e.target.value)} /></div>
+            </div>
+          </div>
+        </CardContent>
+      </AppCard>
+    );
   }
 
   if (mode === "squads") {
-    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squads</h2><p className="text-sm font-semibold text-blue-700">Build blocks across days or weekends.</p></div><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addSquad}>Add Squad</Button></div><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Time</th><th className="p-3 text-left">Event</th><th className="p-3 text-left">Lanes</th><th className="p-3 text-left">Capacity</th><th className="p-3"></th></tr></thead><tbody>{squads.map((squad) => <tr key={squad.id} className="border-t"><td className="p-2"><Input type="date" value={squad.date || ""} onChange={(e) => updateSquad(squad.id, "date", e.target.value)} /></td><td className="p-2"><Input type="time" value={squad.time || ""} onChange={(e) => updateSquad(squad.id, "time", e.target.value)} /></td><td className="p-2"><select value={squad.competition || "Singles"} onChange={(e) => updateSquad(squad.id, "competition", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option>Singles</option><option>Doubles</option><option>Team</option></select></td><td className="p-2"><Input value={squad.lanes || ""} onChange={(e) => updateSquad(squad.id, "lanes", e.target.value)} placeholder="1-12" /></td><td className="p-2"><Input type="number" value={squad.capacity || ""} onChange={(e) => updateSquad(squad.id, "capacity", e.target.value)} /></td><td className="p-2 text-right"><Button variant="outline" className="rounded-2xl" onClick={() => removeSquad(squad.id)}>Delete</Button></td></tr>)}{squads.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No squads added yet.</td></tr>}</tbody></table></div></CardContent></AppCard>;
+    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squads</h2><p className="text-sm font-semibold text-blue-700">Build blocks across days or weekends.</p></div><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addSquad}>Add Squad</Button></div><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Time</th><th className="p-3 text-left">Event</th><th className="p-3 text-left">Lanes</th><th className="p-3 text-left">Capacity</th><th className="p-3"></th></tr></thead><tbody>{squads.map((squad) => <tr key={squad.id} className="border-t"><td className="p-2"><Input type="date" value={squad.date || ""} onChange={(e) => updateSquad(squad.id, "date", e.target.value)} /></td><td className="p-2"><Input type="time" value={squad.time || ""} onChange={(e) => updateSquad(squad.id, "time", e.target.value)} /></td><td className="p-2"><select value={squad.competition || "Singles"} onChange={(e) => updateSquad(squad.id, "competition", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option>Mixed</option>{MULTI_EVENT_COMPETITION_TYPES.map((competition) => <option key={competition}>{competition}</option>)}</select></td><td className="p-2"><Input value={squad.lanes || ""} onChange={(e) => updateSquad(squad.id, "lanes", e.target.value)} placeholder="1-12" /></td><td className="p-2"><Input type="number" value={squad.capacity || ""} onChange={(e) => updateSquad(squad.id, "capacity", e.target.value)} /></td><td className="p-2 text-right"><Button variant="outline" className="rounded-2xl" onClick={() => removeSquad(squad.id)}>Delete</Button></td></tr>)}{squads.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No squads added yet.</td></tr>}</tbody></table></div></CardContent></AppCard>;
   }
 
   if (mode === "registration") {
