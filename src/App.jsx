@@ -8319,6 +8319,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const [selectedSquadId, setSelectedSquadId] = useState("");
   const [testDraftNotice, setTestDraftNotice] = useState("");
   const [collapsedEntryIds, setCollapsedEntryIds] = useState({});
+  const [pendingPlacement, setPendingPlacement] = useState(null);
   const updateEvent = (field, value) => setMultiDayEvent((current) => ({ ...current, [field]: value }));
   const updateScoringDivision = (field, value) => setMultiDayEvent((current) => ({
     ...current,
@@ -8595,13 +8596,42 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       return entryBowlerKeys(existing, squad).some((key) => nextKeys.has(key));
     });
   };
-  const saveEntryByChoices = (squadId, entryId) => {
-    let placedSquadId = squadId;
+  const placeEntryInSquad = (sourceSquadId, entryId, targetSquadId, noticePrefix = "") => {
     let placedLabel = "";
+    setMultiDayEvent((current) => {
+      const currentSquads = current.squads || [];
+      const sourceSquad = currentSquads.find((squad) => squad.id === sourceSquadId);
+      const entry = sourceSquad?.entries?.find((item) => item.id === entryId);
+      const targetSquad = currentSquads.find((squad) => squad.id === targetSquadId);
+      if (!entry || !targetSquad) return current;
+      placedLabel = squadLabel(targetSquad);
+      const placedEntry = {
+        ...entry,
+        firstChoiceSquadId: entry.firstChoiceSquadId || sourceSquadId,
+        secondChoiceSquadId: entry.secondChoiceSquadId || "",
+        assignedSquadId: targetSquadId,
+      };
+      return {
+        ...current,
+        squads: currentSquads.map((squad) => {
+          const withoutEntry = (squad.entries || []).filter((item) => item.id !== entryId);
+          return squad.id === targetSquadId
+            ? { ...squad, entries: [...withoutEntry, placedEntry] }
+            : { ...squad, entries: withoutEntry };
+        }),
+      };
+    });
+    setSelectedSquadId(targetSquadId);
+    setCollapsedEntryIds((current) => ({ ...current, [entryId]: true }));
+    setPendingPlacement(null);
+    setTestDraftNotice(`${noticePrefix}Saved entry to ${placedLabel || "selected squad"}.`);
+  };
+  const saveEntryByChoices = (squadId, entryId) => {
     let wasFull = false;
     let hadConflict = false;
-    let usedAutoSquad = false;
     let blockedMessage = "";
+    let choiceTargetId = "";
+    let fallbackOptions = [];
 
     setMultiDayEvent((current) => {
       const currentSquads = current.squads || [];
@@ -8620,46 +8650,34 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       const firstChoiceBlocked = firstChoice && (
         !squadHasRoomForEntry(firstChoice, entry, current) || squadHasBowlerConflict(firstChoice, entry, current)
       );
-      const targetSquad = candidateSquads.find((squad) =>
+      const choiceSquads = [firstChoice, secondChoice].filter(Boolean);
+      const targetSquad = choiceSquads.find((squad) =>
         squadHasRoomForEntry(squad, entry, current) && !squadHasBowlerConflict(squad, entry, current)
       );
 
       if (!targetSquad) {
-        blockedMessage = "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
+        fallbackOptions = candidateSquads
+          .filter((squad) => squadHasRoomForEntry(squad, entry, current) && !squadHasBowlerConflict(squad, entry, current))
+          .map((squad) => ({ id: squad.id, label: squadLabel(squad), count: getSquadBowlerCount(squad, current, entry.id), capacity: Number(squad.capacity || current.maxBowlersPerSquad || 0) }));
+        blockedMessage = fallbackOptions.length
+          ? "First and second choice are not available. Pick another squad below."
+          : "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
         return current;
       }
 
-      placedSquadId = targetSquad?.id || squadId;
-      placedLabel = squadLabel(targetSquad || sourceSquad);
+      choiceTargetId = targetSquad.id;
       wasFull = Boolean(firstChoiceBlocked && firstChoice && !squadHasRoomForEntry(firstChoice, entry, current));
       hadConflict = Boolean(firstChoiceBlocked && firstChoice && squadHasBowlerConflict(firstChoice, entry, current));
-      usedAutoSquad = Boolean(firstChoice && secondChoice && targetSquad.id !== firstChoice.id && targetSquad.id !== secondChoice.id);
-
-      const placedEntry = {
-        ...entry,
-        firstChoiceSquadId: firstChoiceId,
-        secondChoiceSquadId: secondChoiceId,
-        assignedSquadId: placedSquadId,
-      };
-
-      return {
-        ...current,
-        squads: currentSquads.map((squad) => {
-          const withoutEntry = (squad.entries || []).filter((item) => item.id !== entryId);
-          return squad.id === placedSquadId
-            ? { ...squad, entries: [...withoutEntry, placedEntry] }
-            : { ...squad, entries: withoutEntry };
-        }),
-      };
+      return current;
     });
 
     if (blockedMessage) {
       setTestDraftNotice(blockedMessage);
+      setPendingPlacement(fallbackOptions.length ? { sourceSquadId: squadId, entryId, options: fallbackOptions } : null);
       return;
     }
-    setSelectedSquadId(placedSquadId);
-    setCollapsedEntryIds((current) => ({ ...current, [entryId]: true }));
-    setTestDraftNotice(`${wasFull ? "First choice was full. " : ""}${hadConflict ? "First choice already had one of these bowlers. " : ""}${usedAutoSquad ? "Found the next available squad. " : ""}Saved entry to ${placedLabel || "selected squad"}.`);
+    setPendingPlacement(null);
+    placeEntryInSquad(squadId, entryId, choiceTargetId, `${wasFull ? "First choice was full. " : ""}${hadConflict ? "First choice already had one of these bowlers. " : ""}`);
   };
   const saveMultiDayTestDraft = () => {
     if (typeof window === "undefined") return;
@@ -8937,6 +8955,31 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                         </Button>
                       </div>
                     </div>
+
+                    {pendingPlacement?.entryId === entry.id && (
+                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-sm font-black text-amber-950">First and second choice are not available. Choose another squad:</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {(pendingPlacement.options || []).map((option) => (
+                            <Button
+                              key={option.id}
+                              variant="outline"
+                              className="rounded-2xl border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
+                              onClick={() => placeEntryInSquad(pendingPlacement.sourceSquadId, entry.id, option.id, "Placed from available squad list. ")}
+                            >
+                              {option.label} ({option.count}{option.capacity ? `/${option.capacity}` : ""})
+                            </Button>
+                          ))}
+                          <Button
+                            variant="outline"
+                            className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                            onClick={() => setPendingPlacement(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
 
                     {isCollapsed ? null : (
                     <>
