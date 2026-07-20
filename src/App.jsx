@@ -8584,8 +8584,15 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     if (!capacity) return true;
     return getSquadBowlerCount(squad, event, entry.id) + getEntryMemberCountForSquad(entry, squad, event) <= capacity;
   };
-  const entryBowlerKeys = (entry, squad = activeSquad) =>
-    entryMembers(entry, squad).map((member) => bowlerIdentityKey(member.name)).filter(Boolean);
+  const entryBowlerKeys = (entry, squad = activeSquad) => {
+    const names = [
+      entry.name,
+      ...(entry.members || []),
+      ...(entry.memberDetails || []).map((member) => member?.name),
+      ...entryMembers(entry, squad).map((member) => member.name),
+    ];
+    return Array.from(new Set(names.map((name) => bowlerIdentityKey(name)).filter(Boolean)));
+  };
   const squadCanHostEntry = (squad, entry, event = multiDayEvent) => {
     if (!squad) return false;
     if (event.squadMode === "mixed" || squad.competition === "Mixed") return true;
