@@ -8372,20 +8372,22 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const seriesValue = (value) => Number(value || 0);
   const activeSquad = squads.find((squad) => squad.id === selectedSquadId) || squads[0] || null;
   const squadEntries = squads.flatMap((squad) => (squad.entries || []).map((entry) => ({ ...entry, squad })));
-  const entryTotal = (entry) => (entry.scores || []).reduce((sum, score) => sum + Number(score || 0), 0);
+  const entryTotal = (entry) => Array.isArray(entry.memberScores)
+    ? entry.memberScores.flat().reduce((sum, score) => sum + Number(score || 0), 0)
+    : (entry.scores || []).reduce((sum, score) => sum + Number(score || 0), 0);
   const getEntryCompetition = (entry) => mixedSquads ? entry.competition || (entry.squad.competition === "Mixed" ? "Singles" : entry.squad.competition) || "Singles" : entry.squad.competition || "Singles";
   const singlesRows = squadEntries
     .filter((entry) => getEntryCompetition(entry) === "Singles")
-    .map((entry) => ({ name: entry.name || entry.members?.[0] || "Singles Entry", members: [entry.name || entry.members?.[0]].filter(Boolean), total: entryTotal(entry), squadDate: entry.squad.date }))
-    .sort((a, b) => b.total - a.total);
+    .map((entry) => ({ name: entry.name || entry.members?.[0] || "Singles Entry", members: [entry.name || entry.members?.[0]].filter(Boolean), scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
+    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
   const doublesRows = squadEntries
     .filter((entry) => getEntryCompetition(entry) === "Doubles")
-    .map((entry) => ({ name: entry.name || (entry.members || []).filter(Boolean).join(" / ") || "Doubles Entry", members: entry.members || [], total: entryTotal(entry), squadDate: entry.squad.date }))
-    .sort((a, b) => b.total - a.total);
+    .map((entry) => ({ name: entry.name || (entry.members || []).filter(Boolean).join(" / ") || "Doubles Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
+    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
   const teamRows = squadEntries
     .filter((entry) => getEntryCompetition(entry) === "Team")
-    .map((entry) => ({ name: entry.name || "Team Entry", members: entry.members || [], total: entryTotal(entry), squadDate: entry.squad.date }))
-    .sort((a, b) => b.total - a.total);
+    .map((entry) => ({ name: entry.name || "Team Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date }))
+    .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
   const allEventsByBowler = squadEntries.reduce((totals, entry) => {
     const competition = getEntryCompetition(entry);
     const members = competition === "Singles" ? [entry.name || entry.members?.[0]] : entry.members || [];
@@ -8425,6 +8427,32 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       return { ...detail, name };
     });
   };
+  const handicapPerGame = (member = {}) => {
+    const average = Number(member.average || 0);
+    const base = Number(multiDayEvent.handicapBase || 0);
+    const percent = Number(multiDayEvent.handicapPercent || 0);
+    if (!average || !base || !percent || average >= base) return 0;
+    const raw = Math.floor((base - average) * (percent / 100));
+    const max = Number(multiDayEvent.handicapMax || 0);
+    return max ? Math.min(raw, max) : raw;
+  };
+  const memberGameScore = (entry, memberIndex, gameIndex) => {
+    if (Array.isArray(entry.memberScores)) return Number(entry.memberScores?.[memberIndex]?.[gameIndex] || 0);
+    if (getEntryMemberCount(entry, entry.squad || activeSquad) === 1) return Number(entry.scores?.[gameIndex] || 0);
+    return 0;
+  };
+  const memberScratchSeries = (entry, memberIndex) =>
+    [0, 1, 2].reduce((sum, gameIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
+  const entryGameScratchTotal = (entry, gameIndex, squad = activeSquad) =>
+    entryMembers(entry, squad).reduce((sum, _member, memberIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
+  const entryScratchTotal = (entry, squad = activeSquad) =>
+    entryMembers(entry, squad).reduce((sum, _member, memberIndex) => sum + memberScratchSeries(entry, memberIndex), 0);
+  const entryHandicapPerGame = (entry, squad = activeSquad) =>
+    entryMembers(entry, squad).reduce((sum, member) => sum + handicapPerGame(member), 0);
+  const entryHandicapTotal = (entry, squad = activeSquad) =>
+    entryHandicapPerGame(entry, squad) * 3;
+  const entryHandicapSeries = (entry, squad = activeSquad) =>
+    entryScratchTotal(entry, squad) + entryHandicapTotal(entry, squad);
   const bowlerIdentityKey = (value) => normalizeMatchText(value).replace(/\s+/g, " ");
   const knownBowlerProfiles = squads.reduce((profiles, squad) => {
     (squad.entries || []).forEach((entry) => {
@@ -8508,10 +8536,10 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
       <div className="border-b border-blue-100 bg-blue-50 px-4 py-3"><h3 className="text-lg font-black text-blue-950">{title}</h3></div>
       <table className="w-full min-w-[520px] text-sm">
-        <thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Place</th><th className="p-3 text-left">{nameLabel}</th><th className="p-3 text-left">Bowlers</th><th className="p-3 text-right">Total</th></tr></thead>
+        <thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Place</th><th className="p-3 text-left">{nameLabel}</th><th className="p-3 text-left">Bowlers</th><th className="p-3 text-right">Scratch</th><th className="p-3 text-right">HDCP</th><th className="p-3 text-right">Total</th></tr></thead>
         <tbody>
-          {rows.map((row, index) => <tr key={`${title}-${row.name}-${index}`} className={index === 0 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-bold">#{index + 1}</td><td className="p-3 font-semibold text-blue-950">{row.name || "TBD"}</td><td className="p-3 text-slate-700">{(row.members || []).filter(Boolean).join(", ") || "-"}</td><td className="p-3 text-right font-black">{row.total || "-"}</td></tr>)}
-          {rows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>No scores entered yet.</td></tr>}
+          {rows.map((row, index) => <tr key={`${title}-${row.name}-${index}`} className={index === 0 ? "border-t bg-yellow-50" : "border-t"}><td className="p-3 font-bold">#{index + 1}</td><td className="p-3 font-semibold text-blue-950">{row.name || "TBD"}</td><td className="p-3 text-slate-700">{(row.members || []).filter(Boolean).join(", ") || "-"}</td><td className="p-3 text-right font-black">{row.scratch ?? row.total ?? "-"}</td><td className="p-3 text-right font-black">{row.handicap || "-"}</td><td className="p-3 text-right font-black">{row.total || "-"}</td></tr>)}
+          {rows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No scores entered yet.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -8848,9 +8876,94 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   }
 
   if (mode === "scores") {
-    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Squad Score Entry</h2><p className="text-sm font-semibold text-blue-700">Enter scores after each squad. Leaderboards roll up across all squads.</p></div>
+    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Squad Score Entry</h2><p className="text-sm font-semibold text-blue-700">Enter each bowler's games. Doubles and team totals are calculated below each entry.</p></div>
       <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
-      {activeSquad ? <div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Entry</th><th className="p-3 text-left">Bowlers</th><th className="p-3 text-right">Game 1</th><th className="p-3 text-right">Game 2</th><th className="p-3 text-right">Game 3</th><th className="p-3 text-right">Series</th></tr></thead><tbody>{(activeSquad.entries || []).map((entry) => <tr key={entry.id} className="border-t"><td className="p-3 font-semibold text-blue-950">{entry.name || (entry.members || []).filter(Boolean).join(" / ") || "Entry"}{mixedSquads && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-black text-blue-800">{getSquadEntryCompetition(entry)}</span>}</td><td className="p-3 text-slate-700">{(entry.members || []).filter(Boolean).join(", ") || "-"}</td>{[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-2"><Input className="text-right" type="number" min="0" max={getEntryMaxGame(entry)} value={entry.scores?.[gameIndex] || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => { const scores = [...(current.scores || [])]; scores[gameIndex] = e.target.value; return { ...current, scores }; })} /></td>)}<td className="p-3 text-right font-black">{entryTotal(entry) || "-"}</td></tr>)}{(activeSquad.entries || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>Add entries to this squad on Registration first.</td></tr>}</tbody></table></div> : <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Add squads first.</p>}
+      {activeSquad ? <div className="space-y-4">
+        {(activeSquad.entries || []).map((entry) => {
+          const competition = getSquadEntryCompetition(entry, activeSquad);
+          const members = entryMembers(entry, activeSquad);
+          const handicapGameTotal = entryHandicapPerGame(entry, activeSquad);
+          const scratchTotal = entryScratchTotal(entry, activeSquad);
+          const handicapTotal = entryHandicapTotal(entry, activeSquad);
+          const grandTotal = scratchTotal + handicapTotal;
+
+          return (
+            <div key={entry.id} className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+              <div className="flex flex-col gap-1 border-b border-blue-100 bg-blue-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-base font-black text-blue-950">{entry.name || members.map((member) => member.name).filter(Boolean).join(" / ") || "Entry"}</h3>
+                  <p className="text-xs font-black uppercase tracking-wide text-blue-700">{competition}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs font-black">
+                  <span className="rounded-full bg-white px-3 py-1 text-blue-800">Scratch {scratchTotal || "-"}</span>
+                  <span className="rounded-full bg-white px-3 py-1 text-blue-800">HDCP {handicapTotal || "-"}</span>
+                  <span className="rounded-full bg-blue-800 px-3 py-1 text-white">Total {grandTotal || "-"}</span>
+                </div>
+              </div>
+              <table className="w-full min-w-[820px] text-sm">
+                <thead className="bg-blue-800 text-white">
+                  <tr>
+                    <th className="p-3 text-left">Bowler</th>
+                    <th className="p-3 text-right">Avg</th>
+                    <th className="p-3 text-right">HDCP</th>
+                    <th className="p-3 text-right">Game 1</th>
+                    <th className="p-3 text-right">Game 2</th>
+                    <th className="p-3 text-right">Game 3</th>
+                    <th className="p-3 text-right">Series</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member, memberIndex) => (
+                    <tr key={`${entry.id}-score-${memberIndex}`} className="border-t">
+                      <td className="p-3 font-semibold text-blue-950">{member.name || `Bowler ${memberIndex + 1}`}</td>
+                      <td className="p-3 text-right font-bold text-slate-700">{member.average || "-"}</td>
+                      <td className="p-3 text-right font-bold text-slate-700">{handicapPerGame(member) || "-"}</td>
+                      {[0, 1, 2].map((gameIndex) => (
+                        <td key={gameIndex} className="p-2">
+                          <Input
+                            className="text-right"
+                            type="number"
+                            min="0"
+                            max="300"
+                            value={entry.memberScores?.[memberIndex]?.[gameIndex] || ""}
+                            onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => {
+                              const memberScores = Array.from({ length: getEntryMemberCount(current, activeSquad) }, (_, index) => [...(current.memberScores?.[index] || [])]);
+                              memberScores[memberIndex][gameIndex] = e.target.value;
+                              const scores = [0, 1, 2].map((nextGameIndex) =>
+                                memberScores.reduce((sum, row) => sum + Number(row?.[nextGameIndex] || 0), 0)
+                              );
+                              return { ...current, memberScores, scores };
+                            })}
+                          />
+                        </td>
+                      ))}
+                      <td className="p-3 text-right font-black">{memberScratchSeries(entry, memberIndex) || "-"}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t bg-blue-50 font-black text-blue-950">
+                    <td className="p-3">Scratch Total</td>
+                    <td className="p-3"></td>
+                    <td className="p-3"></td>
+                    {[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-3 text-right">{entryGameScratchTotal(entry, gameIndex, activeSquad) || "-"}</td>)}
+                    <td className="p-3 text-right">{scratchTotal || "-"}</td>
+                  </tr>
+                  <tr className="border-t bg-slate-50 font-black text-slate-800">
+                    <td className="p-3">With Handicap</td>
+                    <td className="p-3"></td>
+                    <td className="p-3 text-right">{handicapGameTotal || "-"}</td>
+                    {[0, 1, 2].map((gameIndex) => {
+                      const scratchGame = entryGameScratchTotal(entry, gameIndex, activeSquad);
+                      return <td key={gameIndex} className="p-3 text-right">{scratchGame ? scratchGame + handicapGameTotal : "-"}</td>;
+                    })}
+                    <td className="p-3 text-right">{grandTotal || "-"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+        {(activeSquad.entries || []).length === 0 && <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700">Add entries to this squad on Registration first.</div>}
+      </div> : <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Add squads first.</p>}
     </CardContent></AppCard>;
   }
 
