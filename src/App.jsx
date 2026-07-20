@@ -8677,27 +8677,27 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       if (!entry) return current;
 
       const firstChoiceId = entry.firstChoiceSquadId || squadId;
-      const secondChoiceId = entry.secondChoiceSquadId || "";
       const firstChoice = currentSquads.find((squad) => squad.id === firstChoiceId);
-      const secondChoice = currentSquads.find((squad) => squad.id === secondChoiceId);
       const firstChoiceBlocked = firstChoice && (
         !squadHasRoomForEntry(firstChoice, entry, current) || squadHasBowlerConflict(firstChoice, entry, current)
       );
-      const choiceSquads = [firstChoice, secondChoice].filter(Boolean);
-      const targetSquad = choiceSquads.find((squad) => entryCanBePlacedInSquad(squad, entry, current));
-
-      if (!targetSquad) {
-        fallbackOptions = availablePlacementOptions(currentSquads, entry, current);
-        blockedMessage = fallbackOptions.length
-          ? "First and second choice are not available. Pick another squad below."
-          : "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
+      if (firstChoice && entryCanBePlacedInSquad(firstChoice, entry, current)) {
+        choiceTargetId = firstChoice.id;
         return current;
       }
 
-      choiceTargetId = targetSquad.id;
-      wasFull = Boolean(firstChoiceBlocked && firstChoice && !squadHasRoomForEntry(firstChoice, entry, current));
-      hadConflict = Boolean(firstChoiceBlocked && firstChoice && squadHasBowlerConflict(firstChoice, entry, current));
-      return current;
+      if (firstChoiceBlocked) {
+        wasFull = Boolean(!squadHasRoomForEntry(firstChoice, entry, current));
+        hadConflict = Boolean(squadHasBowlerConflict(firstChoice, entry, current));
+      }
+
+      {
+        fallbackOptions = availablePlacementOptions(currentSquads, entry, current);
+        blockedMessage = fallbackOptions.length
+          ? `${wasFull ? "First choice is full. " : ""}${hadConflict ? "First choice already has one of these bowlers. " : ""}Pick where to place this entry.`
+          : "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
+        return current;
+      }
     });
 
     if (blockedMessage) {
@@ -8945,7 +8945,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               <div className="w-full max-w-xl rounded-3xl border border-amber-200 bg-white p-5 shadow-2xl">
                 <h3 className="text-xl font-black text-blue-950">Choose Available Squad</h3>
                 <p className="mt-1 text-sm font-semibold text-slate-700">
-                  First and second choice are not available. These squads have room and do not already have that bowler scheduled.
+                  The entry could not be placed into first choice automatically. Choose a squad with enough room where these bowlers are not already scheduled.
                 </p>
                 <div className="mt-4 grid gap-2">
                   {(pendingPlacement.options || []).map((option) => (
