@@ -8620,6 +8620,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       .map((squad) => ({
         id: squad.id,
         label: squadLabel(squad),
+        choiceLabel: entry.secondChoiceSquadId && squad.id === entry.secondChoiceSquadId ? "Second choice" : "Available",
         count: getSquadBowlerCount(squad, event, entry.id),
         capacity: Number(squad.capacity || event.maxBowlersPerSquad || 0),
       }));
@@ -8935,10 +8936,10 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
             ))}
           </datalist>
           {pendingPlacement && typeof document !== "undefined" && createPortal((
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-              <div className="w-full max-w-xl rounded-3xl border border-amber-200 bg-white p-5 shadow-2xl">
-                <h3 className="text-xl font-black text-blue-950">Choose Available Squad</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-700">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+              <div className="w-full max-w-xl rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-2xl">
+                <h3 className="text-xl font-black text-amber-950">Choose Available Squad</h3>
+                <p className="mt-1 text-sm font-semibold text-amber-900">
                   The entry could not be placed into first choice automatically. Choose a squad with enough room where these bowlers are not already scheduled.
                 </p>
                 <div className="mt-4 grid gap-2">
@@ -8946,10 +8947,13 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                     <Button
                       key={option.id}
                       variant="outline"
-                      className="justify-between rounded-2xl border-blue-200 bg-blue-50 text-left text-blue-950 hover:bg-blue-100"
+                      className="justify-between rounded-2xl border-amber-300 bg-white text-left text-amber-950 hover:bg-amber-100"
                       onClick={() => placeEntryInSquad(pendingPlacement.sourceSquadId, pendingPlacement.entryId, option.id, "Placed from available squad list. ")}
                     >
-                      <span>{option.label}</span>
+                      <span className="flex flex-col gap-1">
+                        <span>{option.label}</span>
+                        <span className="text-xs font-black uppercase tracking-wide text-amber-700">{option.choiceLabel}</span>
+                      </span>
                       <span>{option.count}{option.capacity ? `/${option.capacity}` : ""} bowlers</span>
                     </Button>
                   ))}
