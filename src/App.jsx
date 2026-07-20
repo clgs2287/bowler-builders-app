@@ -8287,11 +8287,29 @@ function makeMultiDayBowler() {
 }
 
 function makeMultiDaySquadEntry(competition = "Singles") {
+  const memberCount = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : 5;
   return {
     id: `entry-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     competition,
     name: "",
-    members: Array.from({ length: competition === "Doubles" ? 2 : 5 }, () => ""),
+    captain: "",
+    phone: "",
+    email: "",
+    address: "",
+    city: "",
+    zip: "",
+    firstChoiceSquadId: "",
+    secondChoiceSquadId: "",
+    paid: false,
+    members: Array.from({ length: memberCount }, () => ""),
+    memberDetails: Array.from({ length: memberCount }, () => ({
+      name: "",
+      usbc: "",
+      average: "",
+      league: "",
+      allEvents: false,
+      youth: false,
+    })),
     scores: [],
   };
 }
@@ -8393,6 +8411,60 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const getEntryMaxGame = (entry, squad = activeSquad) => {
     const competition = getSquadEntryCompetition(entry, squad);
     return competition === "Singles" ? 300 : getEntryMemberCount(entry, squad) * 300;
+  };
+  const squadLabel = (squad) => [
+    squad?.date || "Date TBD",
+    squad?.time ? formatStartTime(squad.time) : "",
+    squad?.competition || "Mixed",
+  ].filter(Boolean).join(" - ");
+  const entryMembers = (entry, squad = activeSquad) => {
+    const count = getEntryMemberCount(entry, squad);
+    return Array.from({ length: count }, (_, index) => {
+      const detail = entry.memberDetails?.[index] || {};
+      const name = detail.name || entry.members?.[index] || "";
+      return { ...detail, name };
+    });
+  };
+  const updateEntryMemberName = (squadId, entryId, memberIndex, value) => updateSquadEntry(squadId, entryId, (current) => {
+    const members = [...(current.members || [])];
+    const memberDetails = [...(current.memberDetails || [])];
+    members[memberIndex] = value;
+    memberDetails[memberIndex] = {
+      ...(memberDetails[memberIndex] || {}),
+      name: value,
+    };
+    return { ...current, members, memberDetails };
+  });
+  const updateEntryMemberDetail = (squadId, entryId, memberIndex, field, value) => updateSquadEntry(squadId, entryId, (current) => {
+    const memberDetails = [...(current.memberDetails || [])];
+    memberDetails[memberIndex] = {
+      ...(memberDetails[memberIndex] || {}),
+      name: current.members?.[memberIndex] || memberDetails[memberIndex]?.name || "",
+      [field]: value,
+    };
+    const members = [...(current.members || [])];
+    if (field === "name") members[memberIndex] = value;
+    return { ...current, members, memberDetails };
+  });
+  const resizeEntryForCompetition = (entry, competition) => {
+    const count = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 5);
+    return {
+      ...entry,
+      competition,
+      members: Array.from({ length: count }, (_, index) => entry.members?.[index] || entry.memberDetails?.[index]?.name || ""),
+      memberDetails: Array.from({ length: count }, (_, index) => entry.memberDetails?.[index] || { name: entry.members?.[index] || "", usbc: "", average: "", league: "", allEvents: false, youth: false }),
+    };
+  };
+  const entryFeeEstimate = (entry, squad = activeSquad) => {
+    const competition = getSquadEntryCompetition(entry, squad);
+    const members = entryMembers(entry, squad);
+    const basePrice = competition === "Singles"
+      ? Number(multiDayEvent.singlesPrice || 0)
+      : competition === "Doubles"
+        ? Number(multiDayEvent.doublesPrice || 0)
+        : Number(multiDayEvent.teamPrice || 0);
+    const allEventsTotal = members.filter((member) => member.allEvents).length * Number(multiDayEvent.allEventsPrice || 0);
+    return members.length * basePrice + allEventsTotal;
   };
 
   const leaderboardTable = (title, rows, nameLabel) => (
@@ -8538,6 +8610,174 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   }
 
   if (mode === "registration") {
+    const activeCompetition = activeSquad?.competition === "Mixed" ? "Any Event" : activeSquad?.competition || "Event";
+
+    return (
+      <AppCard>
+        <CardContent className="space-y-5 p-4 md:p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-blue-950">Multi-Event Registration</h2>
+              <p className="text-sm font-semibold text-blue-700">
+                Enter squad reservations like the paper forms: team/captain info, squad choices, averages, USBC numbers, and All Events.
+              </p>
+            </div>
+            {activeSquad && (
+              <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>
+                Add Entry
+              </Button>
+            )}
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
+            <div>
+              <Label>Working Squad</Label>
+              <select
+                value={activeSquad?.id || ""}
+                onChange={(e) => setSelectedSquadId(e.target.value)}
+                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+              >
+                {squads.map((squad) => (
+                  <option key={squad.id} value={squad.id}>{squadLabel(squad)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+              {activeSquad
+                ? `${activeCompetition} squad${activeSquad.lanes ? ` on lanes ${activeSquad.lanes}` : ""}${activeSquad.capacity ? ` - capacity ${activeSquad.capacity} bowlers` : ""}`
+                : "Add squads first on the Squads tab."}
+            </div>
+          </div>
+
+          {!activeSquad && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
+              Add at least one squad before entering registrations.
+            </div>
+          )}
+
+          {activeSquad && (
+            <div className="space-y-4">
+              {(activeSquad.entries || []).map((entry, entryIndex) => {
+                const competition = getSquadEntryCompetition(entry, activeSquad);
+                const members = entryMembers(entry, activeSquad);
+                const feeEstimate = entryFeeEstimate(entry, activeSquad);
+
+                return (
+                  <div key={entry.id} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-blue-700">Entry {entryIndex + 1}</p>
+                        <h3 className="mt-1 text-lg font-black text-blue-950">{entry.name || members.map((member) => member.name).filter(Boolean).join(" / ") || `${competition} Entry`}</h3>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">Estimated ${feeEstimate.toFixed(2)}</span>
+                        <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={() => removeSquadEntry(activeSquad.id, entry.id)}>
+                          Delete Entry
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {mixedSquads && (
+                        <div>
+                          <Label>Event</Label>
+                          <select
+                            value={entry.competition || "Singles"}
+                            onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => resizeEntryForCompetition(current, e.target.value))}
+                            className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                          >
+                            {MULTI_EVENT_COMPETITION_TYPES.map((type) => <option key={type}>{type}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <div>
+                        <Label>{competition === "Singles" ? "Bowler Name" : `${competition} / Team Name`}</Label>
+                        <Input value={entry.name || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, name: e.target.value }))} placeholder={competition === "Singles" ? "Bowler name" : "Team name"} />
+                      </div>
+                      <div>
+                        <Label>Captain</Label>
+                        <Input value={entry.captain || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, captain: e.target.value }))} />
+                      </div>
+                      <div>
+                        <Label>Phone</Label>
+                        <Input value={entry.phone || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, phone: formatPhoneNumber(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <Label>Email</Label>
+                        <Input value={entry.email || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, email: e.target.value }))} />
+                      </div>
+                      <div>
+                        <Label>First Choice Squad</Label>
+                        <select
+                          value={entry.firstChoiceSquadId || activeSquad.id}
+                          onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, firstChoiceSquadId: e.target.value }))}
+                          className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                        >
+                          {squads.map((squad) => <option key={squad.id} value={squad.id}>{squadLabel(squad)}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <Label>Second Choice Squad</Label>
+                        <select
+                          value={entry.secondChoiceSquadId || ""}
+                          onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, secondChoiceSquadId: e.target.value }))}
+                          className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                        >
+                          <option value="">No second choice</option>
+                          {squads.map((squad) => <option key={squad.id} value={squad.id}>{squadLabel(squad)}</option>)}
+                        </select>
+                      </div>
+                      <label className="flex min-h-[40px] items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-3 text-sm font-black text-blue-900">
+                        Paid
+                        <Switch checked={Boolean(entry.paid)} onCheckedChange={(checked) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, paid: checked }))} />
+                      </label>
+                    </div>
+
+                    <div className="mt-4 overflow-auto rounded-2xl border border-blue-100">
+                      <table className="w-full min-w-[920px] text-sm">
+                        <thead className="bg-blue-800 text-white">
+                          <tr>
+                            <th className="p-3 text-left">Line</th>
+                            <th className="p-3 text-left">Bowler</th>
+                            <th className="p-3 text-left">USBC #</th>
+                            <th className="p-3 text-left">Average</th>
+                            <th className="p-3 text-left">League / Center</th>
+                            <th className="p-3 text-left">All Events</th>
+                            <th className="p-3 text-left">Youth</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {members.map((member, memberIndex) => (
+                            <tr key={`${entry.id}-member-${memberIndex}`} className="border-t">
+                              <td className="p-3 font-black text-blue-950">{memberIndex + 1}</td>
+                              <td className="p-2"><Input value={member.name || ""} onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
+                              <td className="p-2"><Input value={member.usbc || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", e.target.value)} /></td>
+                              <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
+                              <td className="p-2"><Input value={member.league || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "league", e.target.value)} placeholder="League / center" /></td>
+                              <td className="p-3"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "allEvents", checked)} /></td>
+                              <td className="p-3"><Switch checked={Boolean(member.youth)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "youth", checked)} /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {(activeSquad.entries || []).length === 0 && (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-800">
+                  No entries in this squad yet. Use Add Entry to start.
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </AppCard>
+    );
+  }
+
+  if (mode === "registrationLegacy") {
     return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squad Registration</h2><p className="text-sm font-semibold text-blue-700">Pick a squad, then add the singles, doubles, or team entries bowling in that block.</p></div>{activeSquad && <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>Add Entry</Button>}</div>
       <div className="grid gap-3 md:grid-cols-[280px_1fr]">
         <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
