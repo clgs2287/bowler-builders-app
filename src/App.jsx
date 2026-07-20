@@ -887,6 +887,7 @@ const HISTORY_STORAGE_KEY = "bowler-builders-tournament-history-v1";
 const TITLE_STORAGE_KEY = "bowler-builders-manual-title-history-v1";
 const BOWLER_IDENTITY_STORAGE_KEY = "bowler-builders-bowler-identities-v1";
 const DRAFT_STORAGE_KEY = "bowler-builders-saved-tournament-drafts-v1";
+const MULTI_DAY_TEST_STORAGE_KEY = "bowler-builders-multi-day-test-draft-v1";
 
 const BOWLING_CENTERS = [
   { name: "Bayside Bowl", address: "58 Alder St, Portland, ME 04101" },
@@ -8316,6 +8317,7 @@ function makeMultiDaySquadEntry(competition = "Singles") {
 
 function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const [selectedSquadId, setSelectedSquadId] = useState("");
+  const [testDraftNotice, setTestDraftNotice] = useState("");
   const updateEvent = (field, value) => setMultiDayEvent((current) => ({ ...current, [field]: value }));
   const updateScoringDivision = (field, value) => setMultiDayEvent((current) => ({
     ...current,
@@ -8531,6 +8533,44 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     const allEventsTotal = members.filter((member) => member.allEvents).length * Number(multiDayEvent.allEventsPrice || 0);
     return members.length * basePrice + allEventsTotal;
   };
+  const saveMultiDayTestDraft = () => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(MULTI_DAY_TEST_STORAGE_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      event: multiDayEvent,
+    }));
+    setTestDraftNotice(`Saved test draft for ${multiDayEvent.name || "multi-event tournament"}.`);
+  };
+  const loadMultiDayTestDraft = () => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(MULTI_DAY_TEST_STORAGE_KEY);
+    if (!saved) {
+      setTestDraftNotice("No multi-event test draft has been saved in this browser yet.");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(saved);
+      setMultiDayEvent({ ...createDefaultMultiDayEvent(), ...(parsed.event || {}) });
+      setTestDraftNotice(`Loaded test draft${parsed.savedAt ? ` from ${new Date(parsed.savedAt).toLocaleString()}` : ""}.`);
+    } catch (_error) {
+      setTestDraftNotice("That saved test draft could not be loaded.");
+    }
+  };
+  const testDraftControls = (
+    <div className="flex flex-col gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
+      <div className="text-sm font-semibold text-blue-800">
+        {testDraftNotice || "Save this multi-event test whenever you want to keep your entries and scores through refreshes."}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" className="rounded-2xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100" onClick={loadMultiDayTestDraft}>
+          Load Test Draft
+        </Button>
+        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={saveMultiDayTestDraft}>
+          Save Test Draft
+        </Button>
+      </div>
+    </div>
+  );
 
   const leaderboardTable = (title, rows, nameLabel) => (
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
@@ -8568,6 +8608,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               Load Strikefest Template
             </Button>
           </div>
+          {testDraftControls}
 
           <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="rounded-2xl border border-blue-200 bg-white p-4">
@@ -8671,7 +8712,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   }
 
   if (mode === "squads") {
-    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squads</h2><p className="text-sm font-semibold text-blue-700">Build blocks across days or weekends.</p></div><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addSquad}>Add Squad</Button></div><div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Time</th><th className="p-3 text-left">Event</th><th className="p-3 text-left">Lanes</th><th className="p-3 text-left">Capacity</th><th className="p-3"></th></tr></thead><tbody>{squads.map((squad) => <tr key={squad.id} className="border-t"><td className="p-2"><Input type="date" value={squad.date || ""} onChange={(e) => updateSquad(squad.id, "date", e.target.value)} /></td><td className="p-2"><Input type="time" value={squad.time || ""} onChange={(e) => updateSquad(squad.id, "time", e.target.value)} /></td><td className="p-2"><select value={squad.competition || "Singles"} onChange={(e) => updateSquad(squad.id, "competition", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option>Mixed</option>{MULTI_EVENT_COMPETITION_TYPES.map((competition) => <option key={competition}>{competition}</option>)}</select></td><td className="p-2"><Input value={squad.lanes || ""} onChange={(e) => updateSquad(squad.id, "lanes", e.target.value)} placeholder="1-12" /></td><td className="p-2"><Input type="number" value={squad.capacity || ""} onChange={(e) => updateSquad(squad.id, "capacity", e.target.value)} /></td><td className="p-2 text-right"><Button variant="outline" className="rounded-2xl" onClick={() => removeSquad(squad.id)}>Delete</Button></td></tr>)}{squads.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No squads added yet.</td></tr>}</tbody></table></div></CardContent></AppCard>;
+    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squads</h2><p className="text-sm font-semibold text-blue-700">Build blocks across days or weekends.</p></div><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addSquad}>Add Squad</Button></div>{testDraftControls}<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Date</th><th className="p-3 text-left">Time</th><th className="p-3 text-left">Event</th><th className="p-3 text-left">Lanes</th><th className="p-3 text-left">Capacity</th><th className="p-3"></th></tr></thead><tbody>{squads.map((squad) => <tr key={squad.id} className="border-t"><td className="p-2"><Input type="date" value={squad.date || ""} onChange={(e) => updateSquad(squad.id, "date", e.target.value)} /></td><td className="p-2"><Input type="time" value={squad.time || ""} onChange={(e) => updateSquad(squad.id, "time", e.target.value)} /></td><td className="p-2"><select value={squad.competition || "Singles"} onChange={(e) => updateSquad(squad.id, "competition", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option>Mixed</option>{MULTI_EVENT_COMPETITION_TYPES.map((competition) => <option key={competition}>{competition}</option>)}</select></td><td className="p-2"><Input value={squad.lanes || ""} onChange={(e) => updateSquad(squad.id, "lanes", e.target.value)} placeholder="1-12" /></td><td className="p-2"><Input type="number" value={squad.capacity || ""} onChange={(e) => updateSquad(squad.id, "capacity", e.target.value)} /></td><td className="p-2 text-right"><Button variant="outline" className="rounded-2xl" onClick={() => removeSquad(squad.id)}>Delete</Button></td></tr>)}{squads.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No squads added yet.</td></tr>}</tbody></table></div></CardContent></AppCard>;
   }
 
   if (mode === "registration") {
@@ -8693,6 +8734,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               </Button>
             )}
           </div>
+          {testDraftControls}
 
           <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
             <div>
@@ -8877,6 +8919,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
 
   if (mode === "scores") {
     return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Squad Score Entry</h2><p className="text-sm font-semibold text-blue-700">Enter each bowler's games. Doubles and team totals are calculated below each entry.</p></div>
+      {testDraftControls}
       <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
       {activeSquad ? <div className="space-y-4">
         {(activeSquad.entries || []).map((entry) => {
@@ -8967,7 +9010,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     </CardContent></AppCard>;
   }
 
-  return <div className="space-y-4">{leaderboardTable("Singles", singlesRows, "Bowler")}{leaderboardTable("Doubles", doublesRows, "Doubles Entry")}{leaderboardTable(`${multiDayEvent.teamSize || 5}-Person Team`, teamRows, "Team")}{leaderboardTable("All Events", allEventsRows, "Bowler")}</div>;
+  return <div className="space-y-4">{testDraftControls}{leaderboardTable("Singles", singlesRows, "Bowler")}{leaderboardTable("Doubles", doublesRows, "Doubles Entry")}{leaderboardTable(`${multiDayEvent.teamSize || 5}-Person Team`, teamRows, "Team")}{leaderboardTable("All Events", allEventsRows, "Bowler")}</div>;
 }
 
 function ReservationsTab({
