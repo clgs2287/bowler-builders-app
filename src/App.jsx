@@ -8565,10 +8565,10 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const getEntryMemberCountForSquad = (entry, squad, event = multiDayEvent) => {
     const competition = event.squadMode === "mixed"
       ? entry.competition || squad?.competition || "Singles"
-      : squad?.competition || "Singles";
-    const expectedCount = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(event.teamSize || 5);
-    const actualCount = Math.max(entry.memberDetails?.length || 0, entry.members?.length || 0);
-    return Math.max(expectedCount, Math.min(actualCount || expectedCount, Number(event.teamSize || 5)));
+      : squad?.competition || entry.competition || "Singles";
+    if (competition === "Singles") return 1;
+    if (competition === "Doubles") return 2;
+    return Number(event.teamSize || 5);
   };
   const getSquadBowlerCount = (squad, event = multiDayEvent, excludeEntryId = "") =>
     (squad?.entries || []).reduce((sum, entry) => (
