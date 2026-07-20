@@ -8363,12 +8363,12 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
         return {
           ...squad,
           entries: [
-            ...(squad.entries || []),
             {
               ...makeMultiDaySquadEntry(squad.competition === "Mixed" ? "Singles" : squad.competition),
               id: entryId,
               firstChoiceSquadId: squadId,
             },
+            ...(squad.entries || []),
           ],
         };
       }),
@@ -8862,7 +8862,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                 const isTeamEntry = competition === "Team";
                 const members = entryMembers(entry, activeSquad);
                 const feeEstimate = entryFeeEstimate(entry, activeSquad);
-                const isCollapsed = Boolean(collapsedEntryIds[entry.id]);
+                const isCollapsed = collapsedEntryIds[entry.id] ?? Boolean(entry.assignedSquadId);
 
                 return (
                   <div key={entry.id} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
