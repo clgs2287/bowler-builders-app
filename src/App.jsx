@@ -8596,14 +8596,35 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       return entryBowlerKeys(existing, squad).some((key) => nextKeys.has(key));
     });
   };
+  const entryCanBePlacedInSquad = (squad, entry, event = multiDayEvent) =>
+    Boolean(squad) &&
+    squadCanHostEntry(squad, entry, event) &&
+    squadHasRoomForEntry(squad, entry, event) &&
+    !squadHasBowlerConflict(squad, entry, event);
+  const availablePlacementOptions = (squadsToCheck, entry, event = multiDayEvent) =>
+    (squadsToCheck || [])
+      .filter(Boolean)
+      .filter((squad, index, list) => list.findIndex((item) => item.id === squad.id) === index)
+      .filter((squad) => entryCanBePlacedInSquad(squad, entry, event))
+      .map((squad) => ({
+        id: squad.id,
+        label: squadLabel(squad),
+        count: getSquadBowlerCount(squad, event, entry.id),
+        capacity: Number(squad.capacity || event.maxBowlersPerSquad || 0),
+      }));
   const placeEntryInSquad = (sourceSquadId, entryId, targetSquadId, noticePrefix = "") => {
     let placedLabel = "";
+    let blockedMessage = "";
     setMultiDayEvent((current) => {
       const currentSquads = current.squads || [];
       const sourceSquad = currentSquads.find((squad) => squad.id === sourceSquadId);
       const entry = sourceSquad?.entries?.find((item) => item.id === entryId);
       const targetSquad = currentSquads.find((squad) => squad.id === targetSquadId);
       if (!entry || !targetSquad) return current;
+      if (!entryCanBePlacedInSquad(targetSquad, entry, current)) {
+        blockedMessage = "That squad is no longer available for this entry.";
+        return current;
+      }
       placedLabel = squadLabel(targetSquad);
       const placedEntry = {
         ...entry,
@@ -8621,6 +8642,10 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
         }),
       };
     });
+    if (blockedMessage) {
+      setTestDraftNotice(blockedMessage);
+      return;
+    }
     setSelectedSquadId(targetSquadId);
     setCollapsedEntryIds((current) => ({ ...current, [entryId]: true }));
     setPendingPlacement(null);
@@ -8643,22 +8668,14 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
       const secondChoiceId = entry.secondChoiceSquadId || "";
       const firstChoice = currentSquads.find((squad) => squad.id === firstChoiceId);
       const secondChoice = currentSquads.find((squad) => squad.id === secondChoiceId);
-      const candidateSquads = [firstChoice, secondChoice, ...currentSquads]
-        .filter(Boolean)
-        .filter((squad, index, list) => list.findIndex((item) => item.id === squad.id) === index)
-        .filter((squad) => squadCanHostEntry(squad, entry, current));
       const firstChoiceBlocked = firstChoice && (
         !squadHasRoomForEntry(firstChoice, entry, current) || squadHasBowlerConflict(firstChoice, entry, current)
       );
       const choiceSquads = [firstChoice, secondChoice].filter(Boolean);
-      const targetSquad = choiceSquads.find((squad) =>
-        squadHasRoomForEntry(squad, entry, current) && !squadHasBowlerConflict(squad, entry, current)
-      );
+      const targetSquad = choiceSquads.find((squad) => entryCanBePlacedInSquad(squad, entry, current));
 
       if (!targetSquad) {
-        fallbackOptions = candidateSquads
-          .filter((squad) => squadHasRoomForEntry(squad, entry, current) && !squadHasBowlerConflict(squad, entry, current))
-          .map((squad) => ({ id: squad.id, label: squadLabel(squad), count: getSquadBowlerCount(squad, current, entry.id), capacity: Number(squad.capacity || current.maxBowlersPerSquad || 0) }));
+        fallbackOptions = availablePlacementOptions(currentSquads, entry, current);
         blockedMessage = fallbackOptions.length
           ? "First and second choice are not available. Pick another squad below."
           : "Could not save entry. Every matching squad is full or already has one of these bowlers scheduled.";
@@ -8911,6 +8928,34 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               <option key={bowlerIdentityKey(bowler.name)} value={bowler.name} />
             ))}
           </datalist>
+          {pendingPlacement && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+              <div className="w-full max-w-xl rounded-3xl border border-amber-200 bg-white p-5 shadow-2xl">
+                <h3 className="text-xl font-black text-blue-950">Choose Available Squad</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  First and second choice are not available. These squads have room and do not already have that bowler scheduled.
+                </p>
+                <div className="mt-4 grid gap-2">
+                  {(pendingPlacement.options || []).map((option) => (
+                    <Button
+                      key={option.id}
+                      variant="outline"
+                      className="justify-between rounded-2xl border-blue-200 bg-blue-50 text-left text-blue-950 hover:bg-blue-100"
+                      onClick={() => placeEntryInSquad(pendingPlacement.sourceSquadId, pendingPlacement.entryId, option.id, "Placed from available squad list. ")}
+                    >
+                      <span>{option.label}</span>
+                      <span>{option.count}{option.capacity ? `/${option.capacity}` : ""} bowlers</span>
+                    </Button>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" className="rounded-2xl" onClick={() => setPendingPlacement(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!activeSquad && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
@@ -8955,31 +9000,6 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                         </Button>
                       </div>
                     </div>
-
-                    {pendingPlacement?.entryId === entry.id && (
-                      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
-                        <p className="text-sm font-black text-amber-950">First and second choice are not available. Choose another squad:</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {(pendingPlacement.options || []).map((option) => (
-                            <Button
-                              key={option.id}
-                              variant="outline"
-                              className="rounded-2xl border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
-                              onClick={() => placeEntryInSquad(pendingPlacement.sourceSquadId, entry.id, option.id, "Placed from available squad list. ")}
-                            >
-                              {option.label} ({option.count}{option.capacity ? `/${option.capacity}` : ""})
-                            </Button>
-                          ))}
-                          <Button
-                            variant="outline"
-                            className="rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
-                            onClick={() => setPendingPlacement(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    )}
 
                     {isCollapsed ? null : (
                     <>
