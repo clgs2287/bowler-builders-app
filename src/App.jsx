@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
@@ -8933,7 +8934,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               <option key={bowlerIdentityKey(bowler.name)} value={bowler.name} />
             ))}
           </datalist>
-          {pendingPlacement && (
+          {pendingPlacement && typeof document !== "undefined" && createPortal((
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
               <div className="w-full max-w-xl rounded-3xl border border-amber-200 bg-white p-5 shadow-2xl">
                 <h3 className="text-xl font-black text-blue-950">Choose Available Squad</h3>
@@ -8960,7 +8961,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                 </div>
               </div>
             </div>
-          )}
+          ), document.body)}
 
           {!activeSquad && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
