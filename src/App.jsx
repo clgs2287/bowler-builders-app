@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
@@ -3344,6 +3344,8 @@ tabs: [
       { id: "multiDaySetup", label: "Setup" },
       { id: "multiDaySquads", label: "Squads" },
       { id: "multiDayRegistration", label: "Registration" },
+      { id: "multiDayCheckIn", label: "Check-In" },
+      { id: "multiDaySideAction", label: "Side Action" },
       { id: "multiDayScores", label: "Scores" },
       { id: "multiDayLeaderboards", label: "Leaderboards" },
     ],
@@ -8223,6 +8225,7 @@ function createStrikefestMultiDayEvent() {
     handicapPercent: 100,
     handicapMax: "",
     scoringDivisions: { scratch: true, handicap: true, youthScratch: true, youthHandicap: true },
+    highGameEnabled: true,
     allEventsRule: "First singles, first doubles, and first team/trios appearance count toward All Events.",
     notes: "Bowl any event on any squad time. Re-entries allowed at tournament manager discretion and lane availability.",
     eventDefinitions: [
@@ -8266,6 +8269,7 @@ function createDefaultMultiDayEvent() {
     handicapPercent: 100,
     handicapMax: "",
     scoringDivisions: { scratch: true, handicap: true, youthScratch: false, youthHandicap: false },
+    highGameEnabled: true,
     allEventsRule: "First singles, first doubles, and first team appearance count toward All Events.",
     notes: "",
     eventDefinitions: DEFAULT_MULTI_EVENT_DEFINITIONS,
@@ -8321,6 +8325,12 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const [testDraftNotice, setTestDraftNotice] = useState("");
   const [collapsedEntryIds, setCollapsedEntryIds] = useState({});
   const [pendingPlacement, setPendingPlacement] = useState(null);
+  const [scoreEntrySort, setScoreEntrySort] = useState("entry");
+  const [checkInSort, setCheckInSort] = useState("entry");
+  const [checkInSortDirection, setCheckInSortDirection] = useState("asc");
+  const [checkInOrderIds, setCheckInOrderIds] = useState([]);
+  const [scoreEntryLaneOrderIds, setScoreEntryLaneOrderIds] = useState([]);
+  const [scoreEntryLaneSortStale, setScoreEntryLaneSortStale] = useState(false);
   const updateEvent = (field, value) => setMultiDayEvent((current) => ({ ...current, [field]: value }));
   const updateScoringDivision = (field, value) => setMultiDayEvent((current) => ({
     ...current,
@@ -8401,6 +8411,7 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   const bowlers = multiDayEvent.bowlers || [];
   const squads = multiDayEvent.squads || [];
   const mixedSquads = multiDayEvent.squadMode === "mixed";
+  const multiDayHighGameEnabled = multiDayEvent.highGameEnabled !== false;
   const seriesValue = (value) => Number(value || 0);
   const activeSquad = squads.find((squad) => squad.id === selectedSquadId) || squads[0] || null;
   const squadEntries = squads.flatMap((squad) => (squad.entries || []).map((entry) => ({ ...entry, squad })));
@@ -8543,6 +8554,490 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     if (field === "name") members[memberIndex] = value;
     return { ...current, members, memberDetails };
   });
+  const multiDayCheckInRows = squadEntries.flatMap((entry) => {
+    const competition = getEntryCompetition(entry);
+    return entryMembers(entry, entry.squad).map((member, memberIndex) => ({
+      entry,
+      squad: entry.squad,
+      competition,
+      member,
+      memberIndex,
+      name: member.name || (competition === "Singles" ? entry.name : "") || `Bowler ${memberIndex + 1}`,
+      entryName: entry.name || (entry.members || []).filter(Boolean).join(" / ") || `${competition} Entry`,
+    }));
+  }).sort((a, b) =>
+    String(a.squad.date || "").localeCompare(String(b.squad.date || "")) ||
+    String(a.squad.time || "").localeCompare(String(b.squad.time || "")) ||
+    String(a.competition || "").localeCompare(String(b.competition || "")) ||
+    String(a.name || "").localeCompare(String(b.name || ""))
+  );
+  const checkedInCount = multiDayCheckInRows.filter((row) => row.member.checkedIn).length;
+  const scratchBracketCount = multiDayCheckInRows.reduce((sum, row) => sum + Number(row.member.scratchBrackets || 0), 0);
+  const handicapBracketCount = multiDayCheckInRows.reduce((sum, row) => sum + Number(row.member.handicapBrackets || 0), 0);
+  const highGameCount = multiDayCheckInRows.filter((row) => row.member.highGame).length;
+  const checkInRowsBySquad = squads.map((squad) => {
+    const rows = multiDayCheckInRows.filter((row) => row.squad.id === squad.id);
+    return {
+      squad,
+      rows,
+      checkedIn: rows.filter((row) => row.member.checkedIn).length,
+      scratchBrackets: rows.reduce((sum, row) => sum + Number(row.member.scratchBrackets || 0), 0),
+      handicapBrackets: rows.reduce((sum, row) => sum + Number(row.member.handicapBrackets || 0), 0),
+      highGame: rows.filter((row) => row.member.highGame).length,
+    };
+  }).filter((group) => group.rows.length > 0);
+  const selectedCheckInGroup =
+    checkInRowsBySquad.find((group) => group.squad.id === selectedSquadId) ||
+    checkInRowsBySquad[0] ||
+    null;
+  const multiDayLaneKey = (lane) => {
+    const value = String(lane || "").trim().toUpperCase();
+    const numericLane = value.match(/\d+/)?.[0];
+    return numericLane || value;
+  };
+  const baseSelectedCheckInEntries = selectedCheckInGroup
+    ? selectedCheckInGroup.rows.reduce((groups, row) => {
+      const existing = groups.find((group) => group.entry.id === row.entry.id);
+      if (existing) {
+        existing.rows.push(row);
+        return groups;
+      }
+      groups.push({ entry: row.entry, entryName: row.entryName, competition: row.competition, rows: [row] });
+      return groups;
+    }, [])
+    : [];
+  const sortCheckInEntryGroups = (groups, sortKey, direction = "asc") => [...groups].sort((a, b) => {
+    const multiplier = direction === "desc" ? -1 : 1;
+    if (sortKey === "lane") {
+      const laneA = multiDayLaneKey(a.entry.lane);
+      const laneB = multiDayLaneKey(b.entry.lane);
+      const laneCompare = laneAssignmentSortValue(laneA || "9999") - laneAssignmentSortValue(laneB || "9999") || String(a.entryName || "").localeCompare(String(b.entryName || ""));
+      return laneCompare * multiplier;
+    }
+    if (sortKey === "here") {
+      const statusA = a.rows.every((row) => row.member.checkedIn) ? 2 : a.rows.some((row) => row.member.checkedIn) ? 1 : 0;
+      const statusB = b.rows.every((row) => row.member.checkedIn) ? 2 : b.rows.some((row) => row.member.checkedIn) ? 1 : 0;
+      const statusCompare = statusA - statusB || String(a.entryName || "").localeCompare(String(b.entryName || ""));
+      return statusCompare * multiplier;
+    }
+    if (sortKey === "event") {
+      const eventCompare = String(a.competition || "").localeCompare(String(b.competition || "")) || String(a.entryName || "").localeCompare(String(b.entryName || ""));
+      return eventCompare * multiplier;
+    }
+    return 0;
+  });
+  const selectedCheckInEntries = checkInOrderIds.length
+    ? [...baseSelectedCheckInEntries].sort((a, b) => {
+      const indexA = checkInOrderIds.indexOf(a.entry.id);
+      const indexB = checkInOrderIds.indexOf(b.entry.id);
+      return (indexA < 0 ? 9999 : indexA) - (indexB < 0 ? 9999 : indexB);
+    })
+    : baseSelectedCheckInEntries;
+  const applyCheckInSort = (sortKey) => {
+    const nextDirection = checkInSort === sortKey && checkInSortDirection === "asc" ? "desc" : "asc";
+    setCheckInSort(sortKey);
+    setCheckInSortDirection(nextDirection);
+    setCheckInOrderIds(sortCheckInEntryGroups(baseSelectedCheckInEntries, sortKey, nextDirection).map((group) => group.entry.id));
+  };
+  const laneOccupancyForSquad = (squad = activeSquad) =>
+    (squad?.entries || []).reduce((map, entry) => {
+      const laneKey = multiDayLaneKey(entry.lane);
+      if (!laneKey) return map;
+      map[laneKey] = (map[laneKey] || 0) + getEntryMemberCount(entry, squad);
+      return map;
+    }, {});
+  const multiDaySideAction = multiDayEvent.sideActionBySquad || {};
+  const selectedSquadSideAction = selectedCheckInGroup ? multiDaySideAction[selectedCheckInGroup.squad.id] || {} : {};
+  const selectedSquadBracketGroups = selectedSquadSideAction.bracketGroups || {};
+  const selectedSquadRefunds = selectedSquadSideAction.refundsBySet || {};
+  const selectedSquadLeftovers = selectedSquadSideAction.leftoversBySet || {};
+  const selectedSquadPlanIds = selectedSquadSideAction.selectedPlanIds || {};
+  const multiDayBracketPrice = Number(multiDayEvent.bracketPrice || DEFAULT_BRACKET_PRICE);
+  const multiDayBracketSetLabel = (setKey) => setKey === "handicap" ? "Handicap" : "Scratch";
+  const multiDayPlayerKey = (row) => `${row.squad.id}::${row.entry.id}::${row.memberIndex}`;
+  const selectedCheckInPlayerByKey = Object.fromEntries(selectedCheckInGroup?.rows.map((row) => [multiDayPlayerKey(row), row]) || []);
+  const multiDayPlayerScore = (playerRef, roundIndex, setKey) => {
+    const row = selectedCheckInPlayerByKey[playerRef?.key];
+    if (!row) return 0;
+    const scratch = memberGameScore(row.entry, row.memberIndex, roundIndex);
+    if (!scratch) return 0;
+    return scratch + (setKey === "handicap" ? handicapPerGame(row.member) : 0);
+  };
+  const multiDayAdvancePlayers = (players, roundIndex, setKey) => {
+    const realPlayers = (players || []).filter((player) => player && player.name !== "BYE");
+    if (realPlayers.length === 0) return [];
+    if (realPlayers.length === 1) return realPlayers;
+    const scored = realPlayers.map((player) => ({ player, score: multiDayPlayerScore(player, roundIndex, setKey) }));
+    const maxScore = Math.max(...scored.map((item) => item.score));
+    if (!maxScore) return [];
+    return scored.filter((item) => item.score === maxScore).map((item) => item.player);
+  };
+  const multiDayBracketRounds = (bracket, setKey) => {
+    const p = Array.from({ length: 8 }, (_, index) => bracket.players?.[index] || { key: `bye-${index}`, name: "BYE" });
+    const r1Matches = [[p[0], p[1]], [p[2], p[3]], [p[4], p[5]], [p[6], p[7]]];
+    const r1Winners = r1Matches.map((match) => multiDayAdvancePlayers(match, 0, setKey));
+    const r2Matches = [[...r1Winners[0], ...r1Winners[1]], [...r1Winners[2], ...r1Winners[3]]];
+    const r2Winners = r2Matches.map((match) => multiDayAdvancePlayers(match, 1, setKey));
+    const finalPlayers = [...r2Winners[0], ...r2Winners[1]];
+    const champions = multiDayAdvancePlayers(finalPlayers, 2, setKey);
+    return { r1Matches, r1Winners, r2Matches, r2Winners, finalPlayers, champions };
+  };
+  const multiDayShuffle = (items) => {
+    const copy = [...items];
+    for (let index = copy.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+    }
+    return copy;
+  };
+  const multiDayBracketPairKey = (a, b) => [String(a?.player?.key || ""), String(b?.player?.key || "")].sort().join("-");
+  const getMultiDayBracketPlans = (entryCount) => {
+    const totalEntries = Number(entryCount || 0);
+    const fullBrackets = Math.floor(totalEntries / 8);
+    const leftoverEntries = totalEntries % 8;
+    const plans = [{
+      id: "full-only",
+      label: `${fullBrackets} full bracket${fullBrackets === 1 ? "" : "s"}, no byes`,
+      brackets: fullBrackets,
+      byes: 0,
+      usedEntries: fullBrackets * 8,
+      leftoverEntries,
+      fullPayoutBrackets: fullBrackets,
+      byePayoutBrackets: 0,
+    }];
+
+    for (let byes = 1; byes <= 7; byes += 1) {
+      const totalSlotsNeeded = totalEntries + byes;
+      if (totalSlotsNeeded % 8 !== 0) continue;
+      const bracketCount = totalSlotsNeeded / 8;
+      if (bracketCount <= fullBrackets) continue;
+      if (totalEntries < bracketCount) continue;
+      if (byes > bracketCount) continue;
+      plans.push({
+        id: `with-${byes}-byes`,
+        label: `${bracketCount} brackets with ${byes} bye${byes === 1 ? "" : "s"}`,
+        brackets: bracketCount,
+        byes,
+        usedEntries: totalEntries,
+        leftoverEntries: 0,
+        fullPayoutBrackets: bracketCount - byes,
+        byePayoutBrackets: byes,
+      });
+    }
+
+    return plans.sort((a, b) => b.usedEntries - a.usedEntries || a.byes - b.byes);
+  };
+  const getMultiDaySelectedPlan = (setKey, entryCount) => {
+    const plans = getMultiDayBracketPlans(entryCount);
+    const selectedId = selectedSquadPlanIds[setKey] || "full-only";
+    return plans.find((plan) => plan.id === selectedId) || plans[0];
+  };
+  const setMultiDaySideActionPlan = (setKey, planId) => {
+    if (!selectedCheckInGroup) return;
+    setMultiDayEvent((current) => ({
+      ...current,
+      sideActionBySquad: {
+        ...(current.sideActionBySquad || {}),
+        [selectedCheckInGroup.squad.id]: {
+          ...((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}),
+          selectedPlanIds: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).selectedPlanIds || {}),
+            [setKey]: planId,
+          },
+        },
+      },
+    }));
+  };
+  const getMultiDayPreviewRows = (setKey, entryCount) => {
+    if (!selectedCheckInGroup) return { rows: [], refunds: [], refundTotal: 0, selectedPlan: null, bracketPlans: [] };
+    const tickets = selectedCheckInGroup.rows.flatMap((row) => {
+      const count = Number(setKey === "handicap" ? row.member.handicapBrackets || 0 : row.member.scratchBrackets || 0);
+      const player = { key: multiDayPlayerKey(row), name: row.name, entryName: row.entryName };
+      return Array.from({ length: count }, (_, index) => ({ id: `${player.key}-${setKey}-${index}`, player }));
+    });
+    const bracketPlans = getMultiDayBracketPlans(entryCount);
+    const selectedPlan = getMultiDaySelectedPlan(setKey, entryCount);
+    if (!selectedPlan || !tickets.length || selectedPlan.brackets <= 0) return { rows: [], refunds: [], refundTotal: 0, selectedPlan, bracketPlans };
+    const byPlayer = tickets.reduce((map, ticket) => {
+      const key = ticket.player.key;
+      map[key] = map[key] || { key, name: ticket.player.name, purchased: 0, used: 0, refunded: 0 };
+      map[key].purchased += 1;
+      return map;
+    }, {});
+    const previewRows = Object.values(byPlayer).map((player) => ({ ...player, used: Math.min(player.purchased, selectedPlan.brackets) }));
+    let surplus = Math.max(0, previewRows.reduce((sum, row) => sum + row.used, 0) - selectedPlan.usedEntries);
+    while (surplus > 0) {
+      const candidates = previewRows
+        .filter((row) => row.used > 0)
+        .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
+      if (!candidates.length) break;
+      for (const row of candidates) {
+        if (surplus <= 0) break;
+        row.used -= 1;
+        surplus -= 1;
+      }
+    }
+    const rows = Object.values(byPlayer)
+      .map((player) => {
+        const used = Number(previewRows.find((row) => row.key === player.key)?.used || 0);
+        const refunded = Math.max(0, player.purchased - used);
+        return { ...player, used, refunded, refundAmount: refunded * multiDayBracketPrice };
+      })
+      .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
+    const refunds = rows.filter((row) => row.refunded > 0).sort((a, b) => b.refunded - a.refunded || a.name.localeCompare(b.name));
+    const refundTotal = refunds.reduce((sum, row) => sum + row.refundAmount, 0);
+    return { rows, refunds, refundTotal, selectedPlan, bracketPlans };
+  };
+  const generateMultiDaySquadBrackets = (setKey) => {
+    if (!selectedCheckInGroup) return;
+    const existing = selectedSquadBracketGroups[setKey] || [];
+    if (existing.length) {
+      window.alert("Brackets are already generated and locked. Clear brackets first if you need to regenerate.");
+      return;
+    }
+    const tickets = selectedCheckInGroup.rows.flatMap((row) => {
+      const entryCount = Number(setKey === "handicap" ? row.member.handicapBrackets || 0 : row.member.scratchBrackets || 0);
+      const player = {
+        key: multiDayPlayerKey(row),
+        name: row.name,
+        entryName: row.entryName,
+      };
+      return Array.from({ length: entryCount }, (_, index) => ({ id: `${player.key}-${setKey}-${index}`, player }));
+    });
+    const totalEntries = tickets.length;
+    const selectedPlan = getMultiDaySelectedPlan(setKey, totalEntries);
+    if (!selectedPlan || selectedPlan.brackets <= 0) {
+      setTestDraftNotice(`Add enough ${multiDayBracketSetLabel(setKey).toLowerCase()} bracket entries before generating.`);
+      return;
+    }
+
+    const allByPlayer = tickets.reduce((map, ticket) => {
+      const key = ticket.player.key;
+      map[key] = [...(map[key] || []), ticket];
+      return map;
+    }, {});
+    const leftoverTickets = [];
+    const usageRows = Object.values(allByPlayer).map((queue) => ({
+      key: queue[0].player.key,
+      name: queue[0].player.name,
+      queue: multiDayShuffle(queue),
+      purchased: queue.length,
+      used: Math.min(queue.length, selectedPlan.brackets),
+    }));
+
+    let surplus = Math.max(0, usageRows.reduce((sum, row) => sum + row.used, 0) - selectedPlan.usedEntries);
+    while (surplus > 0) {
+      const candidates = usageRows
+        .filter((row) => row.used > 0)
+        .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
+      if (!candidates.length) break;
+      for (const row of candidates) {
+        if (surplus <= 0) break;
+        row.used -= 1;
+        surplus -= 1;
+      }
+    }
+
+    const ticketsToUse = [];
+    usageRows.forEach((row) => {
+      ticketsToUse.push(...row.queue.slice(0, row.used));
+      leftoverTickets.push(...row.queue.slice(row.used));
+    });
+
+    const buckets = ticketsToUse.reduce((map, ticket) => {
+      const key = ticket.player.key;
+      map[key] = [...(map[key] || []), ticket];
+      return map;
+    }, {});
+    const bracketTicketGroups = Array.from({ length: selectedPlan.brackets }, () => []);
+    const maxSlotsByBracket = Array.from({ length: selectedPlan.brackets }, (_, index) => 8 - (index < selectedPlan.byes ? 1 : 0));
+    Object.values(buckets)
+      .sort((a, b) => b.length - a.length)
+      .forEach((queue) => {
+        queue.forEach((ticket) => {
+          let bestIndex = -1;
+          let smallestSize = Infinity;
+          bracketTicketGroups.forEach((group, index) => {
+            const hasThisBowler = group.some((item) => item.player.key === ticket.player.key);
+            const hasRoom = group.length < maxSlotsByBracket[index];
+            if (!hasThisBowler && hasRoom && group.length < smallestSize) {
+              bestIndex = index;
+              smallestSize = group.length;
+            }
+          });
+          if (bestIndex >= 0) bracketTicketGroups[bestIndex].push(ticket);
+          else leftoverTickets.push(ticket);
+        });
+      });
+
+    const usedPairs = new Set();
+    const generated = [];
+    bracketTicketGroups.forEach((group, index) => {
+      if (!group.length) return;
+      if (group.length < 7) {
+        leftoverTickets.push(...group);
+        return;
+      }
+      const byesForThisBracket = 8 - group.length;
+      const byeTickets = Array.from({ length: byesForThisBracket }, (_, byeIndex) => ({
+        id: `bye-${index + 1}-${byeIndex}`,
+        player: { key: `BYE-${index + 1}-${byeIndex}`, name: "BYE", entryName: "" },
+      }));
+      let bestOrder = group;
+      let bestDuplicateCount = Infinity;
+      for (let attempt = 0; attempt < 300; attempt += 1) {
+        const candidate = multiDayShuffle(group);
+        const candidateSlots = [...candidate, ...byeTickets];
+        const pairs = [[candidateSlots[0], candidateSlots[1]], [candidateSlots[2], candidateSlots[3]], [candidateSlots[4], candidateSlots[5]], [candidateSlots[6], candidateSlots[7]]];
+        const duplicateCount = pairs.filter(([a, b]) => a?.player?.name !== "BYE" && b?.player?.name !== "BYE" && usedPairs.has(multiDayBracketPairKey(a, b))).length;
+        if (duplicateCount < bestDuplicateCount) {
+          bestDuplicateCount = duplicateCount;
+          bestOrder = candidate;
+        }
+        if (duplicateCount === 0) break;
+      }
+      const finalTickets = [...bestOrder, ...byeTickets];
+      [[finalTickets[0], finalTickets[1]], [finalTickets[2], finalTickets[3]], [finalTickets[4], finalTickets[5]], [finalTickets[6], finalTickets[7]]].forEach(([a, b]) => {
+        if (a?.player?.name !== "BYE" && b?.player?.name !== "BYE") usedPairs.add(multiDayBracketPairKey(a, b));
+      });
+      generated.push({
+        id: `multi-day-side-bracket-${Date.now()}-${setKey}-${index + 1}`,
+        number: index + 1,
+        locked: true,
+        players: finalTickets.map((ticket) => ticket.player),
+        byes: byesForThisBracket,
+        payout: byesForThisBracket > 0 ? { first: 20, second: 10 } : { first: 25, second: 10 },
+      });
+    });
+    const refunds = leftoverTickets.reduce((map, ticket) => {
+      if (ticket.player.name === "BYE") return map;
+      const current = map[ticket.player.key] || { key: ticket.player.key, name: ticket.player.name, unusedEntries: 0 };
+      current.unusedEntries += 1;
+      map[ticket.player.key] = current;
+      return map;
+    }, {});
+    setMultiDayEvent((current) => ({
+      ...current,
+      sideActionBySquad: {
+        ...(current.sideActionBySquad || {}),
+        [selectedCheckInGroup.squad.id]: {
+          ...((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}),
+          bracketGroups: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).bracketGroups || {}),
+            [setKey]: generated,
+          },
+          refundsBySet: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).refundsBySet || {}),
+            [setKey]: Object.values(refunds),
+          },
+          leftoversBySet: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).leftoversBySet || {}),
+            [setKey]: leftoverTickets.length,
+          },
+          selectedPlanIds: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).selectedPlanIds || {}),
+            [setKey]: selectedPlan.id,
+          },
+        },
+      },
+    }));
+    setTestDraftNotice(`Generated ${generated.length} ${multiDayBracketSetLabel(setKey).toLowerCase()} bracket${generated.length === 1 ? "" : "s"} for ${squadLabel(selectedCheckInGroup.squad)}.`);
+  };  const clearMultiDaySquadBrackets = (setKey) => {
+    if (!selectedCheckInGroup) return;
+    setMultiDayEvent((current) => ({
+      ...current,
+      sideActionBySquad: {
+        ...(current.sideActionBySquad || {}),
+        [selectedCheckInGroup.squad.id]: {
+          ...((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}),
+          bracketGroups: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).bracketGroups || {}),
+            [setKey]: [],
+          },
+          refundsBySet: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).refundsBySet || {}),
+            [setKey]: [],
+          },
+          leftoversBySet: {
+            ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).leftoversBySet || {}),
+            [setKey]: 0,
+          },
+        },
+      },
+    }));
+    setTestDraftNotice(`Cleared ${multiDayBracketSetLabel(setKey).toLowerCase()} brackets for ${squadLabel(selectedCheckInGroup.squad)}.`);
+  };
+  const MultiDaySideActionMatch = ({ title, players, roundIndex, setKey }) => {
+    const safePlayers = players || [];
+    const winners = multiDayAdvancePlayers(safePlayers, roundIndex, setKey);
+    return (
+      <div className="rounded-2xl border border-blue-200 bg-white p-3 shadow-sm">
+        <h5 className="mb-2 text-center text-[11px] font-black uppercase tracking-wide text-blue-700">{title}</h5>
+        <div className="space-y-2">
+          {safePlayers.map((player, playerIndex) => {
+            const score = player.name === "BYE" ? 0 : multiDayPlayerScore(player, roundIndex, setKey);
+            const isWinner = player.name !== "BYE" && winners.some((winner) => winner.key === player.key);
+            const rowClass = player.name === "BYE"
+              ? "grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-slate-500"
+              : isWinner
+                ? "grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl bg-green-100 px-3 py-2 text-green-900 ring-1 ring-green-300"
+                : "grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-blue-950";
+            return (
+              <div key={`${title}-${player.key}-${playerIndex}`} className={rowClass}>
+                <span className="min-w-0 whitespace-normal break-words text-sm font-bold leading-snug">{player.name}</span>
+                <span className="min-w-[44px] rounded-lg bg-white px-2 py-1 text-center text-sm font-black text-blue-950 shadow-sm">
+                  {player.name === "BYE" ? "BYE" : score || "-"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const MultiDaySideActionBracketCard = ({ bracket, setKey }) => {
+    const rounds = multiDayBracketRounds(bracket, setKey);
+    const championText = rounds.champions.map((player) => player.name).join(" / ") || "TBD";
+    return (
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 shadow-sm">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <h4 className="font-black text-blue-950">Bracket #{bracket.number}</h4>
+          <div className="flex flex-wrap gap-2 text-xs font-black">
+            {bracket.byes > 0 && <span className="rounded-full bg-purple-100 px-2 py-1 text-purple-900">{bracket.byes} BYE</span>}
+            <span className="rounded-full bg-white px-2 py-1 text-blue-800">1st {currency(bracket.payout?.first || 25)} / 2nd {currency(bracket.payout?.second || 10)}</span>
+            <span className="rounded-full bg-green-50 px-2 py-1 text-green-800">Winner {championText}</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto rounded-2xl border border-blue-100 bg-white/70 p-3">
+          <div className="flex min-w-[880px] items-start gap-8">
+            <div className="min-w-[260px] flex-1">
+              <h5 className="mb-3 text-center text-sm font-black text-blue-900">Game 1</h5>
+              <div className="flex flex-col gap-5">
+                {rounds.r1Matches.map((match, index) => (
+                  <MultiDaySideActionMatch key={`${bracket.id}-r1-${index}`} title={`Match ${index + 1}`} players={match} roundIndex={0} setKey={setKey} />
+                ))}
+              </div>
+            </div>
+            <div className="min-w-[260px] flex-1">
+              <h5 className="mb-3 text-center text-sm font-black text-blue-900">Game 2</h5>
+              <div className="flex flex-col gap-28 pt-14">
+                {rounds.r2Matches.map((match, index) => (
+                  <MultiDaySideActionMatch key={`${bracket.id}-r2-${index}`} title={`Semi ${index + 1}`} players={match} roundIndex={1} setKey={setKey} />
+                ))}
+              </div>
+            </div>
+            <div className="min-w-[260px] flex-1">
+              <h5 className="mb-3 text-center text-sm font-black text-blue-900">Game 3</h5>
+              <div className="pt-40">
+                <MultiDaySideActionMatch title="Final" players={rounds.finalPlayers} roundIndex={2} setKey={setKey} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
   const resizeEntryForCompetition = (entry, competition) => {
     const count = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 5);
     return {
@@ -8711,6 +9206,26 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     }));
     setTestDraftNotice(`Saved test draft for ${multiDayEvent.name || "multi-event tournament"}.`);
   };
+  const saveMultiDayScoreGame = (gameIndex, squad = activeSquad) => {
+    if (typeof window === "undefined" || !squad) return;
+    const savedAt = new Date().toISOString();
+    const nextEvent = {
+      ...multiDayEvent,
+      savedScoreGamesBySquad: {
+        ...(multiDayEvent.savedScoreGamesBySquad || {}),
+        [squad.id]: {
+          ...((multiDayEvent.savedScoreGamesBySquad || {})[squad.id] || {}),
+          [gameIndex]: savedAt,
+        },
+      },
+    };
+    window.localStorage.setItem(MULTI_DAY_TEST_STORAGE_KEY, JSON.stringify({
+      savedAt,
+      event: nextEvent,
+    }));
+    setMultiDayEvent(nextEvent);
+    setTestDraftNotice(`Saved Game ${gameIndex + 1} scores for ${squadLabel(squad)}.`);
+  };
   const loadMultiDayTestDraft = () => {
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem(MULTI_DAY_TEST_STORAGE_KEY);
@@ -8822,6 +9337,13 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
               <div><Label>Doubles Per Bowler</Label><Input type="number" value={multiDayEvent.doublesPrice || ""} onChange={(e) => updateEvent("doublesPrice", e.target.value)} /></div>
               <div><Label>Team/Trios Per Bowler</Label><Input type="number" value={multiDayEvent.teamPrice || ""} onChange={(e) => updateEvent("teamPrice", e.target.value)} /></div>
               <div><Label>All Events Optional</Label><Input type="number" value={multiDayEvent.allEventsPrice || ""} onChange={(e) => updateEvent("allEventsPrice", e.target.value)} /></div>
+            </div>
+            <div className="mt-4 flex min-h-[48px] items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-black text-blue-950">High Game Side Pot</p>
+                <p className="text-xs font-semibold text-blue-700">Turn this off to hide High Game from multi-event check-in.</p>
+              </div>
+              <Switch checked={multiDayHighGameEnabled} onCheckedChange={(checked) => updateEvent("highGameEnabled", checked)} />
             </div>
           </div>
 
@@ -9132,6 +9654,320 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
     );
   }
 
+  if (mode === "sideAction") {
+    return (
+      <AppCard>
+        <CardContent className="space-y-5 p-4 md:p-6">
+          <div>
+            <h2 className="text-2xl font-black text-blue-950">Multi-Event Side Action</h2>
+            <p className="text-sm font-semibold text-blue-700">
+              Generate and review scratch or handicap side brackets for one squad at a time. Bracket entries come from the Check-In tab.
+            </p>
+          </div>
+          {testDraftControls}
+
+          <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
+            <div>
+              <Label>Side Action Squad</Label>
+              <select
+                value={selectedCheckInGroup?.squad.id || ""}
+                onChange={(e) => setSelectedSquadId(e.target.value)}
+                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+              >
+                {checkInRowsBySquad.map((group) => (
+                  <option key={group.squad.id} value={group.squad.id}>{squadLabel(group.squad)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+              {selectedCheckInGroup ? (
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <span>{selectedCheckInGroup.squad.lanes ? `Lanes ${selectedCheckInGroup.squad.lanes}` : "Lanes TBD"}</span>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-900">
+                    Scratch {selectedCheckInGroup.scratchBrackets} - HDCP {selectedCheckInGroup.handicapBrackets}{multiDayHighGameEnabled ? ` - High Game ${selectedCheckInGroup.highGame}` : ""}
+                  </span>
+                </div>
+              ) : "No bracket entries are ready yet. Add bracket counts on Check-In first."}
+            </div>
+          </div>
+
+          {selectedCheckInGroup ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {["scratch", "handicap"].map((setKey) => {
+                const brackets = selectedSquadBracketGroups[setKey] || [];
+                const refunds = selectedSquadRefunds[setKey] || [];
+                const totalRefunds = refunds.reduce((sum, refund) => sum + Number(refund.unusedEntries || 0) * multiDayBracketPrice, 0);
+                const entryCount = setKey === "handicap" ? selectedCheckInGroup.handicapBrackets : selectedCheckInGroup.scratchBrackets;
+                const { rows: previewRows, refunds: previewRefunds, refundTotal: previewRefundTotal, selectedPlan, bracketPlans } = getMultiDayPreviewRows(setKey, entryCount);
+                const hasGeneratedBrackets = brackets.length > 0;
+                return (
+                  <div key={`multi-day-side-action-${setKey}`} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h3 className="text-lg font-black text-blue-950">{multiDayBracketSetLabel(setKey)} Brackets</h3>
+                        <p className="text-sm font-semibold text-blue-700">
+                          {entryCount} entr{entryCount === 1 ? "y" : "ies"} - {brackets.length} bracket{brackets.length === 1 ? "" : "s"} - Leftover {selectedSquadLeftovers[setKey] || 0} - Refunds {currency(totalRefunds)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => generateMultiDaySquadBrackets(setKey)} disabled={hasGeneratedBrackets}>
+                          {hasGeneratedBrackets ? 'Brackets Locked' : 'Generate'}
+                        </Button>
+                        <Button variant="outline" className="rounded-2xl bg-white" onClick={() => clearMultiDaySquadBrackets(setKey)}>
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                    {!hasGeneratedBrackets && (
+                      <div className="mt-4 space-y-3">
+                        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                          <h4 className="text-sm font-black text-blue-950">Bracket Plan Options</h4>
+                          <div className="mt-2 grid gap-2 text-xs font-bold text-blue-800 md:grid-cols-2 xl:grid-cols-3">
+                            {bracketPlans.map((plan) => (
+                              <button
+                                key={`${setKey}-${plan.id}`}
+                                type="button"
+                                onClick={() => setMultiDaySideActionPlan(setKey, plan.id)}
+                                className={selectedPlan?.id === plan.id ? "rounded-xl border-2 border-blue-700 bg-white p-3 text-left shadow-md" : "rounded-xl border border-blue-200 bg-white p-3 text-left shadow-sm hover:bg-blue-50"}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="font-black text-blue-950">{plan.label}</p>
+                                  {selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-[10px] font-black text-white">SELECTED</span>}
+                                </div>
+                                <div className="mt-2 grid grid-cols-2 gap-1">
+                                  <p><strong>Entries used:</strong> {plan.usedEntries}</p>
+                                  <p><strong>Leftover:</strong> {plan.leftoverEntries}</p>
+                                  <p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p>
+                                  <p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p>
+                                </div>
+                                <p className="mt-2 text-[11px] text-blue-600">Full: {currency(25)} / {currency(10)} - With bye: {currency(20)} / {currency(10)}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-blue-100 bg-white p-3">
+                          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <h4 className="text-sm font-black text-blue-950">Bracket & Refund Preview</h4>
+                            <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">Projected Refunds: {currency(previewRefundTotal)}</span>
+                          </div>
+                          {previewRows.length > 0 ? (
+                            <div className="overflow-auto rounded-xl border border-blue-100">
+                              <table className="w-full min-w-[460px] text-xs">
+                                <thead className="bg-blue-800 text-white">
+                                  <tr>
+                                    <th className="p-2 text-left">Bowler</th>
+                                    <th className="p-2 text-right">Total Entries</th>
+                                    <th className="p-2 text-right">Entries Used</th>
+                                    <th className="p-2 text-right">Refund</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {previewRows.map((row) => (
+                                    <tr key={`${setKey}-preview-${row.key}`} className="border-t">
+                                      <td className="p-2 font-semibold text-blue-950">{row.name}</td>
+                                      <td className="p-2 text-right">{row.purchased}</td>
+                                      <td className="p-2 text-right font-black text-blue-900">{row.used}</td>
+                                      <td className="p-2 text-right font-black text-red-700">{row.refunded ? `${row.refunded} / ${currency(row.refundAmount)}` : "-"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="rounded-xl bg-blue-50 p-3 text-xs font-semibold text-blue-800">Add enough bracket entries to preview generated brackets and refunds.</p>
+                          )}
+                          {previewRefunds.length > 0 && (
+                            <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                              Projected refunds: {previewRefunds.map((refund) => `${refund.name} x${refund.refunded}`).join(", ")}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {refunds.length > 0 && (
+                      <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                        Refunds: {refunds.map((refund) => `${refund.name} x${refund.unusedEntries}`).join(", ")}
+                      </p>
+                    )}
+                    {brackets.length > 0 ? (
+                      <div className="mt-4 grid gap-3">
+                        {brackets.map((bracket) => <MultiDaySideActionBracketCard key={bracket.id} bracket={bracket} setKey={setKey} />)}
+                      </div>                    ) : (
+                      <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">No {multiDayBracketSetLabel(setKey).toLowerCase()} brackets generated yet.</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700">
+              No bowlers have bracket entries yet.
+            </div>
+          )}
+        </CardContent>
+      </AppCard>
+    );
+  }
+  if (mode === "checkIn") {
+    return (
+      <AppCard>
+        <CardContent className="space-y-5 p-4 md:p-6">
+          <div>
+            <h2 className="text-2xl font-black text-blue-950">Multi-Event Check-In</h2>
+            <p className="text-sm font-semibold text-blue-700">
+              Mark bowlers as here and track individual side action. Entry fees are assumed paid ahead for this tournament style.
+            </p>
+          </div>
+          {testDraftControls}
+
+          <div className={`grid gap-3 ${multiDayHighGameEnabled ? "md:grid-cols-4" : "md:grid-cols-3"}`}>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Checked In</p>
+              <p className="mt-1 text-2xl font-black text-blue-950">{checkedInCount}/{multiDayCheckInRows.length}</p>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-white p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Scratch Brackets</p>
+              <p className="mt-1 text-2xl font-black text-blue-950">{scratchBracketCount}</p>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-white p-4">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Handicap Brackets</p>
+              <p className="mt-1 text-2xl font-black text-blue-950">{handicapBracketCount}</p>
+            </div>
+            {multiDayHighGameEnabled && (
+              <div className="rounded-2xl border border-blue-100 bg-white p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-blue-700">High Game</p>
+                <p className="mt-1 text-2xl font-black text-blue-950">{highGameCount}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[360px_1fr]">
+            <div>
+              <Label>Check-In Squad</Label>
+              <select
+                value={selectedCheckInGroup?.squad.id || ""}
+                onChange={(e) => setSelectedSquadId(e.target.value)}
+                className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+              >
+                {checkInRowsBySquad.map((group) => (
+                  <option key={group.squad.id} value={group.squad.id}>{squadLabel(group.squad)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">
+              {selectedCheckInGroup ? (
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <span>{selectedCheckInGroup.squad.lanes ? `Lanes ${selectedCheckInGroup.squad.lanes}` : "Lanes TBD"}</span>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-900">
+                    Here {selectedCheckInGroup.checkedIn}/{selectedCheckInGroup.rows.length} - Scratch {selectedCheckInGroup.scratchBrackets} - HDCP {selectedCheckInGroup.handicapBrackets}{multiDayHighGameEnabled ? ` - High Game ${selectedCheckInGroup.highGame}` : ""}
+                  </span>
+                </div>
+              ) : "No registered bowlers are ready for check-in yet."}
+            </div>
+          </div>
+          <div className="space-y-4">
+            {selectedCheckInGroup && (
+              <div key={selectedCheckInGroup.squad.id} className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h3 className="text-lg font-black text-blue-950">{squadLabel(selectedCheckInGroup.squad)}</h3>
+                    <p className="text-xs font-black uppercase tracking-wide text-blue-700">
+                      {selectedCheckInGroup.squad.lanes ? `Lanes ${selectedCheckInGroup.squad.lanes}` : "Lanes TBD"} - {selectedCheckInGroup.rows.length} bowler{selectedCheckInGroup.rows.length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs font-black">
+                    <span className="rounded-full bg-white px-3 py-1 text-blue-800">Here {selectedCheckInGroup.checkedIn}/{selectedCheckInGroup.rows.length}</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-blue-800">Scratch {selectedCheckInGroup.scratchBrackets}</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-blue-800">HDCP {selectedCheckInGroup.handicapBrackets}</span>
+                    {multiDayHighGameEnabled && <span className="rounded-full bg-blue-800 px-3 py-1 text-white">High Game {selectedCheckInGroup.highGame}</span>}
+                  </div>
+                </div>
+<table className="w-full min-w-[960px] text-sm">
+                  <thead className="bg-blue-800 text-white">
+                    <tr>
+                      <th className="p-3 text-left"><button type="button" onClick={() => applyCheckInSort("here")} className="font-black text-white">Here{checkInSort === "here" ? (checkInSortDirection === "asc" ? " ^" : " v") : ""}</button></th>
+                      <th className="p-3 text-left"><button type="button" onClick={() => applyCheckInSort("lane")} className="font-black text-white">Lane{checkInSort === "lane" ? (checkInSortDirection === "asc" ? " ^" : " v") : ""}</button></th>
+                      <th className="p-3 text-left">Bowler</th>
+                      <th className="p-3 text-left">Entry</th>
+                      <th className="p-3 text-left"><button type="button" onClick={() => applyCheckInSort("event")} className="font-black text-white">Event{checkInSort === "event" ? (checkInSortDirection === "asc" ? " ^" : " v") : ""}</button></th>
+                      <th className="p-3 text-right">Avg</th>
+                      <th className="p-3 text-right">HDCP</th>
+                      <th className="w-32 p-3 text-center">Scratch Brackets</th>
+                      <th className="w-32 p-3 text-center">Handicap Brackets</th>
+                      {multiDayHighGameEnabled && <th className="p-3 text-left">High Game</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCheckInEntries.map((entryGroup) => (
+                      <React.Fragment key={`${selectedCheckInGroup.squad.id}-${entryGroup.entry.id}`}>
+                                                <tr className="border-t-4 border-blue-900 bg-slate-100">
+                          <td className="p-3" colSpan={multiDayHighGameEnabled ? 10 : 9}>
+                            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                              <span className="text-xs font-black uppercase tracking-wide text-blue-800">{entryGroup.competition} Entry</span>
+                              <span className="font-black text-blue-950">{entryGroup.entryName}</span>
+                              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-800">Lane {entryGroup.entry.lane || "TBD"}</span>
+                            </div>
+                          </td>
+                        </tr>
+                        {entryGroup.rows.map((row) => (
+                          <tr key={`${row.squad.id}-${row.entry.id}-${row.memberIndex}`} className={row.member.checkedIn ? "border-t bg-green-50" : "border-t"}>
+                            <td className="p-3">
+                              <Switch
+                                checked={Boolean(row.member.checkedIn)}
+                                onCheckedChange={(checked) => updateEntryMemberDetail(row.squad.id, row.entry.id, row.memberIndex, "checkedIn", checked)}
+                              />
+                            </td>
+                            <td className="p-3 font-black text-blue-900">{row.entry.lane || "-"}</td>
+                            <td className="p-3 font-black text-blue-950">{row.name}</td>
+                            <td className="p-3 font-semibold text-slate-700">{row.entryName}</td>
+                            <td className="p-3 font-bold text-blue-800">{row.competition}</td>
+                            <td className="p-3 text-right font-bold text-slate-700">{row.member.average || "-"}</td>
+                            <td className="p-3 text-right font-bold text-slate-700">{handicapPerGame(row.member) || "-"}</td>
+                            <td className="w-32 p-2 text-center">
+                              <Input
+                                className="mx-auto w-24 text-center"
+                                type="number"
+                                min="0"
+                                value={row.member.scratchBrackets || ""}
+                                onChange={(event) => updateEntryMemberDetail(row.squad.id, row.entry.id, row.memberIndex, "scratchBrackets", event.target.value)}
+                              />
+                            </td>
+                            <td className="w-32 p-2 text-center">
+                              <Input
+                                className="mx-auto w-24 text-center"
+                                type="number"
+                                min="0"
+                                value={row.member.handicapBrackets || ""}
+                                onChange={(event) => updateEntryMemberDetail(row.squad.id, row.entry.id, row.memberIndex, "handicapBrackets", event.target.value)}
+                              />
+                            </td>
+                                                        {multiDayHighGameEnabled && (
+                              <td className="p-3">
+                                <Switch
+                                  checked={Boolean(row.member.highGame)}
+                                  onCheckedChange={(checked) => updateEntryMemberDetail(row.squad.id, row.entry.id, row.memberIndex, "highGame", checked)}
+                                />
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {multiDayCheckInRows.length === 0 && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700">
+                No bowlers are registered yet.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </AppCard>
+    );
+  }
+
   if (mode === "registrationLegacy") {
     return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squad Registration</h2><p className="text-sm font-semibold text-blue-700">Pick a squad, then add the singles, doubles, or team entries bowling in that block.</p></div>{activeSquad && <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>Add Entry</Button>}</div>
       <div className="grid gap-3 md:grid-cols-[280px_1fr]">
@@ -9143,24 +9979,146 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
   }
 
   if (mode === "scores") {
+    const activeLaneOccupancy = laneOccupancyForSquad(activeSquad);
+    const activeLaneSummary = Object.entries(activeLaneOccupancy)
+      .sort(([laneA], [laneB]) => laneAssignmentSortValue(laneA) - laneAssignmentSortValue(laneB) || laneA.localeCompare(laneB));
+    const unassignedEntries = (activeSquad?.entries || []).filter((entry) => !multiDayLaneKey(entry.lane));
+    const unassignedByCompetition = unassignedEntries.reduce((totals, entry) => {
+      const competition = getSquadEntryCompetition(entry, activeSquad);
+      const key = competition === "Team" ? `${multiDayEvent.teamSize || 5}-Person Team` : competition;
+      totals[key] = (totals[key] || 0) + getEntryMemberCount(entry, activeSquad);
+      return totals;
+    }, {});
+    const unassignedBowlerCount = Object.values(unassignedByCompetition).reduce((sum, count) => sum + Number(count || 0), 0);
+    const unassignedSummary = ["Singles", "Doubles", `${multiDayEvent.teamSize || 5}-Person Team`]
+      .filter((label) => unassignedByCompetition[label])
+      .map((label) => `${label}: ${unassignedByCompetition[label]}`)
+      .join(" - ");
+    const sortScoreEntriesByLane = (entriesToSort) => [...(entriesToSort || [])].sort((a, b) => {
+      const aLane = multiDayLaneKey(a.lane);
+      const bLane = multiDayLaneKey(b.lane);
+      if (!aLane && !bLane) return 0;
+      if (!aLane) return 1;
+      if (!bLane) return -1;
+      return laneAssignmentSortValue(aLane) - laneAssignmentSortValue(bLane) ||
+        String(a.name || "").localeCompare(String(b.name || ""));
+    });
+    const scoreEntries = activeSquad?.entries || [];
+    const orderIndexByEntryId = Object.fromEntries(scoreEntryLaneOrderIds.map((id, index) => [id, index]));
+    const activeScoreEntries = scoreEntrySort === "lane" && scoreEntryLaneOrderIds.length
+      ? [...scoreEntries].sort((a, b) => {
+        const aIndex = orderIndexByEntryId[a.id] ?? Number.MAX_SAFE_INTEGER;
+        const bIndex = orderIndexByEntryId[b.id] ?? Number.MAX_SAFE_INTEGER;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+        return sortScoreEntriesByLane([a, b])[0]?.id === a.id ? -1 : 1;
+      })
+      : scoreEntries;
+    const firstEntryIdByLane = activeScoreEntries.reduce((map, entry) => {
+      const laneKey = multiDayLaneKey(entry.lane);
+      if (laneKey && !map[laneKey]) map[laneKey] = entry.id;
+      return map;
+    }, {});
+    const applyScoreEntryLaneSort = () => {
+      const sortedIds = sortScoreEntriesByLane(scoreEntries).map((entry) => entry.id);
+      setScoreEntryLaneOrderIds(sortedIds);
+      setScoreEntrySort("lane");
+      setScoreEntryLaneSortStale(false);
+    };
+    const scoreLaneAnchorId = (lane) => `multi-day-score-lane-${String(lane || "").replace(/[^a-z0-9_-]/gi, "-")}`;
+    const scrollToScoreLane = (lane) => {
+      if (typeof document === "undefined") return;
+      document.getElementById(scoreLaneAnchorId(lane))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Squad Score Entry</h2><p className="text-sm font-semibold text-blue-700">Enter each bowler's games. Doubles and team totals are calculated below each entry.</p></div>
       {testDraftControls}
-      <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
+      <div className="grid gap-3 lg:grid-cols-[320px_1fr_auto] lg:items-end">
+        <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
+        <div className="space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-xs font-black text-blue-800">
+          <div>
+            {activeLaneSummary.length
+              ? activeLaneSummary.map(([lane, count]) => (
+                <button
+                  key={lane}
+                  type="button"
+                  onClick={() => scrollToScoreLane(lane)}
+                  className={count > 3 ? "mb-2 mr-2 inline-flex w-32 justify-center rounded-full bg-red-100 px-3 py-1 text-red-800 hover:bg-red-200" : count === 3 ? "mb-2 mr-2 inline-flex w-32 justify-center rounded-full bg-green-100 px-3 py-1 text-green-800 hover:bg-green-200" : "mb-2 mr-2 inline-flex w-32 justify-center rounded-full bg-white px-3 py-1 text-blue-800 hover:bg-blue-100"}
+                >
+                  Lane {lane}: {count}/3{count === 3 ? " Full" : count > 3 ? " Over" : ""}
+                </button>
+              ))
+              : "No lanes assigned yet."}
+          </div>
+          <div>
+            <span className={unassignedBowlerCount > 0 ? "inline-flex rounded-full bg-amber-100 px-3 py-1 text-amber-900" : "inline-flex rounded-full bg-green-100 px-3 py-1 text-green-800"}>
+              Unassigned: {unassignedBowlerCount}{unassignedSummary ? ` - ${unassignedSummary}` : ""}
+            </span>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          className="rounded-2xl bg-white"
+          onClick={() => {
+            if (scoreEntrySort === "lane" && !scoreEntryLaneSortStale) {
+              setScoreEntrySort("entry");
+              setScoreEntryLaneOrderIds([]);
+              return;
+            }
+            applyScoreEntryLaneSort();
+          }}
+        >
+          {scoreEntrySort === "lane" && !scoreEntryLaneSortStale ? "Use Entry Order" : "Sort By Lane"}
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2 rounded-2xl border border-blue-100 bg-white p-3">
+        {[0, 1, 2].map((gameIndex) => (
+          <Button
+            key={`multi-day-save-game-${gameIndex}`}
+            className="rounded-2xl bg-blue-800 hover:bg-blue-900"
+            disabled={!activeSquad}
+            onClick={() => saveMultiDayScoreGame(gameIndex, activeSquad)}
+          >
+            Save Game {gameIndex + 1}
+          </Button>
+        ))}
+      </div>
       {activeSquad ? <div className="space-y-4">
-        {(activeSquad.entries || []).map((entry) => {
+        {activeScoreEntries.map((entry) => {
           const competition = getSquadEntryCompetition(entry, activeSquad);
           const members = entryMembers(entry, activeSquad);
           const handicapGameTotal = entryHandicapPerGame(entry, activeSquad);
           const scratchTotal = entryScratchTotal(entry, activeSquad);
           const handicapTotal = entryHandicapTotal(entry, activeSquad);
           const grandTotal = scratchTotal + handicapTotal;
+          const laneKey = multiDayLaneKey(entry.lane);
+          const laneCount = laneKey ? Number(activeLaneOccupancy[laneKey] || 0) : 0;
+          const laneFull = laneCount === 3;
+          const laneOver = laneCount > 3;
 
           return (
-            <div key={entry.id} className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-              <div className="flex flex-col gap-1 border-b border-blue-100 bg-blue-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h3 className="text-base font-black text-blue-950">{entry.name || members.map((member) => member.name).filter(Boolean).join(" / ") || "Entry"}</h3>
-                  <p className="text-xs font-black uppercase tracking-wide text-blue-700">{competition}</p>
+            <div key={entry.id} id={laneKey && firstEntryIdByLane[laneKey] === entry.id ? scoreLaneAnchorId(laneKey) : undefined} className="scroll-mt-24 overflow-auto rounded-2xl border border-blue-200 bg-white">
+              <div className="flex flex-col gap-3 border-b border-blue-100 bg-blue-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_150px] md:items-end">
+                  <div>
+                    <h3 className="text-base font-black text-blue-950">{entry.name || members.map((member) => member.name).filter(Boolean).join(" / ") || "Entry"}</h3>
+                    <p className="text-xs font-black uppercase tracking-wide text-blue-700">{competition}</p>
+                  </div>
+                  <label className="text-xs font-black uppercase tracking-wide text-blue-700">
+                    Lane
+                    <Input
+                      className="mt-1 bg-white text-center"
+                      value={entry.lane || ""}
+                      onChange={(event) => {
+                        if (scoreEntrySort === "lane") setScoreEntryLaneSortStale(true);
+                        updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, lane: event.target.value }));
+                      }}
+                      placeholder="1"
+                    />
+                    {laneKey && (
+                      <span className={laneOver ? "mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-800" : laneFull ? "mt-1 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-black text-green-800" : "mt-1 inline-flex rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-blue-800"}>
+                        Lane {laneKey}: {laneCount}/3{laneFull ? " Full" : laneOver ? " Over" : ""}
+                      </span>
+                    )}
+                  </label>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs font-black">
                   <span className="rounded-full bg-white px-3 py-1 text-blue-800">Scratch {scratchTotal || "-"}</span>
@@ -9168,28 +10126,32 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                   <span className="rounded-full bg-blue-800 px-3 py-1 text-white">Total {grandTotal || "-"}</span>
                 </div>
               </div>
-              <table className="w-full min-w-[820px] text-sm">
+              <table className="w-full min-w-[940px] text-sm">
                 <thead className="bg-blue-800 text-white">
                   <tr>
                     <th className="p-3 text-left">Bowler</th>
-                    <th className="p-3 text-right">Avg</th>
-                    <th className="p-3 text-right">HDCP</th>
-                    <th className="p-3 text-right">Game 1</th>
-                    <th className="p-3 text-right">Game 2</th>
-                    <th className="p-3 text-right">Game 3</th>
-                    <th className="p-3 text-right">Series</th>
+                    <th className="w-20 p-3 text-center">Avg</th>
+                    <th className="w-20 p-3 text-center">HDCP</th>
+                    <th className="w-28 p-3 text-center">Game 1</th>
+                    <th className="w-28 p-3 text-center">Game 2</th>
+                    <th className="w-28 p-3 text-center">Game 3</th>
+                    <th className="w-28 p-3 text-center">Scratch Series</th>
+                    <th className="w-28 p-3 text-center">Handicap Series</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {members.map((member, memberIndex) => (
+                  {members.map((member, memberIndex) => {
+                    const scratchSeries = memberScratchSeries(entry, memberIndex);
+                    const handicapSeries = scratchSeries ? scratchSeries + (handicapPerGame(member) * 3) : 0;
+                    return (
                     <tr key={`${entry.id}-score-${memberIndex}`} className="border-t">
                       <td className="p-3 font-semibold text-blue-950">{member.name || `Bowler ${memberIndex + 1}`}</td>
-                      <td className="p-3 text-right font-bold text-slate-700">{member.average || "-"}</td>
-                      <td className="p-3 text-right font-bold text-slate-700">{handicapPerGame(member) || "-"}</td>
+                      <td className="w-20 p-3 text-center font-bold text-slate-700">{member.average || "-"}</td>
+                      <td className="w-20 p-3 text-center font-bold text-slate-700">{handicapPerGame(member) || "-"}</td>
                       {[0, 1, 2].map((gameIndex) => (
-                        <td key={gameIndex} className="p-2">
+                        <td key={gameIndex} className="w-28 p-2 text-center">
                           <Input
-                            className="text-right"
+                            className="mx-auto w-20 text-center"
                             type="number"
                             min="0"
                             max="300"
@@ -9205,25 +10167,29 @@ function MultiDayEventsTab({ mode, multiDayEvent, setMultiDayEvent }) {
                           />
                         </td>
                       ))}
-                      <td className="p-3 text-right font-black">{memberScratchSeries(entry, memberIndex) || "-"}</td>
+                      <td className="w-28 p-3 text-center font-black">{scratchSeries || "-"}</td>
+                      <td className="w-28 p-3 text-center font-black">{handicapSeries || "-"}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   <tr className="border-t bg-blue-50 font-black text-blue-950">
                     <td className="p-3">Scratch Total</td>
-                    <td className="p-3"></td>
-                    <td className="p-3"></td>
-                    {[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-3 text-right">{entryGameScratchTotal(entry, gameIndex, activeSquad) || "-"}</td>)}
-                    <td className="p-3 text-right">{scratchTotal || "-"}</td>
+                    <td className="w-20 p-3"></td>
+                    <td className="w-20 p-3"></td>
+                    {[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="w-28 p-3 text-center">{entryGameScratchTotal(entry, gameIndex, activeSquad) || "-"}</td>)}
+                    <td className="w-28 p-3 text-center">{scratchTotal || "-"}</td>
+                    <td className="w-28 p-3 text-center">-</td>
                   </tr>
                   <tr className="border-t bg-slate-50 font-black text-slate-800">
                     <td className="p-3">With Handicap</td>
-                    <td className="p-3"></td>
-                    <td className="p-3 text-right">{handicapGameTotal || "-"}</td>
+                    <td className="w-20 p-3"></td>
+                    <td className="w-20 p-3 text-center">{handicapGameTotal || "-"}</td>
                     {[0, 1, 2].map((gameIndex) => {
                       const scratchGame = entryGameScratchTotal(entry, gameIndex, activeSquad);
-                      return <td key={gameIndex} className="p-3 text-right">{scratchGame ? scratchGame + handicapGameTotal : "-"}</td>;
+                      return <td key={gameIndex} className="w-28 p-3 text-center">{scratchGame ? scratchGame + handicapGameTotal : "-"}</td>;
                     })}
-                    <td className="p-3 text-right">{grandTotal || "-"}</td>
+                    <td className="w-28 p-3 text-center">{scratchTotal || "-"}</td>
+                    <td className="w-28 p-3 text-center">{grandTotal || "-"}</td>
                   </tr>
                 </tbody>
               </table>
@@ -22068,7 +23034,16 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     <MultiDayEventsTab mode="registration" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} />
   </AppErrorBoundary>
 )}
-{activeTab === "multiDayScores" && (
+{activeTab === "multiDayCheckIn" && (
+  <AppErrorBoundary key="multiDayCheckIn">
+    <MultiDayEventsTab mode="checkIn" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} />
+  </AppErrorBoundary>
+)}
+{activeTab === "multiDaySideAction" && (
+  <AppErrorBoundary key="multiDaySideAction">
+    <MultiDayEventsTab mode="sideAction" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} />
+  </AppErrorBoundary>
+)}{activeTab === "multiDayScores" && (
   <AppErrorBoundary key="multiDayScores">
     <MultiDayEventsTab mode="scores" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} />
   </AppErrorBoundary>
@@ -22257,6 +23232,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     </div>
   );
 }
+
+
+
+
+
+
 
 
 
