@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
@@ -1659,6 +1659,16 @@ function getArchivedAverageForName(tournamentHistory = [], name, bowlerIdentitie
 
 function currency(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number.isFinite(Number(value)) ? Number(value) : 0);
+}
+
+function currencyWithOptionalCents(value) {
+  const amount = Number.isFinite(Number(value)) ? Number(value) : 0;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+  }).format(amount);
 }
 
 function roundToNearest(value, increment) {
@@ -3341,13 +3351,14 @@ tabs: [
     id: "multiDay",
     label: "Multi-Day Events",
     tabs: [
+      { id: "multiDayInfo", label: "Info" },
       { id: "multiDaySetup", label: "Setup" },
       { id: "multiDayRegistration", label: "Registration" },
       { id: "multiDayFinance", label: "Finance" },
       { id: "multiDayCheckIn", label: "Check-In" },
       { id: "multiDaySideAction", label: "Side Action" },
-      { id: "multiDayPublicSideAction", label: "Public Side Action" },
       { id: "multiDayScores", label: "Scores" },
+      { id: "multiDayPublicSideAction", label: "Brackets" },
       { id: "multiDayLeaderboards", label: "Leaderboards" },
       { id: "multiDayArchive", label: "Archive" },
     ],
@@ -3449,7 +3460,7 @@ function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournament
             </TabButton>
           ))}
         </div>
-        {isAdminMode && isOwnerAdmin && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset Active Tournament</Button>}
+        {isAdminMode && isOwnerAdmin && activeSection.id !== "multiDay" && <Button variant="outline" className="shrink-0 rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetSavedTournament}>Reset Active Tournament</Button>}
       </div>
     </div>
   );
@@ -8283,6 +8294,7 @@ function createDefaultMultiDayEvent() {
     eventDefinitions: DEFAULT_MULTI_EVENT_DEFINITIONS,
     squads: [],
     bowlers: [],
+    registrationPackets: [],
   };
 }
 
@@ -8340,6 +8352,7 @@ function MultiDayEventsTab({
   const setSelectedSquadId = setWorkingSquadId;
   const [testDraftNotice, setTestDraftNotice] = useState("");
   const [collapsedEntryIds, setCollapsedEntryIds] = useState({});
+  const [collapsedPacketIds, setCollapsedPacketIds] = useState({});
   const [pendingPlacement, setPendingPlacement] = useState(null);
   const [scoreEntrySort, setScoreEntrySort] = useState("lane");
   const [checkInSort, setCheckInSort] = useState("entry");
@@ -8347,6 +8360,7 @@ function MultiDayEventsTab({
   const [checkInOrderIds, setCheckInOrderIds] = useState([]);
   const [scoreEntryLaneOrderIds, setScoreEntryLaneOrderIds] = useState([]);
   const [scoreEntryLaneSortStale, setScoreEntryLaneSortStale] = useState(false);
+  const [scoreLaneAssignmentMode, setScoreLaneAssignmentMode] = useState(false);
   const [multiDayRegistrationView, setMultiDayRegistrationView] = useState("entries");
   const [expandedMultiDayFinanceEvent, setExpandedMultiDayFinanceEvent] = useState(null);
   const [expandedMultiDaySideActionKey, setExpandedMultiDaySideActionKey] = useState(null);
@@ -8359,7 +8373,16 @@ function MultiDayEventsTab({
   const [multiDayLeaderboardSquadId, setMultiDayLeaderboardSquadId] = useState("all");
   const [multiDayPublicSideSquadId, setMultiDayPublicSideSquadId] = useState("");
   const [multiDayLeaderboardSearch, setMultiDayLeaderboardSearch] = useState("");
+  const [multiDayRegistrationSearch, setMultiDayRegistrationSearch] = useState("");
   const [expandedMultiDayLeaderboardKey, setExpandedMultiDayLeaderboardKey] = useState(null);
+  const [expandedMultiDayArchiveKey, setExpandedMultiDayArchiveKey] = useState(null);
+  const [multiDayArchiveView, setMultiDayArchiveView] = useState("tournaments");
+  const [multiDayArchiveStatsSearch, setMultiDayArchiveStatsSearch] = useState("");
+  const [multiDayArchiveSections, setMultiDayArchiveSections] = useState({});
+  const [multiDayArchivePaidFilters, setMultiDayArchivePaidFilters] = useState({});
+  const [multiDayArchiveSideFilters, setMultiDayArchiveSideFilters] = useState({});
+  const [multiDayArchiveLeaderboardTabs, setMultiDayArchiveLeaderboardTabs] = useState({});
+  const [multiDayArchiveSort, setMultiDayArchiveSort] = useState({});
   const [multiDayLeaderboardSort, setMultiDayLeaderboardSort] = useState({
     scratch: { key: "scratch", direction: "desc" },
     handicap: { key: "total", direction: "desc" },
@@ -8441,6 +8464,100 @@ function MultiDayEventsTab({
     removeSquadEntry(squadId, entryId);
   };
   const removeBowler = (id) => setMultiDayEvent((current) => ({ ...current, bowlers: (current.bowlers || []).filter((bowler) => bowler.id !== id) }));
+  const makePacketLine = (competition = "Singles") => {
+    const memberCount = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 3);
+    return {
+      id: `packet-line-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      competition,
+      name: "",
+      firstChoiceSquadId: "",
+      secondChoiceSquadId: "",
+      paid: true,
+      members: Array.from({ length: memberCount }, () => ({ name: "", usbc: "", average: "", league: "", allEvents: false, youth: false })),
+    };
+  };
+  const addRegistrationPacket = () => {
+    const packetId = `packet-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setMultiDayEvent((current) => ({
+      ...current,
+      registrationPackets: [
+        {
+          id: packetId,
+          packetNumber: String((current.registrationPackets || []).length + 1),
+          captain: "",
+          phone: "",
+          email: "",
+          address: "",
+          city: "",
+          zip: "",
+          checkNumber: "",
+          amountPaid: "",
+          notes: "",
+          submitted: false,
+          lines: [makePacketLine("Team"), makePacketLine("Doubles"), makePacketLine("Singles")],
+        },
+        ...(current.registrationPackets || []),
+      ],
+    }));
+  };
+  const updateRegistrationPacket = (packetId, updater) => setMultiDayEvent((current) => ({
+    ...current,
+    registrationPackets: (current.registrationPackets || []).map((packet) => packet.id === packetId ? updater(packet) : packet),
+  }));
+  const updatePacketField = (packetId, field, value) => updateRegistrationPacket(packetId, (packet) => ({ ...packet, [field]: value }));
+  const updatePacketLine = (packetId, lineId, updater) => updateRegistrationPacket(packetId, (packet) => ({
+    ...packet,
+    lines: (packet.lines || []).map((line) => line.id === lineId ? updater(line) : line),
+  }));
+  const updatePacketMemberName = (packetId, lineId, memberIndex, memberCount, value) => updatePacketLine(packetId, lineId, (current) => ({
+    ...current,
+    members: Array.from({ length: memberCount }, (_, index) => {
+      const existing = current.members?.[index] || {};
+      return index === memberIndex ? backfillKnownBowler(existing, value) : existing;
+    }),
+  }));
+  const updatePacketMemberDetail = (packetId, lineId, memberIndex, memberCount, field, value) => updatePacketLine(packetId, lineId, (current) => ({
+    ...current,
+    members: Array.from({ length: memberCount }, (_, index) => {
+      const existing = current.members?.[index] || {};
+      return index === memberIndex ? { ...existing, [field]: value } : existing;
+    }),
+  }));
+  const addPacketLine = (packetId, competition) => updateRegistrationPacket(packetId, (packet) => ({
+    ...packet,
+    lines: [...(packet.lines || []), makePacketLine(competition)],
+  }));
+  const removePacketLine = (packetId, lineId) => updateRegistrationPacket(packetId, (packet) => ({
+    ...packet,
+    lines: (packet.lines || []).filter((line) => line.id !== lineId),
+  }));
+  const deleteRegistrationPacket = (packetId) => {
+    const packet = (multiDayEvent.registrationPackets || []).find((item) => item.id === packetId);
+    if (!packet) return;
+    const message = packet.submitted
+      ? "Delete this submitted packet and remove the entries it created from registration? This cannot be undone."
+      : "Delete this packet? This cannot be undone.";
+    if (typeof window !== "undefined" && !window.confirm(message)) return;
+    const placedEntryIds = new Set((packet.placedEntryIds || []).map((id) => String(id)));
+    setMultiDayEvent((current) => ({
+      ...current,
+      registrationPackets: (current.registrationPackets || []).filter((item) => item.id !== packetId),
+      squads: (current.squads || []).map((squad) => ({
+        ...squad,
+        entries: (squad.entries || []).filter((entry) => {
+          if (!packet.submitted) return true;
+          return String(entry.packetId || "") !== String(packetId) && !placedEntryIds.has(String(entry.id));
+        }),
+      })),
+    }));
+    setCollapsedPacketIds((current) => {
+      const next = { ...current };
+      delete next[packetId];
+      return next;
+    });
+    setPendingPlacement((current) => current?.packetId === packetId ? null : current);
+    setTestDraftNotice(packet.submitted ? "Deleted packet and removed its submitted registration entries." : "Deleted packet.");
+  };
   const bowlers = multiDayEvent.bowlers || [];
   const squads = multiDayEvent.squads || [];
   const mixedSquads = multiDayEvent.squadMode === "mixed";
@@ -8500,6 +8617,8 @@ function MultiDayEventsTab({
   };
   const memberScratchSeries = (entry, memberIndex) =>
     [0, 1, 2].reduce((sum, gameIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
+  const entryAverageTotal = (entry, squad = activeSquad) =>
+    entryMembers(entry, squad).reduce((sum, member) => sum + Number(member.average || 0), 0);
   const entryGameScratchTotal = (entry, gameIndex, squad = activeSquad) =>
     entryMembers(entry, squad).reduce((sum, _member, memberIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
   const entryScratchTotal = (entry, squad = activeSquad) =>
@@ -8528,8 +8647,12 @@ function MultiDayEventsTab({
     });
   const singlesRows = squadEntries
     .filter((entry) => getEntryCompetition(entry) === "Singles")
-    .map((entry) => ({ detailKey: `${entry.squad.id}-${entry.id}`, name: entry.name || entry.members?.[0] || "Singles Entry", members: [entry.name || entry.members?.[0]].filter(Boolean), scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date, squadId: entry.squad.id, squadLabel: squadLabel(entry.squad), details: entryLeaderboardDetailRows(entry, entry.squad) }))
+    .map((entry) => {
+      const member = entryMembers(entry, entry.squad)[0] || {};
+      return { detailKey: `${entry.squad.id}-${entry.id}`, name: member.name || entry.name || entry.members?.[0] || "Singles Entry", members: [member.name || entry.name || entry.members?.[0]].filter(Boolean), youth: Boolean(member.youth), scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date, squadId: entry.squad.id, squadLabel: squadLabel(entry.squad), details: entryLeaderboardDetailRows(entry, entry.squad) };
+    })
     .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
+  const youthRows = singlesRows.filter((row) => row.youth);
   const doublesRows = squadEntries
     .filter((entry) => getEntryCompetition(entry) === "Doubles")
     .map((entry) => ({ detailKey: `${entry.squad.id}-${entry.id}`, name: entry.name || (entry.members || []).filter(Boolean).join(" / ") || "Doubles Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date, squadId: entry.squad.id, squadLabel: squadLabel(entry.squad), details: entryLeaderboardDetailRows(entry, entry.squad) }))
@@ -8538,15 +8661,27 @@ function MultiDayEventsTab({
     .filter((entry) => getEntryCompetition(entry) === "Team")
     .map((entry) => ({ detailKey: `${entry.squad.id}-${entry.id}`, name: entry.name || "Team Entry", members: entry.members || [], scratch: entryScratchTotal(entry, entry.squad), handicap: entryHandicapTotal(entry, entry.squad), total: entryHandicapSeries(entry, entry.squad), squadDate: entry.squad.date, squadId: entry.squad.id, squadLabel: squadLabel(entry.squad), details: entryLeaderboardDetailRows(entry, entry.squad) }))
     .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
+  const allEventsEligibleNames = squadEntries.reduce((names, entry) => {
+    entryMembers(entry, entry.squad).forEach((member) => {
+      const nameKey = normalizeMatchText(member.name);
+      if (member.allEvents && nameKey) names.add(nameKey);
+    });
+    return names;
+  }, new Set());
   const allEventsByBowler = squadEntries.reduce((totals, entry) => {
     const competition = getEntryCompetition(entry);
     const members = entryMembers(entry, entry.squad);
-    members.filter((member) => member.name).forEach((member, memberIndex) => {
+    members
+      .map((member, memberIndex) => ({ member, memberIndex }))
+      .filter(({ member }) => member.name && allEventsEligibleNames.has(normalizeMatchText(member.name)))
+      .forEach(({ member, memberIndex }) => {
       const name = member.name;
-      totals[name] = totals[name] || { detailKey: `all-events-${normalizeMatchText(name) || name}`, name, members: [name], singles: null, doubles: null, team: null, handicap: 0, squadIds: [], squadLabels: [], details: [], aeSeen: {} };
+      totals[name] = totals[name] || { detailKey: `all-events-${normalizeMatchText(name) || name}`, name, members: [name], singles: null, doubles: null, team: null, handicap: 0, squadIds: [], squadLabels: [], countedSquadLabels: [], details: [], aeSeen: {} };
       const key = competition === "Singles" ? "singles" : competition === "Doubles" ? "doubles" : "team";
       if (!totals[name].aeSeen[key]) {
         totals[name].aeSeen[key] = true;
+        const label = entry.squad ? squadLabel(entry.squad) : "";
+        if (label && !totals[name].countedSquadLabels.includes(label)) totals[name].countedSquadLabels.push(label);
         const games = [0, 1, 2].map((gameIndex) => memberGameScore(entry, memberIndex, gameIndex));
         const scratch = games.reduce((sum, score) => sum + Number(score || 0), 0);
         const hasScore = games.some((score) => Number(score || 0) > 0);
@@ -8866,8 +9001,8 @@ function MultiDayEventsTab({
   };
   const getMultiDaySelectedPlan = (setKey, entryCount) => {
     const plans = getMultiDayBracketPlans(entryCount);
-    const selectedId = selectedSquadPlanIds[setKey] || "full-only";
-    return plans.find((plan) => plan.id === selectedId) || plans[0];
+    const selectedId = selectedSquadPlanIds[setKey];
+    return selectedId ? plans.find((plan) => plan.id === selectedId) || plans[0] : plans[0];
   };
   const setMultiDaySideActionPlan = (setKey, planId) => {
     if (!selectedCheckInGroup) return;
@@ -9255,6 +9390,10 @@ function MultiDayEventsTab({
       const safeBrackets = Array.isArray(setBrackets) ? setBrackets : [];
       safeBrackets.forEach((bracket) => {
         const rounds = multiDayBracketRounds(bracket, setKey);
+        const aliveKeys = new Set();
+        (bracket.players || [])
+          .filter((player) => player && player.name !== "BYE")
+          .forEach((player) => aliveKeys.add(player.key));
         const roundConfigs = [
           { label: `${multiDayBracketSetLabel(setKey)} Bracket ${bracket.number} - Game 1`, roundIndex: 0, matches: rounds.r1Matches },
           { label: `${multiDayBracketSetLabel(setKey)} Bracket ${bracket.number} - Game 2`, roundIndex: 1, matches: rounds.r2Matches },
@@ -9281,6 +9420,7 @@ function MultiDayEventsTab({
               const playerAdvanced = winners.some((winner) => winner.key === player.key);
               const tied = winners.length > 1 && playerAdvanced;
               const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
+              if (matchHasScores && result === "L") aliveKeys.delete(player.key);
               const scoreParts = multiDayPlayerScoreParts(player, round.roundIndex, setKey);
               const opponentBreakdown = setKey === "handicap" && opponents.length
                 ? opponents.map((other) => {
@@ -9301,15 +9441,7 @@ function MultiDayEventsTab({
           });
         });
 
-        const alivePlayers = rounds.champions.length
-          ? rounds.champions
-          : rounds.finalPlayers.length
-            ? rounds.finalPlayers.filter((player) => player && player.name !== "BYE")
-            : rounds.r2Winners.flat().length
-              ? rounds.r2Winners.flat()
-              : rounds.r1Winners.flat().length
-                ? rounds.r1Winners.flat()
-                : (bracket.players || []).filter((player) => player && player.name !== "BYE");
+        const alivePlayers = (bracket.players || []).filter((player) => player && player.name !== "BYE" && aliveKeys.has(player.key));
         alivePlayers.forEach((player) => {
           const row = ensurePlayer(player);
           if (row) row.alive += 1;
@@ -9403,18 +9535,45 @@ function MultiDayEventsTab({
       handicapPrize: prize / 2,
     };
   })();
-  const multiDayFinanceSummaryRows = [...multiDayFinanceRows, multiDayAllEventsFinance];
-  const multiDayFinanceTotals = multiDayFinanceSummaryRows.reduce((totals, row) => ({
-    gross: totals.gross + row.gross,
-    paidGross: totals.paidGross + row.paidGross,
-    bowling: totals.bowling + row.bowling,
-    expense: totals.expense + row.expense,
-    prize: totals.prize + row.prize,
-    scratchPrize: totals.scratchPrize + row.scratchPrize,
-    handicapPrize: totals.handicapPrize + row.handicapPrize,
-    bowlerCount: totals.bowlerCount + row.bowlerCount,
-  }), { gross: 0, paidGross: 0, bowling: 0, expense: 0, prize: 0, scratchPrize: 0, handicapPrize: 0, bowlerCount: 0 });
+  const multiDayYouthFinance = {
+    competition: "Youth",
+    entryCount: youthRows.length,
+    bowlerCount: youthRows.length,
+    paidEntryCount: youthRows.length,
+    paidBowlers: youthRows.length,
+    pricePerBowler: 0,
+    gross: 0,
+    paidGross: 0,
+    bowling: 0,
+    expense: 0,
+    prize: youthRows.length ? 370 : 0,
+    scratchPrize: youthRows.length ? 185 : 0,
+    handicapPrize: youthRows.length ? 185 : 0,
+    outsideAward: true,
+  };
+  const multiDayFinanceSummaryRows = [...multiDayFinanceRows, multiDayAllEventsFinance, multiDayYouthFinance];
+  const multiDayFinanceTotals = multiDayFinanceSummaryRows.reduce((totals, row) => {
+    if (row.outsideAward) return totals;
+    return {
+      gross: totals.gross + row.gross,
+      paidGross: totals.paidGross + row.paidGross,
+      bowling: totals.bowling + row.bowling,
+      expense: totals.expense + row.expense,
+      prize: totals.prize + row.prize,
+      scratchPrize: totals.scratchPrize + row.scratchPrize,
+      handicapPrize: totals.handicapPrize + row.handicapPrize,
+      bowlerCount: totals.bowlerCount + row.bowlerCount,
+    };
+  }, { gross: 0, paidGross: 0, bowling: 0, expense: 0, prize: 0, scratchPrize: 0, handicapPrize: 0, bowlerCount: 0 });
   const multiDayPayoutSpotCount = (row) => {
+    const preset = {
+      Singles: 12,
+      Doubles: 7,
+      Team: 3,
+      "All Events": 4,
+      Youth: 1,
+    }[row.competition];
+    if (preset) return preset;
     const ratio = row.competition === "All Events" ? 14 : 8;
     const count = Number(row.entryCount || 0);
     if (!count) return 0;
@@ -9422,7 +9581,16 @@ function MultiDayEventsTab({
     const remainder = count % ratio;
     return Math.max(1, whole + (remainder >= ratio / 2 ? 1 : 0));
   };
-  const multiDayPayoutPlan = (prizeFund, spots) => {
+  const multiDayPresetPayouts = (competition) => ({
+    Singles: [250, 225, 200, 175, 150, 125, 100, 90, 80, 70, 60, 50],
+    Doubles: [500, 380, 280, 200, 140, 120, 100],
+    Team: [900, 600, 300],
+    "All Events": [80, 60, 45, 35],
+    Youth: [185],
+  }[competition] || []);
+  const multiDayPayoutPlan = (prizeFund, spots, competition = "") => {
+    const preset = multiDayPresetPayouts(competition);
+    if (preset.length) return preset.map((amount, index) => ({ place: index + 1, amount }));
     const fund = Number(prizeFund || 0);
     const count = Math.max(0, Number(spots || 0));
     if (!fund || !count) return [];
@@ -9599,13 +9767,120 @@ function MultiDayEventsTab({
     setTestDraftNotice(blockedMessage);
     setPendingPlacement(fallbackOptions.length ? { sourceSquadId: squadId, entryId, options: fallbackOptions } : null);
   };
-  const saveMultiDayTestDraft = () => {
+  const buildPacketEntry = (packet, line, lineIndex) => {
+    const competition = line.competition || "Singles";
+    const memberCount = competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 3);
+    const members = Array.from({ length: memberCount }, (_, index) => line.members?.[index] || {});
+    return {
+      ...makeMultiDaySquadEntry(competition),
+      id: `entry-${packet.id}-${line.id}-${lineIndex}`,
+      packetId: packet.id,
+      packetNumber: packet.packetNumber || "",
+      competition,
+      name: competition === "Team" ? line.name || packet.teamName || "" : members.map((member) => member.name).filter(Boolean).join(" / "),
+      captain: packet.captain || "",
+      phone: formatPhoneNumber(packet.phone || ""),
+      email: packet.email || "",
+      address: packet.address || "",
+      city: packet.city || "",
+      zip: packet.zip || "",
+      firstChoiceSquadId: line.firstChoiceSquadId || "",
+      secondChoiceSquadId: line.secondChoiceSquadId || "",
+      paid: Boolean(line.paid),
+      members: members.map((member) => member.name || ""),
+      memberDetails: members.map((member) => ({
+        name: member.name || "",
+        usbc: member.usbc || "",
+        average: member.average || "",
+        league: member.league || "",
+        allEvents: Boolean(member.allEvents),
+        youth: Boolean(member.youth),
+      })),
+      scores: [],
+      memberScores: members.map(() => []),
+      draft: false,
+    };
+  };
+  const submitRegistrationPacket = (packetId, forcedPlacements = {}) => {
+    const packet = (multiDayEvent.registrationPackets || []).find((item) => item.id === packetId);
+    if (!packet) return;
+    const usableLines = (packet.lines || [])
+      .map((line, originalIndex) => ({ line, originalIndex }))
+      .filter(({ line }) => (line.members || []).some((member) => String(member?.name || "").trim()));
+    if (!usableLines.length) {
+      setTestDraftNotice("Add at least one team, doubles, or singles entry before submitting this packet.");
+      return;
+    }
+    const currentSquads = multiDayEvent.squads || [];
+    const workingSquads = currentSquads.map((squad) => ({ ...squad, entries: [...(squad.entries || [])] }));
+    const placedEntries = [];
+    for (const { line, originalIndex } of usableLines) {
+      const entry = buildPacketEntry(packet, line, originalIndex);
+      const workingEvent = { ...multiDayEvent, squads: workingSquads };
+      const forcedSquadId = forcedPlacements[line.id] || "";
+      const forcedSquad = forcedSquadId ? workingSquads.find((squad) => squad.id === forcedSquadId) : null;
+      const choices = forcedSquad
+        ? [forcedSquad]
+        : [line.firstChoiceSquadId, line.secondChoiceSquadId]
+          .map((id) => workingSquads.find((squad) => squad.id === id))
+          .filter(Boolean);
+      const targetSquad = choices.find((squad) => entryCanBePlacedInSquad(squad, entry, workingEvent));
+      if (!targetSquad) {
+        const fallbackOptions = availablePlacementOptions(workingSquads, entry, workingEvent);
+        const label = `${entry.competition} ${entry.name || line.name || `line ${originalIndex + 1}`}`;
+        if (!fallbackOptions.length) {
+          setPendingPlacement(null);
+          setTestDraftNotice(`Packet not submitted. ${label} does not have an available squad with enough room and no bowler conflicts.`);
+          return;
+        }
+        setPendingPlacement({
+          type: "packet",
+          packetId,
+          lineId: line.id,
+          lineLabel: label,
+          forcedPlacements,
+          options: fallbackOptions,
+        });
+        setTestDraftNotice(`${label} needs an available squad. Pick where to place it, then the packet will continue submitting.`);
+        return;
+      }
+      const placedEntry = { ...entry, assignedSquadId: targetSquad.id };
+      targetSquad.entries = [...(targetSquad.entries || []), placedEntry];
+      placedEntries.push({ squadId: targetSquad.id, entry: placedEntry });
+    }
+    setPendingPlacement(null);
+    setMultiDayEvent((current) => ({
+      ...current,
+      squads: workingSquads,
+      registrationPackets: (current.registrationPackets || []).map((item) => item.id === packetId ? {
+        ...item,
+        submitted: true,
+        submittedAt: new Date().toISOString(),
+        placedEntryIds: placedEntries.map((placed) => placed.entry.id),
+      } : item),
+    }));
+    setTestDraftNotice(`Submitted packet ${packet.packetNumber || ""} for ${packet.captain || "captain"}. Added ${placedEntries.length} entr${placedEntries.length === 1 ? "y" : "ies"}.`);
+  };  const saveMultiDayTestDraft = () => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(MULTI_DAY_TEST_STORAGE_KEY, JSON.stringify({
       savedAt: new Date().toISOString(),
       event: multiDayEvent,
     }));
     setTestDraftNotice(`Saved test draft for ${multiDayEvent.name || "multi-event tournament"}.`);
+  };
+  const exportMultiDayData = () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safeName = String(multiDayEvent.name || "multi-event")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "multi-event";
+    downloadJson(`bowler-builders-${safeName}-backup-${stamp}.json`, {
+      type: "bowler-builders-multi-event-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      event: multiDayEvent,
+    });
+    setTestDraftNotice(`Exported multi-event backup for ${multiDayEvent.name || "multi-event tournament"}.`);
   };
   const saveMultiDayScoreGame = (gameIndex, squad = activeSquad) => {
     if (typeof window === "undefined" || !squad) return;
@@ -9642,14 +9917,37 @@ function MultiDayEventsTab({
       setTestDraftNotice("That saved test draft could not be loaded.");
     }
   };
+  const resetMultiDayOnly = () => {
+    if (typeof window !== "undefined" && !window.confirm("Reset only the multi-event workspace?\n\nThis clears the current multi-event setup, entries, scores, check-in, and side action. Multi-event archives stay saved, and the regular tournament workspace is not touched.")) return;
+    setMultiDayEvent((current) => ({
+      ...createDefaultMultiDayEvent(),
+      archives: current.archives || [],
+    }));
+    setSelectedSquadId("");
+    setMultiDayPublicSideSquadId("");
+    setCollapsedEntryIds({});
+    setPendingPlacement(null);
+    setScoreEntryLaneOrderIds([]);
+    setScoreEntryLaneSortStale(false);
+    setExpandedMultiDaySideActionKey(null);
+    setExpandedMultiDayLeaderboardKey(null);
+    setExpandedMultiDayArchiveKey(null);
+    setTestDraftNotice("Reset multi-event workspace only. Multi-event archives were kept.");
+  };
   const testDraftControls = (
     <div className="flex flex-col gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
       <div className="text-sm font-semibold text-blue-800">
         {testDraftNotice || "Save this multi-event test whenever you want to keep your entries and scores through refreshes."}
       </div>
       <div className="flex flex-wrap gap-2">
+        <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetMultiDayOnly}>
+          Reset Multi-Event Only
+        </Button>
         <Button variant="outline" className="rounded-2xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100" onClick={loadMultiDayTestDraft}>
           Load Test Draft
+        </Button>
+        <Button variant="outline" className="rounded-2xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100" onClick={exportMultiDayData}>
+          Export Multi-Event Data
         </Button>
         <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={saveMultiDayTestDraft}>
           Save Test Draft
@@ -9671,7 +9969,7 @@ function MultiDayEventsTab({
     </div>
   );
 
-  if (mode === "archive") {
+  if (mode === "archivePreviewDisabled") {
     const completedSquads = squads.filter((squad) => (squad.entries || []).length > 0);
     const totalEntries = squadEntries.length;
     const totalGames = squadEntries.reduce((sum, entry) =>
@@ -9733,6 +10031,118 @@ function MultiDayEventsTab({
       </AppCard>
     );
   }
+  if (mode === "info") {
+    const scoringDivisions = multiDayEvent.scoringDivisions || {};
+    const eventDefinitions = multiDayEvent.eventDefinitions || DEFAULT_MULTI_EVENT_DEFINITIONS;
+    const enabledEvents = eventDefinitions.filter((eventType) => eventType.enabled);
+    const dateRange = [multiDayEvent.startDate, multiDayEvent.endDate].filter(Boolean).join(" to ") || "Dates TBD";
+    const feeRows = [
+      { label: "Singles", value: multiDayEvent.singlesPrice },
+      { label: "Doubles", value: multiDayEvent.doublesPrice },
+      { label: `${multiDayEvent.teamSize || 3}-Person Team`, value: multiDayEvent.teamPrice },
+      { label: "All Events", value: multiDayEvent.allEventsPrice },
+    ].filter((row) => row.value !== "" && row.value !== undefined && row.value !== null);
+    const divisionList = [
+      scoringDivisions.scratch ? "Scratch" : "",
+      scoringDivisions.handicap ? "Handicap" : "",
+      scoringDivisions.youthScratch ? "Youth Scratch" : "",
+      scoringDivisions.youthHandicap ? "Youth Handicap" : "",
+    ].filter(Boolean);
+
+    return (
+      <div className="space-y-4">
+        {isAdminMode && testDraftControls}
+        <section className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
+          <div className="bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 p-5 text-white md:p-7">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-200">Multi-Event Tournament</p>
+            <h2 className="mt-2 text-3xl font-black md:text-4xl">{multiDayEvent.name || "Tournament Name"}</h2>
+            <div className="mt-4 grid gap-3 text-sm font-bold md:grid-cols-3">
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                <p className="text-xs uppercase text-blue-200">Dates</p>
+                <p className="mt-1 text-lg">{dateRange}</p>
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                <p className="text-xs uppercase text-blue-200">Location</p>
+                <p className="mt-1 text-lg">{multiDayEvent.center || "Center TBD"}</p>
+              </div>
+              <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
+                <p className="text-xs uppercase text-blue-200">Entries Close</p>
+                <p className="mt-1 text-lg">{multiDayEvent.entriesCloseDate || "TBD"}</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                <h3 className="text-lg font-black text-blue-950">Entry Information</h3>
+                <p className="mt-2 text-sm font-semibold text-blue-800">
+                  Entries are submitted by paper form. Drop off or mail entries with payment before the entry deadline.
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white p-3 text-sm font-bold text-blue-900">
+                    <span className="block text-xs uppercase text-blue-600">Mail / Drop-Off</span>
+                    Bowler Builders Pro Shops
+                  </div>
+                  <div className="rounded-xl bg-white p-3 text-sm font-bold text-blue-900">
+                    <span className="block text-xs uppercase text-blue-600">Questions</span>
+                    Contact the tournament director listed on the entry form.
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-blue-200 bg-white">
+                <div className="border-b border-blue-100 bg-blue-50 px-4 py-3">
+                  <h3 className="font-black text-blue-950">Squad Schedule</h3>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full min-w-[620px] text-sm">
+                    <thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Squad</th><th className="p-3 text-left">Event</th><th className="p-3 text-left">Lanes</th><th className="p-3 text-right">Capacity</th></tr></thead>
+                    <tbody>
+                      {squads.map((squad) => <tr key={`multi-info-squad-${squad.id}`} className="border-t"><td className="p-3 font-bold text-blue-950">{squad.date || "Date TBD"} {squad.time ? `- ${formatStartTime(squad.time)}` : ""}</td><td className="p-3">{squad.competition || "Mixed"}</td><td className="p-3">{squad.lanes || "TBD"}</td><td className="p-3 text-right font-bold">{squad.capacity || multiDayEvent.maxBowlersPerSquad || "TBD"}</td></tr>)}
+                      {squads.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>Squads will be posted here.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {multiDayEvent.notes && (
+                <div className="rounded-2xl border border-blue-200 bg-white p-4">
+                  <h3 className="font-black text-blue-950">Tournament Notes</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm font-semibold text-blue-800">{multiDayEvent.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <aside className="space-y-4">
+              <div className="rounded-2xl border border-blue-200 bg-white p-4">
+                <h3 className="font-black text-blue-950">Events</h3>
+                <div className="mt-3 grid gap-2">
+                  {enabledEvents.map((eventType) => <div key={`multi-info-event-${eventType.id}`} className="rounded-xl border border-blue-100 bg-blue-50 p-3"><p className="font-black text-blue-950">{eventType.label}</p><p className="text-xs font-semibold text-blue-700">{eventType.competition} - {eventType.games || 3} games</p></div>)}
+                  {enabledEvents.length === 0 && <p className="text-sm font-semibold text-blue-700">Events will be posted here.</p>}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-white p-4">
+                <h3 className="font-black text-blue-950">Entry Fees</h3>
+                <div className="mt-3 divide-y divide-blue-100">
+                  {feeRows.map((row) => <div key={`multi-info-fee-${row.label}`} className="flex items-center justify-between py-2 text-sm"><span className="font-semibold text-blue-800">{row.label}</span><span className="font-black text-blue-950">{currency(row.value)}</span></div>)}
+                  {feeRows.length === 0 && <p className="text-sm font-semibold text-blue-700">Fees will be posted here.</p>}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-white p-4">
+                <h3 className="font-black text-blue-950">Scoring</h3>
+                <div className="mt-3 space-y-2 text-sm font-semibold text-blue-800">
+                  <p><span className="font-black text-blue-950">Divisions:</span> {divisionList.join(", ") || "TBD"}</p>
+                  <p><span className="font-black text-blue-950">Handicap:</span> {multiDayEvent.handicapPercent || 100}% of {multiDayEvent.handicapBase || 240}</p>
+                  <p><span className="font-black text-blue-950">All Events:</span> {multiDayEvent.allEventsRule || "First eligible Singles, Doubles, and Team series count."}</p>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   if (mode === "setup") {
     const scoringDivisions = multiDayEvent.scoringDivisions || {};
     const eventDefinitions = multiDayEvent.eventDefinitions || DEFAULT_MULTI_EVENT_DEFINITIONS;
@@ -9773,7 +10183,7 @@ function MultiDayEventsTab({
                 <div><Label>Team Size</Label><select value={multiDayEvent.teamSize || 3} onChange={(e) => updateEvent("teamSize", Number(e.target.value))} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value={3}>3 Person Teams / Trios</option><option value={4}>4 Person Teams</option><option value={5}>5 Person Teams</option></select></div>
                 <div><Label>Squad Format</Label><select value={multiDayEvent.squadMode || "fixed"} onChange={(e) => updateEvent("squadMode", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="fixed">Each squad is one event type</option><option value="mixed">Any event in any squad</option></select></div>
                 <div><Label>Max Bowlers Per Squad</Label><Input type="number" value={multiDayEvent.maxBowlersPerSquad || ""} onChange={(e) => updateEvent("maxBowlersPerSquad", e.target.value)} /></div>
-                <div><Label>Handicap</Label><div className="grid grid-cols-[1fr_1fr_1fr] gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="%" /><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="Base" /><Input type="number" value={multiDayEvent.handicapMax || ""} onChange={(e) => updateEvent("handicapMax", e.target.value)} placeholder="Max" /></div></div>
+                <div><Label>Handicap</Label><div className="grid max-w-xs grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1fr)] items-center gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="100" /><span className="text-sm font-black text-blue-800">% of</span><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="240" /></div></div>
               </div>
             </div>
 
@@ -9909,6 +10319,38 @@ function MultiDayEventsTab({
 
   if (mode === "registration") {
     const activeCompetition = activeSquad?.competition === "Mixed" ? "Any Event" : activeSquad?.competition || "Event";
+    const registrationSearchTerm = normalizeMatchText(multiDayRegistrationSearch);
+    const multiDayRegistrationSearchRows = registrationSearchTerm
+      ? squadEntries.flatMap((entry) => {
+        const competition = getEntryCompetition(entry);
+        const entryName = multiDayEntryDisplayName(entry, entry.squad);
+        return entryMembers(entry, entry.squad)
+          .map((member, memberIndex) => ({
+            squad: entry.squad,
+            entry,
+            member,
+            memberIndex,
+            competition,
+            entryName,
+            searchable: normalizeMatchText([
+              member.name,
+              entryName,
+              entry.captain,
+              member.usbc,
+            ].filter(Boolean).join(" ")),
+          }))
+          .filter((row) => row.searchable.includes(registrationSearchTerm));
+      })
+      : [];
+    const openMultiDayRegistrationEntry = (squadId, entryId) => {
+      setMultiDayRegistrationView("entries");
+      setSelectedSquadId(squadId);
+      setCollapsedEntryIds((current) => ({ ...current, [entryId]: false }));
+      window.setTimeout(() => {
+        if (typeof document === "undefined") return;
+        document.getElementById(`multi-day-registration-entry-${entryId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 0);
+    };
 
     return (
       <AppCard>
@@ -9920,7 +10362,11 @@ function MultiDayEventsTab({
                 Enter squad reservations like the paper forms: team/captain info, squad choices, averages, USBC numbers, and All Events.
               </p>
             </div>
-            {activeSquad && (
+            {multiDayRegistrationView === "packets" ? (
+              <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addRegistrationPacket}>
+                Add Packet
+              </Button>
+            ) : activeSquad && (
               <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>
                 Add Entry
               </Button>
@@ -9930,6 +10376,7 @@ function MultiDayEventsTab({
 
           <div className="flex flex-wrap gap-2">
             {[
+              { id: "packets", label: "Packets" },
               { id: "entries", label: "Entries" },
               { id: "checkInfo", label: "Check Info" },
             ].map((view) => (
@@ -9943,6 +10390,46 @@ function MultiDayEventsTab({
               </button>
             ))}
           </div>
+
+          <datalist id="multi-day-known-bowlers">
+            {knownBowlerOptions.map((bowler) => (
+              <option key={bowlerIdentityKey(bowler.name)} value={bowler.name} />
+            ))}
+          </datalist>
+
+          {pendingPlacement && typeof document !== "undefined" && createPortal((
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+              <div className="w-full max-w-xl rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-2xl">
+                <h3 className="text-xl font-black text-amber-950">Choose Available Squad</h3>
+                <p className="mt-1 text-sm font-semibold text-amber-900">
+                  {pendingPlacement.type === "packet"
+                    ? `${pendingPlacement.lineLabel || "This packet line"} needs a squad with enough room where these bowlers are not already scheduled.`
+                    : "The entry could not be placed into first choice automatically. Choose a squad with enough room where these bowlers are not already scheduled."}
+                </p>
+                <div className="mt-4 grid gap-2">
+                  {(pendingPlacement.options || []).map((option) => (
+                    <Button
+                      key={option.id}
+                      variant="outline"
+                      className="justify-between rounded-2xl border-amber-300 bg-white text-left text-amber-950 hover:bg-amber-100"
+                      onClick={() => pendingPlacement.type === "packet" ? submitRegistrationPacket(pendingPlacement.packetId, { ...(pendingPlacement.forcedPlacements || {}), [pendingPlacement.lineId]: option.id }) : placeEntryInSquad(pendingPlacement.sourceSquadId, pendingPlacement.entryId, option.id, "Placed from available squad list. ")}
+                    >
+                      <span className="flex flex-col gap-1">
+                        <span>{option.label}</span>
+                        <span className="text-xs font-black uppercase tracking-wide text-amber-700">{option.choiceLabel}</span>
+                      </span>
+                      <span>{option.count}{option.capacity ? `/${option.capacity}` : ""} bowlers</span>
+                    </Button>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <Button variant="outline" className="rounded-2xl" onClick={() => setPendingPlacement(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ), document.body)}
 
           {multiDayRegistrationView === "checkInfo" && (
             <div className="space-y-3">
@@ -9988,6 +10475,132 @@ function MultiDayEventsTab({
             </div>
           )}
 
+          {multiDayRegistrationView === "packets" && (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-blue-800">
+                Enter one paper form as one packet. The captain/contact information stays attached to every team, doubles, and singles entry submitted from that form.
+              </div>
+              {(multiDayEvent.registrationPackets || []).map((packet) => {
+                const submittedLineCount = (packet.placedEntryIds || []).length || (packet.lines || []).filter((line) => (line.members || []).some((member) => String(member?.name || "").trim())).length;
+                const submittedBowlerCount = (packet.lines || []).reduce((sum, line) => {
+                  if (!(line.members || []).some((member) => String(member?.name || "").trim())) return sum;
+                  const competition = line.competition || "Singles";
+                  return sum + (competition === "Singles" ? 1 : competition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 3));
+                }, 0);
+                const packetIsCollapsed = Boolean(packet.submitted && collapsedPacketIds[packet.id] !== false);
+                if (packetIsCollapsed) {
+                  return (
+                    <div key={packet.id} className="rounded-2xl border border-green-200 bg-green-50 p-4 shadow-sm">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-wide text-green-700">Packet {packet.packetNumber || ""} submitted</p>
+                          <h3 className="text-lg font-black text-green-950">{packet.captain || "Captain / Submitter"}</h3>
+                          <p className="text-sm font-semibold text-green-800">{submittedLineCount} entr{submittedLineCount === 1 ? "y" : "ies"} / {submittedBowlerCount} bowler{submittedBowlerCount === 1 ? "" : "s"}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" className="rounded-2xl border-green-300 bg-white text-green-800" onClick={() => setCollapsedPacketIds((current) => ({ ...current, [packet.id]: false }))}>Review</Button>
+                          <Button variant="outline" className="rounded-2xl border-red-200 bg-white text-red-700" onClick={() => deleteRegistrationPacket(packet.id)}>Delete</Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                <div key={packet.id} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-blue-700">Packet {packet.packetNumber || ""}</p>
+                      <h3 className="text-xl font-black text-blue-950">{packet.captain || "Captain / Submitter"}</h3>
+                      {packet.submitted && <p className="text-sm font-bold text-green-700">Submitted to registration</p>}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {!packet.submitted && <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800" onClick={() => addPacketLine(packet.id, "Team")}>Add Team</Button>}
+                      {!packet.submitted && <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800" onClick={() => addPacketLine(packet.id, "Doubles")}>Add Doubles</Button>}
+                      {!packet.submitted && <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800" onClick={() => addPacketLine(packet.id, "Singles")}>Add Singles</Button>}
+                      {packet.submitted ? (
+                        <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800" onClick={() => setCollapsedPacketIds((current) => ({ ...current, [packet.id]: true }))}>Minimize</Button>
+                      ) : (
+                        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => submitRegistrationPacket(packet.id)}>Submit Packet</Button>
+                      )}
+                      <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700" onClick={() => deleteRegistrationPacket(packet.id)}>Delete Packet</Button>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div><Label>Captain / Submitter</Label><Input value={packet.captain || ""} onChange={(e) => updatePacketField(packet.id, "captain", e.target.value)} /></div>
+                    <div><Label>Phone</Label><Input value={packet.phone || ""} onChange={(e) => updatePacketField(packet.id, "phone", formatPhoneNumber(e.target.value))} /></div>
+                    <div><Label>Email</Label><Input value={packet.email || ""} onChange={(e) => updatePacketField(packet.id, "email", e.target.value)} /></div>
+                    <div><Label>Address</Label><Input value={packet.address || ""} onChange={(e) => updatePacketField(packet.id, "address", e.target.value)} /></div>
+                    <div><Label>City / State</Label><Input value={packet.city || ""} onChange={(e) => updatePacketField(packet.id, "city", e.target.value)} /></div>
+                    <div><Label>ZIP</Label><Input value={packet.zip || ""} onChange={(e) => updatePacketField(packet.id, "zip", e.target.value)} /></div>
+                    <div><Label>Check #</Label><Input value={packet.checkNumber || ""} onChange={(e) => updatePacketField(packet.id, "checkNumber", e.target.value)} /></div>
+                    <div><Label>Amount Paid</Label><Input type="number" value={packet.amountPaid || ""} onChange={(e) => updatePacketField(packet.id, "amountPaid", e.target.value)} /></div>
+                    <div><Label>Notes</Label><Input value={packet.notes || ""} onChange={(e) => updatePacketField(packet.id, "notes", e.target.value)} /></div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {(packet.lines || []).map((line, lineIndex) => {
+                      const memberCount = line.competition === "Singles" ? 1 : line.competition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 3);
+                      const members = Array.from({ length: memberCount }, (_, index) => line.members?.[index] || {});
+                      return (
+                        <div key={line.id} className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                          <div className="grid gap-3 lg:grid-cols-[130px_1fr_180px_180px_110px_auto] lg:items-end">
+                            <div>
+                              <Label>Event</Label>
+                              <select
+                                value={line.competition || "Singles"}
+                                onChange={(e) => updatePacketLine(packet.id, line.id, (current) => {
+                                  const nextCompetition = e.target.value;
+                                  const nextCount = nextCompetition === "Singles" ? 1 : nextCompetition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 3);
+                                  const nextMembers = Array.from({ length: nextCount }, (_, index) => current.members?.[index] || { name: "", usbc: "", average: "", league: "", allEvents: false, youth: false });
+                                  return { ...current, competition: nextCompetition, members: nextMembers };
+                                })}
+                                className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                              >
+                                <option>Team</option>
+                                <option>Doubles</option>
+                                <option>Singles</option>
+                              </select>
+                            </div>
+                            <div><Label>{line.competition === "Team" ? "Team Name" : "Entry Name"}</Label><Input value={line.name || ""} onChange={(e) => updatePacketLine(packet.id, line.id, (current) => ({ ...current, name: e.target.value }))} placeholder={line.competition === "Team" ? "Team name" : "Optional"} /></div>
+                            <div><Label>1st Choice</Label><select value={line.firstChoiceSquadId || ""} onChange={(e) => updatePacketLine(packet.id, line.id, (current) => ({ ...current, firstChoiceSquadId: e.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="">Select squad</option>{squads.map((squad) => <option key={`${line.id}-first-${squad.id}`} value={squad.id}>{squadLabel(squad)}</option>)}</select></div>
+                            <div><Label>2nd Choice</Label><select value={line.secondChoiceSquadId || ""} onChange={(e) => updatePacketLine(packet.id, line.id, (current) => ({ ...current, secondChoiceSquadId: e.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="">Select squad</option>{squads.map((squad) => <option key={`${line.id}-second-${squad.id}`} value={squad.id}>{squadLabel(squad)}</option>)}</select></div>
+                            <label className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-white px-3 py-2 text-sm font-black text-blue-950">Paid<Switch checked={line.paid !== false} onCheckedChange={(checked) => updatePacketLine(packet.id, line.id, (current) => ({ ...current, paid: checked }))} /></label>
+                            <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700" onClick={() => removePacketLine(packet.id, line.id)}>Delete</Button>
+                          </div>
+                          <div className="mt-3 overflow-auto rounded-xl border border-blue-100 bg-white">
+                            <table className="w-full min-w-[820px] text-sm">
+                              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Line</th><th className="p-2 text-left">Bowler</th><th className="p-2 text-left">USBC #</th><th className="p-2 text-left">Avg</th><th className="p-2 text-left">League / Center</th><th className="p-2 text-center">A/E</th><th className="p-2 text-center">Youth</th></tr></thead>
+                              <tbody>
+                                {members.map((member, memberIndex) => (
+                                  <tr key={`${line.id}-member-${memberIndex}`} className="border-t">
+                                    <td className="p-2 font-black text-blue-950">{memberIndex + 1}</td>
+                                    <td className="p-2"><Input list="multi-day-known-bowlers" value={member.name || ""} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
+                                    <td className="p-2"><Input value={member.usbc || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", e.target.value)} /></td>
+                                    <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
+                                    <td className="p-2"><Input value={member.league || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "league", e.target.value)} /></td>
+                                    <td className="p-2 text-center"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "allEvents", checked)} /></td>
+                                    <td className="p-2 text-center"><Switch checked={Boolean(member.youth)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "youth", checked)} /></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {(packet.lines || []).length === 0 && <p className="rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">Add team, doubles, or singles entries from this paper form.</p>}
+                  </div>
+                </div>
+                );
+              })}
+              {(multiDayEvent.registrationPackets || []).length === 0 && (
+                <div className="rounded-2xl border border-blue-200 bg-white p-4 text-sm font-semibold text-blue-700">
+                  No registration packets yet. Click Add Packet to enter one complete paper form.
+                </div>
+              )}
+            </div>
+          )}
+
           {multiDayRegistrationView === "entries" && (
           <>
           {multiDayUnpaidEntries.length > 0 && (
@@ -10019,42 +10632,63 @@ function MultiDayEventsTab({
               ) : "Add squads first on the Squads tab."}
             </div>
           </div>
-          <datalist id="multi-day-known-bowlers">
-            {knownBowlerOptions.map((bowler) => (
-              <option key={bowlerIdentityKey(bowler.name)} value={bowler.name} />
-            ))}
-          </datalist>
-          {pendingPlacement && typeof document !== "undefined" && createPortal((
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
-              <div className="w-full max-w-xl rounded-3xl border border-amber-300 bg-amber-50 p-5 shadow-2xl">
-                <h3 className="text-xl font-black text-amber-950">Choose Available Squad</h3>
-                <p className="mt-1 text-sm font-semibold text-amber-900">
-                  The entry could not be placed into first choice automatically. Choose a squad with enough room where these bowlers are not already scheduled.
-                </p>
-                <div className="mt-4 grid gap-2">
-                  {(pendingPlacement.options || []).map((option) => (
-                    <Button
-                      key={option.id}
-                      variant="outline"
-                      className="justify-between rounded-2xl border-amber-300 bg-white text-left text-amber-950 hover:bg-amber-100"
-                      onClick={() => placeEntryInSquad(pendingPlacement.sourceSquadId, pendingPlacement.entryId, option.id, "Placed from available squad list. ")}
-                    >
-                      <span className="flex flex-col gap-1">
-                        <span>{option.label}</span>
-                        <span className="text-xs font-black uppercase tracking-wide text-amber-700">{option.choiceLabel}</span>
-                      </span>
-                      <span>{option.count}{option.capacity ? `/${option.capacity}` : ""} bowlers</span>
-                    </Button>
-                  ))}
-                </div>
-                <div className="mt-4 flex justify-end">
-                  <Button variant="outline" className="rounded-2xl" onClick={() => setPendingPlacement(null)}>
-                    Cancel
-                  </Button>
-                </div>
+          <div className="rounded-2xl border border-blue-100 bg-white p-3 shadow-sm">
+            <div className="grid gap-3 lg:grid-cols-[320px_1fr] lg:items-start">
+              <div>
+                <Label>Find Bowler</Label>
+                <Input
+                  value={multiDayRegistrationSearch}
+                  onChange={(event) => setMultiDayRegistrationSearch(event.target.value)}
+                  placeholder="Search name, entry, captain, or USBC..."
+                  className="mt-1"
+                />
+              </div>
+              <div className="text-sm">
+                {!registrationSearchTerm ? (
+                  <div className="rounded-2xl bg-blue-50 p-3 font-semibold text-blue-700">
+                    Search will show every squad/time where that bowler is entered.
+                  </div>
+                ) : multiDayRegistrationSearchRows.length ? (
+                  <div className="overflow-auto rounded-2xl border border-blue-100">
+                    <table className="w-full min-w-[720px] text-sm">
+                      <thead className="bg-blue-800 text-white">
+                        <tr>
+                          <th className="p-2 text-left">Bowler</th>
+                          <th className="p-2 text-left">Event</th>
+                          <th className="p-2 text-left">Squad</th>
+                          <th className="p-2 text-left">Entry</th>
+                          <th className="p-2 text-center">Lane</th>
+                          <th className="p-2 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {multiDayRegistrationSearchRows.map((row) => (
+                          <tr key={`registration-search-${row.squad.id}-${row.entry.id}-${row.memberIndex}`} className="border-t">
+                            <td className="p-2 font-black text-blue-950">{row.member.name || `Bowler ${row.memberIndex + 1}`}</td>
+                            <td className="p-2 font-semibold text-blue-800">{row.competition}</td>
+                            <td className="p-2 text-blue-700">{squadLabel(row.squad)}</td>
+                            <td className="p-2">{row.entryName}</td>
+                            <td className="p-2 text-center font-bold">{row.entry.lane || "-"}</td>
+                            <td className="p-2 text-right">
+                              <Button variant="outline" className="rounded-2xl bg-white" onClick={() => openMultiDayRegistrationEntry(row.squad.id, row.entry.id)}>
+                                Open
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-amber-50 p-3 font-bold text-amber-800">
+                    No matching bowler found.
+                  </div>
+                )}
               </div>
             </div>
-          ), document.body)}
+          </div>
+
+
 
           {!activeSquad && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900">
@@ -10072,7 +10706,7 @@ function MultiDayEventsTab({
                 const isCollapsed = collapsedEntryIds[entry.id] ?? Boolean(entry.assignedSquadId);
 
                 return (
-                  <div key={entry.id} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
+                  <div key={entry.id} id={`multi-day-registration-entry-${entry.id}`} className="scroll-mt-24 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
                         <p className="text-xs font-black uppercase tracking-wide text-blue-700">Entry {entryIndex + 1}</p>
@@ -10333,8 +10967,8 @@ function MultiDayEventsTab({
                 {multiDayFinanceSummaryRows.map((row) => {
                   const expanded = expandedMultiDayFinanceEvent === row.competition;
                   const paidSpots = multiDayPayoutSpotCount(row);
-                  const scratchPlan = multiDayPayoutPlan(row.scratchPrize, paidSpots);
-                  const handicapPlan = multiDayPayoutPlan(row.handicapPrize, paidSpots);
+                  const scratchPlan = multiDayPayoutPlan(row.scratchPrize, paidSpots, row.competition);
+                  const handicapPlan = multiDayPayoutPlan(row.handicapPrize, paidSpots, row.competition);
                   return (
                     <React.Fragment key={row.competition}>
                       <tr className="border-t">
@@ -10359,7 +10993,7 @@ function MultiDayEventsTab({
                           <td className="p-4" colSpan={11}>
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm font-bold text-blue-900">
                               <span>{paidSpots} paid spot{paidSpots === 1 ? "" : "s"} per division</span>
-                              <span>{row.competition === "All Events" ? "1:14 or major portion" : "1:8 or major portion"}</span>
+                              <span>{row.outsideAward ? "Standalone youth award" : row.competition === "All Events" ? "1:14 or major portion" : "1:8 or major portion"}</span>
                             </div>
                             <div className="grid gap-4 md:grid-cols-2">
                               {[
@@ -10610,7 +11244,7 @@ function MultiDayEventsTab({
       <AppCard>
         <CardContent className="space-y-5 p-4 md:p-6">
           <div>
-            <h2 className="text-2xl font-black text-blue-950">Multi-Event Public Side Action</h2>
+            <h2 className="text-2xl font-black text-blue-950">Multi-Event Brackets</h2>
             <p className="text-sm font-semibold text-blue-700">
               Public-style bracket lookup for this multi-event tournament. Select a squad, then click a bowler name to see their bracket path.
             </p>
@@ -10949,7 +11583,7 @@ function MultiDayEventsTab({
   if (mode === "registrationLegacy") {
     return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-2xl font-black text-blue-950">Squad Registration</h2><p className="text-sm font-semibold text-blue-700">Pick a squad, then add the singles, doubles, or team entries bowling in that block.</p></div>{activeSquad && <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>Add Entry</Button>}</div>
       <div className="grid gap-3 md:grid-cols-[280px_1fr]">
-        <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
+        <div><Label>Squad</Label><select value={activeSquad?.id || ""} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">{squads.map((squad) => <option key={squad.id} value={squad.id}>{squadLabel(squad)}</option>)}</select></div>
         <div className="rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-800">{activeSquad ? `${mixedSquads ? "Mixed event" : activeSquad.competition} squad${activeSquad.lanes ? ` on lanes ${activeSquad.lanes}` : ""}` : "Add squads first on the Squads tab."}</div>
       </div>
       {activeSquad && <div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[900px] text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Entry Name</th><th className="p-3 text-left">Bowler 1</th><th className="p-3 text-left">Bowler 2</th><th className="p-3 text-left">Bowler 3</th><th className="p-3 text-left">Bowler 4</th><th className="p-3 text-left">Bowler 5</th><th className="p-3"></th></tr></thead><tbody>{(activeSquad.entries || []).map((entry) => <tr key={entry.id} className="border-t"><td className="p-2"><div className="space-y-2">{mixedSquads && <select value={entry.competition || "Singles"} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, competition: e.target.value, members: Array.from({ length: e.target.value === "Singles" ? 1 : e.target.value === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 5) }, (_, index) => current.members?.[index] || "") }))} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option>Singles</option><option>Doubles</option><option>Team</option></select>}<Input value={entry.name || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, name: e.target.value }))} placeholder={getSquadEntryCompetition(entry) === "Singles" ? "Bowler name" : `${getSquadEntryCompetition(entry)} name`} /></div></td>{Array.from({ length: getEntryMemberCount(entry) }, (_, memberIndex) => <td key={memberIndex} className="p-2"><Input value={entry.members?.[memberIndex] || ""} onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => { const members = [...(current.members || [])]; members[memberIndex] = e.target.value; return { ...current, members }; })} placeholder={`Bowler ${memberIndex + 1}`} /></td>)}{Array.from({ length: Math.max(0, 5 - getEntryMemberCount(entry)) }, (_, blankIndex) => <td key={`blank-${blankIndex}`} className="p-2 text-slate-300">-</td>)}<td className="p-2 text-right"><Button variant="outline" className="rounded-2xl" onClick={() => removeSquadEntry(activeSquad.id, entry.id)}>Delete</Button></td></tr>)}{(activeSquad.entries || []).length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>No entries in this squad yet.</td></tr>}</tbody></table></div>}
@@ -10993,6 +11627,47 @@ function MultiDayEventsTab({
         })
         : sortScoreEntriesByLane(scoreEntries)
       : scoreEntries;
+    const focusLaneAssignmentInput = (targetIndex) => {
+      if (typeof document === "undefined") return;
+      const laneInputs = Array.from(document.querySelectorAll('[data-multi-day-lane-input="true"]'));
+      const targetInput = laneInputs.find((input) => Number(input.dataset.multiDayLaneIndex || -1) === targetIndex);
+      if (targetInput) {
+        targetInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        targetInput.focus();
+        targetInput.select?.();
+      }
+    };
+    const handleLaneAssignmentKeyDown = (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      const currentIndex = Number(event.currentTarget.dataset.multiDayLaneIndex || -1);
+      if (currentIndex < 0) return;
+      focusLaneAssignmentInput(event.key === "ArrowUp" ? currentIndex - 1 : currentIndex + 1);
+    };
+    const scoreInputRowIndexByKey = {};
+    let nextScoreInputRowIndex = 0;
+    activeScoreEntries.forEach((entry) => {
+      entryMembers(entry, activeSquad).forEach((_member, memberIndex) => {
+        scoreInputRowIndexByKey[`${entry.id}-${memberIndex}`] = nextScoreInputRowIndex;
+        nextScoreInputRowIndex += 1;
+      });
+    });
+    const handleMultiDayScoreKeyDown = (event) => {
+      if (event.key !== "Enter" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      const gameIndex = event.currentTarget.dataset.multiDayScoreGame;
+      const rowIndex = Number(event.currentTarget.dataset.multiDayScoreRow || -1);
+      if (!gameIndex || rowIndex < 0 || typeof document === "undefined") return;
+      const targetRowIndex = event.key === "ArrowUp" ? rowIndex - 1 : rowIndex + 1;
+      if (targetRowIndex < 0) return;
+      const nextInput = document.querySelector(
+        `[data-multi-day-score-input="true"][data-multi-day-score-game="${gameIndex}"][data-multi-day-score-row="${targetRowIndex}"]`
+      );
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select?.();
+      }
+    };
     const firstEntryIdByLane = activeScoreEntries.reduce((map, entry) => {
       const laneKey = multiDayLaneKey(entry.lane);
       if (laneKey && !map[laneKey]) map[laneKey] = entry.id;
@@ -11041,6 +11716,7 @@ function MultiDayEventsTab({
       const scratchTotal = entryScratchTotal(entry, squad);
       const hdcpTotal = entryHandicapTotal(entry, squad);
       const entryTotal = scratchTotal + hdcpTotal;
+      const averageTotal = entryAverageTotal(entry, squad);
       const memberRows = members.map((member, memberIndex) => {
         const scratchSeries = memberScratchSeries(entry, memberIndex);
         const hdcpSeries = scratchSeries ? scratchSeries + (handicapPerGame(member) * 3) : 0;
@@ -11057,10 +11733,10 @@ function MultiDayEventsTab({
       const perGameHandicap = entryHandicapPerGame(entry, squad);
       const totalHandicap = perGameHandicap * 3;
       const isSinglesEntry = getEntryMemberCount(entry, squad) === 1;
-      const scratchTotalRow = isSinglesEntry ? "" : `<tr class="total-row total-start"><td>Scratch Total</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+      const scratchTotalRow = isSinglesEntry ? "" : `<tr class="total-row total-start"><td>Scratch Total</td><td>${averageTotal || ""}</td><td></td><td></td><td></td><td></td><td></td></tr>`;
       const totalsRows = `<tr class="total-spacer"><td colspan="7"></td></tr>
         ${scratchTotalRow}
-        <tr class="total-row ${isSinglesEntry ? "total-start" : ""}"><td>Handicap</td><td></td><td>${perGameHandicap || ""}</td><td>${perGameHandicap || ""}</td><td>${perGameHandicap || ""}</td><td>${perGameHandicap || ""}</td><td>${totalHandicap || ""}</td></tr>
+        <tr class="total-row ${isSinglesEntry ? "total-start" : ""}"><td>Handicap</td><td>${isSinglesEntry ? averageTotal || "" : ""}</td><td>${perGameHandicap || ""}</td><td>${perGameHandicap || ""}</td><td>${perGameHandicap || ""}</td><td>${perGameHandicap || ""}</td><td>${totalHandicap || ""}</td></tr>
         <tr class="total-row"><td>Total</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
       return `${memberRows}${totalsRows}`;
     };
@@ -11180,10 +11856,12 @@ function MultiDayEventsTab({
       </style></head><body>${bodyHtml}<script>window.onload = function(){ window.focus(); window.print(); };</script></body></html>`);
       printWindow.document.close();
     };
-    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Squad Score Entry</h2><p className="text-sm font-semibold text-blue-700">Enter each bowler's games. Doubles and team totals are calculated below each entry.</p></div>
-      {testDraftControls}
-      <div className="grid gap-3 lg:grid-cols-[320px_1fr_auto] lg:items-end">
-        <div><Label>Squad</Label><select value={selectedSquadId} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="">Select a squad...</option>{squads.map((squad) => <option key={squad.id} value={squad.id}>{squad.date || "Date TBD"} {squad.time || ""} - {squad.competition}</option>)}</select></div>
+    const laneAssignmentToolbar = (
+      <div
+        className={scoreLaneAssignmentMode ? "grid max-h-[45vh] gap-3 overflow-auto rounded-2xl border border-blue-200 bg-white/95 p-3 shadow-2xl backdrop-blur lg:grid-cols-[320px_1fr_auto] lg:items-end" : "grid gap-3 rounded-2xl border border-blue-100 bg-white/95 p-3 shadow-lg backdrop-blur lg:grid-cols-[320px_1fr_auto] lg:items-end"}
+        style={scoreLaneAssignmentMode ? { position: "fixed", top: 8, left: 8, right: 8, zIndex: 9999 } : undefined}
+      >
+        <div><Label>Squad</Label><select value={selectedSquadId} onChange={(e) => setSelectedSquadId(e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="">Select a squad...</option>{squads.map((squad) => <option key={squad.id} value={squad.id}>{squadLabel(squad)}</option>)}</select></div>
         <div className="space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-xs font-black text-blue-800">
           <div>
             {activeLaneSummary.length
@@ -11205,21 +11883,35 @@ function MultiDayEventsTab({
             </span>
           </div>
         </div>
-        <Button
-          variant="outline"
-          className="rounded-2xl bg-white"
-          onClick={() => {
-            if (scoreEntrySort === "lane" && !scoreEntryLaneSortStale) {
-              setScoreEntrySort("entry");
-              setScoreEntryLaneOrderIds([]);
-              return;
-            }
-            applyScoreEntryLaneSort();
-          }}
-        >
-          {scoreEntrySort === "lane" && !scoreEntryLaneSortStale ? "Use Entry Order" : "Sort By Lane"}
-        </Button>
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          <Button
+            variant="outline"
+            className="rounded-2xl bg-white"
+            onClick={() => {
+              if (scoreEntrySort === "lane" && !scoreEntryLaneSortStale) {
+                setScoreEntrySort("entry");
+                setScoreEntryLaneOrderIds([]);
+                return;
+              }
+              applyScoreEntryLaneSort();
+            }}
+          >
+            {scoreEntrySort === "lane" && !scoreEntryLaneSortStale ? "Use Entry Order" : "Sort By Lane"}
+          </Button>
+          <Button
+            variant={scoreLaneAssignmentMode ? "default" : "outline"}
+            className={scoreLaneAssignmentMode ? "rounded-2xl bg-green-700 hover:bg-green-800" : "rounded-2xl bg-white"}
+            onClick={() => setScoreLaneAssignmentMode((current) => !current)}
+          >
+            {scoreLaneAssignmentMode ? "Done Assigning Lanes" : "Start Lane Assignments"}
+          </Button>
+        </div>
       </div>
+    );
+    return <AppCard><CardContent className="space-y-4 p-4 md:p-6"><div><h2 className="text-2xl font-black text-blue-950">Squad Score Entry</h2><p className="text-sm font-semibold text-blue-700">Enter each bowler's games. Doubles and team totals are calculated below each entry.</p></div>
+      {testDraftControls}
+      {scoreLaneAssignmentMode && <div className="h-56 md:h-36" />}
+      {scoreLaneAssignmentMode && typeof document !== "undefined" ? createPortal(laneAssignmentToolbar, document.body) : laneAssignmentToolbar}
       <div className="flex flex-wrap gap-2 rounded-2xl border border-blue-100 bg-white p-3">
         {[0, 1, 2].map((gameIndex) => (
           <Button
@@ -11249,10 +11941,11 @@ function MultiDayEventsTab({
         </Button>
       </div>
       {activeSquad ? <div className="space-y-4">
-        {activeScoreEntries.map((entry) => {
+        {activeScoreEntries.map((entry, entryIndex) => {
           const competition = getSquadEntryCompetition(entry, activeSquad);
           const members = entryMembers(entry, activeSquad);
           const handicapGameTotal = entryHandicapPerGame(entry, activeSquad);
+          const averageTotal = entryAverageTotal(entry, activeSquad);
           const scratchTotal = entryScratchTotal(entry, activeSquad);
           const handicapTotal = entryHandicapTotal(entry, activeSquad);
           const grandTotal = scratchTotal + handicapTotal;
@@ -11271,15 +11964,34 @@ function MultiDayEventsTab({
                   </div>
                   <label className="text-xs font-black uppercase tracking-wide text-blue-700">
                     Lane
-                    <Input
-                      className="mt-1 bg-white text-center"
-                      value={entry.lane || ""}
-                      onChange={(event) => {
-                        if (scoreEntrySort === "lane") setScoreEntryLaneSortStale(true);
-                        updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, lane: event.target.value }));
-                      }}
-                      placeholder="1"
-                    />
+                    <div className="mt-1 flex gap-2">
+                      <Input
+                        className="bg-white text-center"
+                        value={entry.lane || ""}
+                        data-multi-day-lane-input="true"
+                        data-multi-day-lane-index={entryIndex}
+                        onKeyDown={handleLaneAssignmentKeyDown}
+                        onFocus={() => setScoreLaneAssignmentMode(true)}
+                        onChange={(event) => {
+                          if (scoreEntrySort === "lane") {
+                            if (!scoreEntryLaneOrderIds.length) {
+                              setScoreEntryLaneOrderIds(activeScoreEntries.map((scoreEntry) => scoreEntry.id));
+                            }
+                            setScoreEntryLaneSortStale(true);
+                          }
+                          updateSquadEntry(activeSquad.id, entry.id, (current) => ({ ...current, lane: event.target.value }));
+                        }}
+                        placeholder="1"
+                      />
+                      <button
+                        type="button"
+                        className="h-10 w-10 rounded-xl border border-blue-200 bg-white text-lg font-black text-blue-800 shadow-sm hover:bg-blue-50"
+                        onClick={() => focusLaneAssignmentInput(entryIndex + 1)}
+                        title="Next lane assignment"
+                      >
+                        ↓
+                      </button>
+                    </div>
                     {laneKey && (
                       <span className={laneOver ? "mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-800" : laneFull ? "mt-1 inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-black text-green-800" : "mt-1 inline-flex rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-blue-800"}>
                         Lane {laneKey}: {laneCount}/3{laneFull ? " Full" : laneOver ? " Over" : ""}
@@ -11322,7 +12034,11 @@ function MultiDayEventsTab({
                             type="number"
                             min="0"
                             max="300"
+                            data-multi-day-score-input="true"
+                            data-multi-day-score-game={gameIndex}
+                            data-multi-day-score-row={scoreInputRowIndexByKey[`${entry.id}-${memberIndex}`]}
                             value={entry.memberScores?.[memberIndex]?.[gameIndex] || ""}
+                            onKeyDown={handleMultiDayScoreKeyDown}
                             onChange={(e) => updateSquadEntry(activeSquad.id, entry.id, (current) => {
                               const memberScores = Array.from({ length: getEntryMemberCount(current, activeSquad) }, (_, index) => [...(current.memberScores?.[index] || [])]);
                               memberScores[memberIndex][gameIndex] = e.target.value;
@@ -11341,7 +12057,7 @@ function MultiDayEventsTab({
                   })}
                   <tr className="border-t bg-blue-50 font-black text-blue-950">
                     <td className="p-3">Scratch Total</td>
-                    <td className="w-20 p-3"></td>
+                    <td className="w-20 p-3 text-center">{averageTotal || "-"}</td>
                     <td className="w-20 p-3"></td>
                     {[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="w-28 p-3 text-center">{entryGameScratchTotal(entry, gameIndex, activeSquad) || "-"}</td>)}
                     <td className="w-28 p-3 text-center">{scratchTotal || "-"}</td>
@@ -11368,6 +12084,871 @@ function MultiDayEventsTab({
     </CardContent></AppCard>;
   }
 
+  if (mode === "archive") {
+    const archiveScoreKey = (row) => row.detailKey || row.name;
+    const archivePresetPayoutCount = (eventId) => ({
+      singles: 12,
+      doubles: 7,
+      team: 3,
+      allEvents: 4,
+      youth: 1,
+    }[eventId] || 0);
+    const archivePaidWinnerConfigs = [
+      { id: "singles", label: "Singles", rows: singlesRows },
+      { id: "doubles", label: "Doubles", rows: doublesRows },
+      { id: "team", label: "Team", rows: teamRows },
+      { id: "allEvents", label: "All Events", rows: allEventsRows },
+      { id: "youth", label: "Youth", rows: youthRows },
+    ];
+    const archivePlaceRows = (rows, scoreKey) => {
+      const placedRows = [...rows]
+        .filter((row) => Number(row[scoreKey] || 0) > 0)
+        .sort((a, b) => Number(b[scoreKey] || 0) - Number(a[scoreKey] || 0) || Number(b.scratch || 0) - Number(a.scratch || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+      let currentPlace = 0;
+      return placedRows.map((row, index) => {
+        const score = Number(row[scoreKey] || 0);
+        const previous = placedRows[index - 1];
+        const previousScore = Number(previous?.[scoreKey] || 0);
+        const next = placedRows[index + 1];
+        const nextScore = Number(next?.[scoreKey] || 0);
+        if (!previous || previousScore !== score) currentPlace = index + 1;
+        const tied = previousScore === score || nextScore === score;
+        return { ...row, place: currentPlace, placeLabel: tied ? `${currentPlace}T` : String(currentPlace), score: row[scoreKey] };
+      });
+    };
+    const archivePaidKey = (row, eventId) => eventId === "singles" || eventId === "youth" ? bowlerIdentityKey(row.name || "") : archiveScoreKey(row);
+    const archiveBestRows = (rows, scoreKey, eventId) => {
+      if (eventId !== "singles" && eventId !== "youth") return rows;
+      const bestRows = new Map();
+      rows.forEach((row) => {
+        const key = archivePaidKey(row, eventId);
+        const current = bestRows.get(key);
+        if (!current || Number(row[scoreKey] || 0) > Number(current[scoreKey] || 0)) bestRows.set(key, row);
+      });
+      return [...bestRows.values()];
+    };
+    const archiveVisiblePaidWinners = (rows, payoutPlan, payoutCount) => {
+      const sortedRows = [...rows].sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+      const winners = [];
+      let currentPlace = 0;
+      sortedRows.forEach((row, index) => {
+        const score = Number(row.score || 0);
+        const previous = sortedRows[index - 1];
+        const previousScore = Number(previous?.score || 0);
+        if (!previous || previousScore !== score) currentPlace = index + 1;
+        if (currentPlace > payoutCount) return;
+        const tiedRows = sortedRows.filter((candidate) => Number(candidate.score || 0) === score);
+        const tied = tiedRows.length > 1;
+        const tiedAmount = Array.from({ length: tiedRows.length }, (_, offset) => payoutPlan[currentPlace - 1 + offset]?.amount || 0)
+          .reduce((sum, amount) => sum + Number(amount || 0), 0);
+        winners.push({
+          event: row.event,
+          division: row.division,
+          place: tied ? `${currentPlace}T` : String(currentPlace),
+          name: row.name,
+          score,
+          payout: tiedAmount / Math.max(1, tiedRows.length),
+        });
+      });
+      return winners;
+    };
+    const buildArchivePaidWinners = () => archivePaidWinnerConfigs.flatMap((config) => {
+      const payoutCount = archivePresetPayoutCount(config.id);
+      if (!payoutCount) return [];
+      const payoutPlan = multiDayPayoutPlan(0, payoutCount, config.label);
+      const scratchPlaced = archivePlaceRows(archiveBestRows(config.rows || [], "scratch", config.id), "scratch");
+      const handicapPlaced = archivePlaceRows(archiveBestRows(config.rows || [], "total", config.id), "total");
+      const scratchByKey = new Map(scratchPlaced.map((row) => [archivePaidKey(row, config.id), row]));
+      const handicapByKey = new Map(handicapPlaced.map((row) => [archivePaidKey(row, config.id), row]));
+      const chosenByKey = new Map();
+      [...new Map([...scratchPlaced, ...handicapPlaced].map((row) => [archivePaidKey(row, config.id), row])).values()].forEach((row) => {
+        const key = archivePaidKey(row, config.id);
+        const scratchRow = scratchByKey.get(key);
+        const handicapRow = handicapByKey.get(key);
+        if (!scratchRow && !handicapRow) return;
+        const useHandicap = scratchRow && handicapRow ? handicapRow.place < scratchRow.place : Boolean(handicapRow);
+        const chosen = useHandicap ? handicapRow : scratchRow;
+        chosenByKey.set(key, { ...chosen, event: config.label, division: useHandicap ? "Handicap" : "Scratch", score: useHandicap ? chosen.total : chosen.scratch });
+      });
+      return ["Scratch", "Handicap"].flatMap((division) => archiveVisiblePaidWinners(
+        [...chosenByKey.values()].filter((row) => row.division === division),
+        payoutPlan,
+        payoutCount
+      ));
+    });
+    const buildArchiveFirstPlaces = (paidRows) => paidRows.filter((row) => String(row.place) === "1").map((row) => ({
+      label: `${row.event} ${row.division}`,
+      name: row.name,
+      score: row.score,
+      payout: row.payout,
+    }));
+    const buildArchiveLeaderboardSections = () => archivePaidWinnerConfigs
+      .filter((config) => config.id !== "youth")
+      .flatMap((config) => ([
+        { title: `${config.label} Scratch`, rows: archivePlaceRows(config.rows || [], "scratch").map((row) => ({ place: row.placeLabel, name: row.name, score: row.scratch, scratch: row.scratch, handicap: row.handicap, total: row.total, members: row.members || [], details: row.details || [] })) },
+        { title: `${config.label} Handicap`, rows: archivePlaceRows(config.rows || [], "total").map((row) => ({ place: row.placeLabel, name: row.name, score: row.total, scratch: row.scratch, handicap: row.handicap, total: row.total, members: row.members || [], details: row.details || [] })) },
+      ]));
+    const buildArchiveSideActionRows = () => {
+      const rowsForGroup = (group) => {
+        const groupPlayerByKey = Object.fromEntries((group.rows || []).map((row) => [multiDayPlayerKey(row), row]));
+        const scorePartsForGroup = (playerRef, roundIndex, setKey) => {
+          const row = groupPlayerByKey[playerRef?.key];
+          if (!row || playerRef?.name === "BYE") return { scratch: 0, handicap: 0, total: 0 };
+          const scratch = memberGameScore(row.entry, row.memberIndex, roundIndex);
+          if (!scratch) return { scratch: 0, handicap: 0, total: 0 };
+          const handicap = setKey === "handicap" ? handicapPerGame(row.member) : 0;
+          return { scratch, handicap, total: scratch + handicap };
+        };
+        const advanceForGroup = (players, roundIndex, setKey, options = {}) => {
+          const realPlayers = players.filter((player) => player && player.name !== "BYE");
+          if (realPlayers.length === 0) return [];
+          if (realPlayers.length === 1) return options.advanceSingle ? realPlayers : [];
+          const scored = realPlayers.map((player) => ({ player, score: scorePartsForGroup(player, roundIndex, setKey).total }));
+          const maxScore = Math.max(...scored.map((item) => item.score));
+          if (!maxScore) return [];
+          return scored.filter((item) => item.score === maxScore).map((item) => item.player);
+        };
+        const roundsForGroup = (bracket, setKey) => {
+          const p = Array.from({ length: 8 }, (_, index) => bracket.players?.[index] || { key: `bye-${index}`, name: "BYE" });
+          const r1Matches = [[p[0], p[1]], [p[2], p[3]], [p[4], p[5]], [p[6], p[7]]];
+          const r1Winners = r1Matches.map((match) => advanceForGroup(match, 0, setKey, { advanceSingle: match.some((player) => player?.name === "BYE") }));
+          const r2Matches = [[...r1Winners[0], ...r1Winners[1]], [...r1Winners[2], ...r1Winners[3]]];
+          const r2Winners = r2Matches.map((match) => advanceForGroup(match, 1, setKey));
+          const finalPlayers = [...r2Winners[0], ...r2Winners[1]];
+          const champions = advanceForGroup(finalPlayers, 2, setKey);
+          return { finalPlayers, champions };
+        };
+        const payoutMap = {};
+        const addPayout = (player, setKey, amount, detail) => {
+          if (!player || player.name === "BYE" || !amount) return;
+          const current = payoutMap[player.key] || { squad: squadLabel(group.squad), name: player.name, total: 0, details: [] };
+          current.total += amount;
+          current.details.push(`${multiDayBracketSetLabel(setKey)} ${detail} ${currencyWithOptionalCents(amount)}`);
+          payoutMap[player.key] = current;
+        };
+        const bracketGroups = (multiDaySideAction[group.squad.id] || {}).bracketGroups || {};
+        Object.entries(bracketGroups).forEach(([setKey, brackets]) => {
+          (Array.isArray(brackets) ? brackets : []).forEach((bracket) => {
+            const rounds = roundsForGroup(bracket, setKey);
+            const firstPayout = Number(bracket.payout?.first || 25);
+            const secondPayout = Number(bracket.payout?.second || 10);
+            if (!rounds.champions.length) return;
+            rounds.champions.forEach((winner) => addPayout(winner, setKey, firstPayout / rounds.champions.length, `Bracket #${bracket.number} 1st`));
+            if (rounds.champions.length === 1) {
+              (rounds.finalPlayers || [])
+                .filter((player) => player && player.name !== "BYE" && player.key !== rounds.champions[0].key)
+                .forEach((runnerUp) => addPayout(runnerUp, setKey, secondPayout, `Bracket #${bracket.number} 2nd`));
+            }
+          });
+        });
+        return Object.values(payoutMap).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+      };
+      return checkInRowsBySquad.flatMap((group) => rowsForGroup(group));
+    };
+    const buildArchivePublicSideActionGroups = () => {
+      const rowsForGroup = (group) => {
+        const groupPlayerByKey = Object.fromEntries((group.rows || []).map((row) => [multiDayPlayerKey(row), row]));
+        const scorePartsForGroup = (playerRef, roundIndex, setKey) => {
+          const row = groupPlayerByKey[playerRef?.key];
+          if (!row || playerRef?.name === "BYE") return { scratch: 0, handicap: 0, total: 0 };
+          const scratch = memberGameScore(row.entry, row.memberIndex, roundIndex);
+          if (!scratch) return { scratch: 0, handicap: 0, total: 0 };
+          const handicap = setKey === "handicap" ? handicapPerGame(row.member) : 0;
+          return { scratch, handicap, total: scratch + handicap };
+        };
+        const advanceForGroup = (players, roundIndex, setKey, options = {}) => {
+          const realPlayers = players.filter((player) => player && player.name !== "BYE");
+          if (realPlayers.length === 0) return [];
+          if (realPlayers.length === 1) return options.advanceSingle ? realPlayers : [];
+          const scored = realPlayers.map((player) => ({ player, score: scorePartsForGroup(player, roundIndex, setKey).total }));
+          const maxScore = Math.max(...scored.map((item) => item.score));
+          if (!maxScore) return [];
+          return scored.filter((item) => item.score === maxScore).map((item) => item.player);
+        };
+        const roundsForGroup = (bracket, setKey) => {
+          const p = Array.from({ length: 8 }, (_, index) => bracket.players?.[index] || { key: `bye-${index}`, name: "BYE" });
+          const r1Matches = [[p[0], p[1]], [p[2], p[3]], [p[4], p[5]], [p[6], p[7]]];
+          const r1Winners = r1Matches.map((match) => advanceForGroup(match, 0, setKey, { advanceSingle: match.some((player) => player?.name === "BYE") }));
+          const r2Matches = [[...r1Winners[0], ...r1Winners[1]], [...r1Winners[2], ...r1Winners[3]]];
+          const r2Winners = r2Matches.map((match) => advanceForGroup(match, 1, setKey));
+          const finalPlayers = [...r2Winners[0], ...r2Winners[1]];
+          return { r1Matches, r2Matches, finalPlayers };
+        };
+        const playerMap = {};
+        const ensurePlayer = (player) => {
+          if (!player || player.name === "BYE") return null;
+          if (!playerMap[player.key]) playerMap[player.key] = { key: player.key, name: player.name, alive: 0, matches: [] };
+          return playerMap[player.key];
+        };
+        const bracketGroups = (multiDaySideAction[group.squad.id] || {}).bracketGroups || {};
+        Object.entries(bracketGroups).forEach(([setKey, brackets]) => {
+          (Array.isArray(brackets) ? brackets : []).forEach((bracket) => {
+            const rounds = roundsForGroup(bracket, setKey);
+            const aliveKeys = new Set((bracket.players || []).filter((player) => player && player.name !== "BYE").map((player) => player.key));
+            [
+              { label: `${multiDayBracketSetLabel(setKey)} Bracket ${bracket.number} - Game 1`, roundIndex: 0, matches: rounds.r1Matches },
+              { label: `${multiDayBracketSetLabel(setKey)} Bracket ${bracket.number} - Game 2`, roundIndex: 1, matches: rounds.r2Matches },
+              { label: `${multiDayBracketSetLabel(setKey)} Bracket ${bracket.number} - Game 3`, roundIndex: 2, matches: rounds.finalPlayers.length ? [rounds.finalPlayers] : [] },
+            ].forEach((round) => {
+              round.matches.forEach((match) => {
+                const realPlayers = match.filter((player) => player && player.name !== "BYE");
+                if (round.roundIndex > 0 && realPlayers.length < 2) return;
+                const matchHasBye = match.some((player) => player?.name === "BYE");
+                const winners = advanceForGroup(match, round.roundIndex, setKey, { advanceSingle: round.roundIndex === 0 && matchHasBye });
+                const matchHasScores = realPlayers.some((player) => scorePartsForGroup(player, round.roundIndex, setKey).total > 0) || (round.roundIndex === 0 && matchHasBye && realPlayers.length === 1);
+                realPlayers.forEach((player) => {
+                  const row = ensurePlayer(player);
+                  if (!row) return;
+                  const opponents = realPlayers.filter((other) => other.key !== player.key);
+                  const playerAdvanced = winners.some((winner) => winner.key === player.key);
+                  const tied = winners.length > 1 && playerAdvanced;
+                  const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
+                  if (matchHasScores && result === "L") aliveKeys.delete(player.key);
+                  const scoreParts = scorePartsForGroup(player, round.roundIndex, setKey);
+                  row.matches.push({
+                    round: round.label,
+                    result,
+                    opponent: opponents.length ? opponents.map((other) => other.name).join(" / ") : "BYE",
+                    opponentScore: opponents.length ? opponents.map((other) => scorePartsForGroup(other, round.roundIndex, setKey).total || "- -").join(" / ") : "- -",
+                    opponentBreakdown: setKey === "handicap" && opponents.length ? opponents.map((other) => {
+                      const parts = scorePartsForGroup(other, round.roundIndex, setKey);
+                      return parts.scratch > 0 ? `(${parts.scratch} + ${parts.handicap})` : "";
+                    }).join(" / ") : "",
+                    playerScore: scoreParts.total || "- -",
+                    playerBreakdown: setKey === "handicap" && scoreParts.scratch > 0 ? `${scoreParts.scratch} + ${scoreParts.handicap}` : "",
+                  });
+                });
+              });
+            });
+            (bracket.players || []).filter((player) => player && player.name !== "BYE" && aliveKeys.has(player.key)).forEach((player) => {
+              const row = ensurePlayer(player);
+              if (row) row.alive += 1;
+            });
+          });
+        });
+        return Object.values(playerMap).sort((a, b) => b.alive - a.alive || a.name.localeCompare(b.name));
+      };
+      return checkInRowsBySquad.map((group) => ({
+        squad: squadLabel(group.squad),
+        lanes: group.squad.lanes || "",
+        rows: rowsForGroup(group),
+      })).filter((group) => group.rows.length > 0);
+    };
+    const createMultiDayArchive = () => {
+      const paidWinners = buildArchivePaidWinners();
+      const restoreSnapshot = (() => {
+        const { archives: _archives, ...restorableEvent } = multiDayEvent || {};
+        try {
+          return structuredClone(restorableEvent);
+        } catch {
+          return JSON.parse(JSON.stringify(restorableEvent));
+        }
+      })();
+      const snapshot = {
+        id: `multi-archive-${Date.now()}`,
+        archivedAt: new Date().toISOString(),
+        name: multiDayEvent.name || "Multi-Event Tournament",
+        dates: [multiDayEvent.startDate, multiDayEvent.endDate].filter(Boolean).join(" to "),
+        center: multiDayEvent.center || "",
+        restoreSnapshot,
+        firstPlaces: buildArchiveFirstPlaces(paidWinners),
+        leaderboards: buildArchiveLeaderboardSections(),
+        paidWinners,
+        sideActionPayouts: buildArchiveSideActionRows(),
+        publicSideAction: buildArchivePublicSideActionGroups(),
+      };
+      setMultiDayEvent((current) => ({ ...current, archives: [snapshot, ...(current.archives || [])] }));
+      setTestDraftNotice(`Archived ${snapshot.name}.`);
+    };
+    const deleteMultiDayArchive = (archiveId) => {
+      if (typeof window !== "undefined" && !window.confirm("Delete this multi-event archive?")) return;
+      setMultiDayEvent((current) => ({ ...current, archives: (current.archives || []).filter((archive) => archive.id !== archiveId) }));
+    };
+    const restoreMultiDayArchive = (archive) => {
+      if (!archive?.restoreSnapshot) {
+        if (typeof window !== "undefined") window.alert("This archive was saved before restore snapshots were added, so it cannot be restored automatically.");
+        return;
+      }
+      const archiveDetails = [archive.dates, archive.center].filter(Boolean).join(" - ");
+      if (typeof window !== "undefined" && !window.confirm(`Restore "${archive.name || "this multi-event tournament"}"${archiveDetails ? ` (${archiveDetails})` : ""} as the current multi-event workspace?\n\nThis will replace the multi-event setup, entries, scores, check-in, and side action you are currently working on. The archive list will stay.`)) return;
+      setMultiDayEvent((current) => ({
+        ...archive.restoreSnapshot,
+        archives: current.archives || [],
+      }));
+      setMultiDayArchiveView("tournaments");
+      setExpandedMultiDayArchiveKey(null);
+      setTestDraftNotice(`Restored ${archive.name || "multi-event tournament"}.`);
+    };
+    const archives = multiDayEvent.archives || [];
+    const archiveSortValue = (row, key) => {
+      if (key === "place") return Number(String(row.place || "").replace(/[^0-9.]/g, "")) || 9999;
+      if (["avg", "cash", "cashes", "events", "games", "handicap", "handicapAvg", "payout", "score", "scratch", "tournaments", "total", "wins"].includes(key)) return Number(row[key] || 0);
+      return String(row[key] || "").toLowerCase();
+    };
+    const getArchiveSort = (tableKey, fallbackKey = "place", fallbackDirection = "asc") =>
+      multiDayArchiveSort?.[tableKey] || { key: fallbackKey, direction: fallbackDirection };
+    const setArchiveSort = (tableKey, key, fallbackDirection = "asc") => {
+      setMultiDayArchiveSort((current) => ({
+        ...current,
+        [tableKey]: {
+          key,
+          direction: current?.[tableKey]?.key === key && current?.[tableKey]?.direction === fallbackDirection ? "desc" : fallbackDirection,
+        },
+      }));
+    };
+    const archiveSortArrow = (tableKey, key) => {
+      const activeSort = getArchiveSort(tableKey);
+      return activeSort.key === key ? (activeSort.direction === "asc" ? "▲" : "▼") : "↕";
+    };
+    const sortedArchiveRows = (rows, tableKey, fallbackKey = "place", fallbackDirection = "asc") => {
+      const activeSort = getArchiveSort(tableKey, fallbackKey, fallbackDirection);
+      const direction = activeSort.direction === "asc" ? 1 : -1;
+      return [...(rows || [])].sort((a, b) => {
+        const aValue = archiveSortValue(a, activeSort.key);
+        const bValue = archiveSortValue(b, activeSort.key);
+        if (typeof aValue === "number" && typeof bValue === "number" && aValue !== bValue) return (aValue - bValue) * direction;
+        if (String(aValue) !== String(bValue)) return String(aValue).localeCompare(String(bValue)) * direction;
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      });
+    };
+    const archiveSortButton = (tableKey, key, label, fallbackDirection = "asc", className = "font-black") => (
+      <button type="button" onClick={() => setArchiveSort(tableKey, key, fallbackDirection)} className={className}>
+        {label} {archiveSortArrow(tableKey, key)}
+      </button>
+    );
+    const archivedBowlerStats = (() => {
+      const statsByBowler = new Map();
+      const ensureBowlerStats = (name) => {
+        const cleanName = String(name || "").trim();
+        const key = bowlerIdentityKey(cleanName);
+        if (!key) return null;
+        const current = statsByBowler.get(key) || {
+          key,
+          name: cleanName,
+          tournamentsSet: new Set(),
+          events: 0,
+          games: 0,
+          scratch: 0,
+          handicap: 0,
+          total: 0,
+          wins: 0,
+          cashes: 0,
+          cash: 0,
+          details: [],
+        };
+        if (!current.name && cleanName) current.name = cleanName;
+        statsByBowler.set(key, current);
+        return current;
+      };
+      const detailSeen = new Set();
+      archives.forEach((archive) => {
+        (archive.leaderboards || [])
+          .filter((section) => {
+            const title = String(section.title || "").toLowerCase();
+            return title.endsWith(" scratch") && !title.startsWith("all events ");
+          })
+          .forEach((section) => {
+            const eventName = String(section.title || "").replace(/\s+Scratch$/i, "");
+            (section.rows || []).forEach((row) => {
+              (row.details || []).forEach((detail, detailIndex) => {
+                const detailName = detail.name || row.name;
+                const stat = ensureBowlerStats(detailName);
+                if (!stat) return;
+                const seenKey = [archive.id, section.title, row.name, detailName, detailIndex].join("|");
+                if (detailSeen.has(seenKey)) return;
+                detailSeen.add(seenKey);
+                const games = (detail.games || []).map((score) => Number(score || 0)).filter((score) => score > 0);
+                const scratch = Number(detail.scratch || games.reduce((sum, score) => sum + score, 0) || 0);
+                const total = Number(detail.total || scratch || 0);
+                const handicap = Math.max(0, Number(detail.handicap || total - scratch || 0));
+                if (!scratch && !total) return;
+                stat.tournamentsSet.add(archive.id);
+                stat.events += 1;
+                stat.games += games.length || (scratch ? 3 : 0);
+                stat.scratch += scratch;
+                stat.handicap += handicap;
+                stat.total += total;
+                stat.details.push({
+                  archive: archive.name || "Archived Tournament",
+                  dates: archive.dates || "",
+                  event: eventName,
+                  entry: row.name || detailName,
+                  games,
+                  scratch,
+                  handicap,
+                  total,
+                });
+              });
+            });
+          });
+        (archive.paidWinners || []).forEach((winner) => {
+          const namesToCredit = (archive.leaderboards || [])
+            .flatMap((section) => section.rows || [])
+            .filter((row) => row.name === winner.name)
+            .flatMap((row) => (row.details || []).map((detail) => detail.name || row.name));
+          const winnerNames = namesToCredit.length ? namesToCredit : [winner.name];
+          winnerNames.forEach((name) => {
+            const stat = ensureBowlerStats(name);
+            if (!stat) return;
+            stat.cashes += 1;
+            stat.cash += Number(winner.payout || 0) / Math.max(1, winnerNames.length);
+            if (String(winner.place) === "1") stat.wins += 1;
+          });
+        });
+      });
+      return [...statsByBowler.values()].map((stat) => ({
+        ...stat,
+        tournaments: stat.tournamentsSet.size,
+        avg: stat.games ? stat.scratch / stat.games : 0,
+        handicapAvg: stat.games ? stat.total / stat.games : 0,
+      }));
+    })();
+    const archiveStatsSearchTerm = normalizeMatchText(multiDayArchiveStatsSearch);
+    const filteredArchivedBowlerStats = archivedBowlerStats.filter((row) =>
+      !archiveStatsSearchTerm ||
+      normalizeMatchText([row.name, ...(row.details || []).map((detail) => `${detail.archive} ${detail.event} ${detail.entry}`)].join(" ")).includes(archiveStatsSearchTerm)
+    );
+    return (
+      <div className="space-y-4">
+        {isAdminMode && testDraftControls}
+        <AppCard>
+          <CardContent className="space-y-4 p-4 md:p-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-2xl font-black text-blue-950">Multi-Event Archives</h2>
+                <p className="text-sm font-semibold text-blue-700">Save a full result packet from leaderboards and side action.</p>
+              </div>
+              {isAdminMode && <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={createMultiDayArchive}>Archive Current Multi-Event</Button>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: "tournaments", label: "Archived Tournaments" },
+                { id: "stats", label: "Bowler Stats" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMultiDayArchiveView(tab.id)}
+                  className={multiDayArchiveView === tab.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {isAdminMode && testDraftNotice && <p className="rounded-2xl bg-green-50 p-3 text-sm font-bold text-green-800">{testDraftNotice}</p>}
+          </CardContent>
+        </AppCard>
+        {multiDayArchiveView === "stats" && (
+        <AppCard>
+          <CardContent className="space-y-4 p-4 md:p-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h3 className="text-xl font-black text-blue-950">Multi-Event Bowler Stats</h3>
+                <p className="text-sm font-semibold text-blue-700">Aggregated from saved multi-event archives.</p>
+              </div>
+              <div className="w-full md:max-w-xs">
+                <Label>Search</Label>
+                <Input value={multiDayArchiveStatsSearch} onChange={(event) => setMultiDayArchiveStatsSearch(event.target.value)} placeholder="Type a bowler..." className="mt-1" />
+              </div>
+            </div>
+            <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+              <table className="w-full min-w-[920px] text-sm">
+                <thead className="bg-blue-800 text-white"><tr>
+                  <th className="p-3 text-left">{archiveSortButton("multi-archive-stats", "name", "Bowler")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "tournaments", "Tourn.", "desc")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "events", "Events", "desc")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "games", "Games", "desc")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "scratch", "Scratch", "desc")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "avg", "Avg", "desc")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "total", "HDCP Total", "desc")}</th>
+                  <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "handicapAvg", "HDCP Avg", "desc")}</th>
+                </tr></thead>
+                <tbody>{sortedArchiveRows(filteredArchivedBowlerStats, "multi-archive-stats", "avg", "desc").map((row) => {
+                  const rowKey = `multi-archive-stats-${row.key}`;
+                  const expanded = expandedMultiDayArchiveKey === rowKey;
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <tr className="border-t">
+                        <td className="p-3">
+                          <button type="button" onClick={() => setExpandedMultiDayArchiveKey(expanded ? null : rowKey)} className="text-left font-black text-blue-950 underline-offset-4 hover:underline">
+                            {row.name} <span className="text-xs text-blue-600">{expanded ? "▲" : "▼"}</span>
+                          </button>
+                        </td>
+                        <td className="p-3 text-right font-bold">{row.tournaments}</td>
+                        <td className="p-3 text-right font-bold">{row.events}</td>
+                        <td className="p-3 text-right font-bold">{row.games}</td>
+                        <td className="p-3 text-right font-bold">{row.scratch}</td>
+                        <td className="p-3 text-right font-black">{row.avg ? row.avg.toFixed(1) : "-"}</td>
+                        <td className="p-3 text-right font-bold">{row.total}</td>
+                        <td className="p-3 text-right font-black">{row.handicapAvg ? row.handicapAvg.toFixed(1) : "-"}</td>
+                      </tr>
+                      {expanded && (
+                        <tr className="border-t bg-blue-50/60">
+                          <td className="p-3" colSpan={8}>
+                            <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
+                              <table className="w-full min-w-[760px] text-xs">
+                                <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Tournament</th><th className="p-2 text-left">Event</th><th className="p-2 text-left">Entry</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
+                                <tbody>{(row.details || []).map((detail, detailIndex) => <tr key={`${rowKey}-detail-${detailIndex}`} className="border-t border-blue-100"><td className="p-2 font-semibold text-blue-950">{detail.archive}<span className="block text-[10px] font-bold text-blue-600">{detail.dates}</span></td><td className="p-2">{detail.event}</td><td className="p-2">{detail.entry}</td>{[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-2 text-center">{detail.games?.[gameIndex] || "-"}</td>)}<td className="p-2 text-right font-bold">{detail.scratch || "-"}</td><td className="p-2 text-right font-bold">{detail.handicap || "-"}</td><td className="p-2 text-right font-black">{detail.total || "-"}</td></tr>)}</tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                {filteredArchivedBowlerStats.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No bowler stats match this search.</td></tr>}</tbody>
+              </table>
+            </div>
+          </CardContent>
+        </AppCard>
+        )}
+        {multiDayArchiveView === "tournaments" && (
+        <>
+        {archives.map((archive) => {
+          const activeArchiveSection = multiDayArchiveSections[archive.id] || "winners";
+          const paidFilters = multiDayArchivePaidFilters[archive.id] || { event: "all", division: "all", search: "" };
+          const sideFilters = { squad: "all", division: "all", search: "", ...(multiDayArchiveSideFilters[archive.id] || {}) };
+          const paidEventOptions = ["Singles", "Doubles", "Team", "All Events", "Youth"].filter((eventName) =>
+            (archive.paidWinners || []).some((row) => row.event === eventName)
+          );
+          const paidSearchTerm = normalizeMatchText(paidFilters.search || "");
+          const filteredArchivePaidWinners = (archive.paidWinners || []).filter((row) =>
+            (paidFilters.event === "all" || row.event === paidFilters.event) &&
+            (paidFilters.division === "all" || row.division === paidFilters.division) &&
+            (!paidSearchTerm || normalizeMatchText([row.name, row.event, row.division].join(" ")).includes(paidSearchTerm))
+          );
+          const leaderboardEventTabs = [
+            { id: "singles", label: "Singles" },
+            { id: "doubles", label: "Doubles" },
+            { id: "team", label: "Team" },
+            { id: "allEvents", label: "All Events" },
+          ];
+          const activeArchiveLeaderboardTab = multiDayArchiveLeaderboardTabs[archive.id] || "singles";
+          const archiveLeaderboardSectionsForTab = (archive.leaderboards || []).filter((section) => {
+            const title = String(section.title || "").toLowerCase();
+            if (activeArchiveLeaderboardTab === "singles") return title.startsWith("singles ");
+            if (activeArchiveLeaderboardTab === "doubles") return title.startsWith("doubles ");
+            if (activeArchiveLeaderboardTab === "team") return title.startsWith("team ");
+            return title.startsWith("all events ");
+          });
+          const archiveSectionTabs = [
+            { id: "winners", label: "Winners" },
+            { id: "paid", label: "Payouts" },
+            { id: "leaderboards", label: "Leaderboards" },
+            { id: "publicSide", label: "Side Action" },
+          ];
+          const archivedSideSquads = Array.from(new Set([
+            ...(archive.publicSideAction || []).map((group) => group.squad),
+            ...(archive.sideActionPayouts || []).map((row) => row.squad),
+          ].filter(Boolean)));
+          const sideSearchTerm = normalizeMatchText(sideFilters.search || "");
+          const rowHasArchiveSideDivision = (row, division) => {
+            if (division === "all") return true;
+            const needle = division.toLowerCase();
+            return (row.matches || []).some((match) => normalizeMatchText(match.round || "").includes(needle));
+          };
+          const payoutHasArchiveSideDivision = (row, division) => {
+            if (division === "all") return true;
+            const needle = division.toLowerCase();
+            return (row.details || []).some((detail) => normalizeMatchText(detail).includes(needle));
+          };
+          const filteredArchivePublicSideAction = (archive.publicSideAction || [])
+            .filter((group) => sideFilters.squad === "all" || group.squad === sideFilters.squad)
+            .map((group) => ({
+              ...group,
+              rows: (group.rows || []).filter((row) =>
+                rowHasArchiveSideDivision(row, sideFilters.division) &&
+                (!sideSearchTerm || normalizeMatchText([row.name, group.squad, group.lanes].join(" ")).includes(sideSearchTerm))
+              ),
+            }))
+            .filter((group) => group.rows.length > 0);
+          const filteredArchiveSidePayouts = (archive.sideActionPayouts || []).filter((row) =>
+            (sideFilters.squad === "all" || row.squad === sideFilters.squad) &&
+            payoutHasArchiveSideDivision(row, sideFilters.division) &&
+            (!sideSearchTerm || normalizeMatchText([row.name, row.squad, ...(row.details || [])].join(" ")).includes(sideSearchTerm))
+          );
+          return (
+          <AppCard key={archive.id}>
+            <CardContent className="space-y-5 p-4 md:p-6">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-xl font-black text-blue-950">{archive.name}</h3>
+                  <p className="text-sm font-semibold text-blue-700">{[archive.dates, archive.center].filter(Boolean).join(" - ")}</p>
+                </div>
+                {isAdminMode && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" className="rounded-2xl border-blue-200 bg-blue-50 text-blue-800" onClick={() => restoreMultiDayArchive(archive)}>Restore Tournament</Button>
+                    <Button variant="outline" className="rounded-2xl border-red-200 text-red-700" onClick={() => deleteMultiDayArchive(archive.id)}>Delete Archive</Button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {archiveSectionTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setMultiDayArchiveSections((current) => ({ ...current, [archive.id]: tab.id }))}
+                    className={activeArchiveSection === tab.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {activeArchiveSection === "winners" && (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {(archive.firstPlaces || []).map((winner) => (
+                  <div key={`${archive.id}-${winner.label}-${winner.name}`} className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4">
+                    <p className="text-xs font-black uppercase tracking-wide text-yellow-700">{winner.label}</p>
+                    <p className="text-lg font-black text-blue-950">{winner.name}</p>
+                    <p className="text-sm font-bold text-blue-800">Score {winner.score} - {currencyWithOptionalCents(winner.payout || 0)}</p>
+                  </div>
+                ))}
+              </div>
+              )}
+              {activeArchiveSection === "paid" && (
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div>
+                    <Label>Event</Label>
+                    <select
+                      value={paidFilters.event}
+                      onChange={(event) => setMultiDayArchivePaidFilters((current) => ({ ...current, [archive.id]: { ...(current[archive.id] || {}), event: event.target.value } }))}
+                      className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                    >
+                      <option value="all">All Payouts</option>
+                      {paidEventOptions.map((eventName) => <option key={eventName} value={eventName}>{eventName}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Division</Label>
+                    <select
+                      value={paidFilters.division}
+                      onChange={(event) => setMultiDayArchivePaidFilters((current) => ({ ...current, [archive.id]: { ...(current[archive.id] || {}), division: event.target.value } }))}
+                      className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                    >
+                      <option value="all">Scratch & Handicap</option>
+                      <option value="Scratch">Scratch</option>
+                      <option value="Handicap">Handicap</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Search</Label>
+                    <Input
+                      value={paidFilters.search || ""}
+                      onChange={(event) => setMultiDayArchivePaidFilters((current) => ({ ...current, [archive.id]: { ...(current[archive.id] || {}), search: event.target.value } }))}
+                      placeholder="Type a bowler or team..."
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead className="bg-blue-800 text-white"><tr>
+                    <th className="p-3 text-left">{archiveSortButton(`${archive.id}-paid`, "event", "Event")}</th>
+                    <th className="p-3 text-left">{archiveSortButton(`${archive.id}-paid`, "division", "Division")}</th>
+                    <th className="p-3 text-left">{archiveSortButton(`${archive.id}-paid`, "place", "Place")}</th>
+                    <th className="p-3 text-left">{archiveSortButton(`${archive.id}-paid`, "name", "Entry")}</th>
+                    <th className="p-3 text-right">{archiveSortButton(`${archive.id}-paid`, "score", "Score", "desc")}</th>
+                    <th className="p-3 text-right">{archiveSortButton(`${archive.id}-paid`, "payout", "Payout", "desc")}</th>
+                  </tr></thead>
+                  <tbody>{sortedArchiveRows(filteredArchivePaidWinners, `${archive.id}-paid`, "place", "asc").map((row, index) => <tr key={`${archive.id}-paid-${index}`} className="border-t"><td className="p-3 font-bold">{row.event}</td><td className="p-3">{row.division}</td><td className="p-3 font-black">#{row.place}</td><td className="p-3 font-semibold text-blue-950">{row.name}</td><td className="p-3 text-right font-bold">{row.score}</td><td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(row.payout || 0)}</td></tr>)}
+                  {filteredArchivePaidWinners.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No payouts match these filters.</td></tr>}</tbody>
+                </table>
+              </div>
+              </div>
+              )}
+              {activeArchiveSection === "leaderboards" && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {leaderboardEventTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setMultiDayArchiveLeaderboardTabs((current) => ({ ...current, [archive.id]: tab.id }))}
+                      className={activeArchiveLeaderboardTab === tab.id ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900 hover:bg-blue-50"}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {archiveLeaderboardSectionsForTab.map((section) => (
+                  <div key={`${archive.id}-${section.title}`} className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                    <div className="border-b border-blue-100 bg-blue-50 px-4 py-3"><h4 className="font-black text-blue-950">{section.title}</h4></div>
+                    <table className="w-full min-w-[420px] text-sm">
+                      <thead className="bg-blue-800 text-white">
+                        <tr>
+                          <th className="p-2 text-left">{archiveSortButton(`${archive.id}-${section.title}`, "place", "Place", "asc")}</th>
+                          <th className="p-2 text-left">{archiveSortButton(`${archive.id}-${section.title}`, "name", "Entry", "asc")}</th>
+                          <th className="p-2 text-right">{archiveSortButton(`${archive.id}-${section.title}`, "score", "Score", "desc")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>{sortedArchiveRows(section.rows || [], `${archive.id}-${section.title}`, "place", "asc").map((row, index) => {
+                        const rowKey = `${archive.id}-${section.title}-${row.name}-${index}`;
+                        const expanded = expandedMultiDayArchiveKey === rowKey;
+                        return (
+                          <React.Fragment key={rowKey}>
+                            <tr className="border-t">
+                              <td className="p-2 font-black">#{row.place}</td>
+                              <td className="p-2">
+                                <button type="button" onClick={() => setExpandedMultiDayArchiveKey(expanded ? null : rowKey)} className="text-left font-semibold text-blue-950 underline-offset-4 hover:underline">
+                                  {row.name} <span className="text-xs text-blue-600">{expanded ? "▲" : "▼"}</span>
+                                </button>
+                              </td>
+                              <td className="p-2 text-right font-black">{row.score}</td>
+                            </tr>
+                            {expanded && (
+                              <tr className="border-t bg-blue-50/60">
+                                <td className="p-3" colSpan={3}>
+                                  {(row.details || []).length > 0 ? (
+                                    <table className="w-full text-xs">
+                                      <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bowler/Event</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
+                                      <tbody>{(row.details || []).map((detail, detailIndex) => <tr key={`${rowKey}-detail-${detailIndex}`} className="border-t border-blue-100"><td className="p-2 font-semibold text-blue-950">{detail.name}</td>{(detail.games || [0, 0, 0]).map((score, gameIndex) => <td key={gameIndex} className="p-2 text-center">{score || "-"}</td>)}<td className="p-2 text-right font-bold">{detail.scratch || "-"}</td><td className="p-2 text-right font-bold">{detail.handicap || "-"}</td><td className="p-2 text-right font-black">{detail.total || "-"}</td></tr>)}</tbody>
+                                    </table>
+                                  ) : (
+                                    <p className="text-sm font-semibold text-blue-700">No score detail saved for this archived row.</p>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                ))}
+                {archiveLeaderboardSectionsForTab.length === 0 && <p className="rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">No archived leaderboard rows for this event.</p>}
+              </div>
+              </div>
+              )}
+              {activeArchiveSection === "publicSide" && (
+              <div className="rounded-2xl border border-blue-200 bg-white">
+                <div className="border-b border-blue-100 bg-blue-50 px-4 py-3"><h4 className="font-black text-blue-950">Side Action</h4></div>
+                <div className="space-y-4 p-3">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div>
+                      <Label>Squad</Label>
+                      <select
+                        value={sideFilters.squad}
+                        onChange={(event) => setMultiDayArchiveSideFilters((current) => ({ ...current, [archive.id]: { ...(current[archive.id] || {}), squad: event.target.value } }))}
+                        className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                      >
+                        <option value="all">All Squads</option>
+                        {archivedSideSquads.map((squadName) => <option key={`${archive.id}-public-side-squad-${squadName}`} value={squadName}>{squadName}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Division</Label>
+                      <select
+                        value={sideFilters.division}
+                        onChange={(event) => setMultiDayArchiveSideFilters((current) => ({ ...current, [archive.id]: { ...(current[archive.id] || {}), division: event.target.value } }))}
+                        className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
+                      >
+                        <option value="all">Scratch & Handicap</option>
+                        <option value="Scratch">Scratch</option>
+                        <option value="Handicap">Handicap</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Search</Label>
+                      <Input
+                        value={sideFilters.search || ""}
+                        onChange={(event) => setMultiDayArchiveSideFilters((current) => ({ ...current, [archive.id]: { ...(current[archive.id] || {}), search: event.target.value } }))}
+                        placeholder="Type a bowler..."
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  {filteredArchivePublicSideAction.map((group) => (
+                    <div key={`${archive.id}-public-side-${group.squad}`} className="overflow-auto rounded-2xl border border-blue-100">
+                      <div className="flex flex-col gap-1 border-b border-blue-100 bg-blue-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+                        <h5 className="font-black text-blue-950">{group.squad}</h5>
+                        <span className="text-xs font-black text-blue-800">{group.lanes ? `Lanes ${group.lanes}` : "Lanes TBD"}</span>
+                      </div>
+                      <table className="bb-public-side-table w-full text-xs md:min-w-[640px] md:text-sm">
+                        <thead className="bg-blue-800 text-white">
+                          <tr>
+                            <th className="p-2 text-left md:p-3">Bowler</th>
+                            <th className="p-2 text-right md:p-3">{archiveSortButton(`${archive.id}-public-side-${group.squad}`, "alive", "Alive", "desc")}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedArchiveRows(group.rows || [], `${archive.id}-public-side-${group.squad}`, "alive", "desc").map((row) => {
+                            const rowKey = `${archive.id}-public-side-${group.squad}-${row.key}`;
+                            const expanded = expandedMultiDayArchiveKey === rowKey;
+                            return (
+                              <React.Fragment key={rowKey}>
+                                <tr className="border-t">
+                                  <td className="p-2 font-semibold md:p-3">
+                                    <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setExpandedMultiDayArchiveKey(expanded ? null : rowKey)}>
+                                      {row.name} <span className="text-xs text-blue-600">{expanded ? "▲" : "▼"}</span>
+                                    </button>
+                                  </td>
+                                  <td className="p-2 text-right font-black text-blue-950 md:p-3">{row.alive}</td>
+                                </tr>
+                                {expanded && (
+                                  <tr className="border-t bg-blue-50">
+                                    <td colSpan={2} className="p-1.5 md:p-3">
+                                      <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
+                                        <table className="bb-public-side-detail-table bb-side-mobile-score-table w-full text-[11px] md:hidden">
+                                          <tbody>
+                                            {(row.matches || []).map((match, matchIndex) => (
+                                              <React.Fragment key={`${rowKey}-mobile-${matchIndex}`}>
+                                                <tr className="border-t bb-side-mobile-label-row"><td colSpan={2} className="bb-side-round-cell p-1.5"><span className="bb-side-mobile-match-label"><span>{match.round}</span><span className={match.result === "W" ? "bb-side-result-line font-black text-green-700" : match.result === "L" ? "bb-side-result-line font-black text-red-600" : match.result === "T" ? "bb-side-result-line font-black text-amber-700" : "bb-side-result-line text-blue-400"}>Result: {match.result || "- -"}</span></span></td></tr>
+                                                <tr className="border-t bb-side-mobile-opponent-row"><td colSpan={2} className="p-1.5 font-semibold text-blue-950">Opponent: {match.opponent}</td></tr>
+                                                <tr className="border-t"><td className="bb-side-mobile-score-cell p-1.5 text-right font-bold"><span className="bb-side-mobile-score-label">Opp Score</span>{match.opponentBreakdown ? <span className="bb-side-mobile-score-value"><span className="bb-side-mobile-score-breakdown font-semibold">{match.opponentBreakdown}</span><span>{match.opponentScore}</span></span> : match.opponentScore}</td><td className="bb-side-mobile-score-cell p-1.5 text-right font-bold"><span className="bb-side-mobile-score-label">Score</span>{match.playerBreakdown ? <span className="bb-side-mobile-score-value"><span className="bb-side-mobile-score-breakdown font-semibold">({match.playerBreakdown})</span><span>{match.playerScore}</span></span> : match.playerScore}</td></tr>
+                                              </React.Fragment>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                        <table className="hidden w-full min-w-[560px] text-sm md:table">
+                                          <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bracket / Game</th><th className="p-2 text-center">Result</th><th className="p-2 text-right">Opp Score</th><th className="p-2 text-left">Opponent</th><th className="p-2 text-right">Score</th></tr></thead>
+                                          <tbody>{(row.matches || []).map((match, matchIndex) => <tr key={`${rowKey}-desktop-${matchIndex}`} className="border-t"><td className="max-w-[150px] truncate p-2">{match.round}</td><td className={match.result === "W" ? "p-2 text-center font-black text-green-700" : match.result === "L" ? "p-2 text-center font-black text-red-600" : match.result === "T" ? "p-2 text-center font-black text-amber-700" : "p-2 text-center text-blue-400"}>{match.result || "- -"}</td><td className="p-2 text-right font-bold">{match.opponentBreakdown ? <span className="inline-flex items-center justify-end gap-2"><span className="text-xs font-semibold text-blue-700">{match.opponentBreakdown}</span><span>{match.opponentScore}</span></span> : match.opponentScore}</td><td className="max-w-[140px] truncate p-2 font-semibold">{match.opponent}</td><td className="p-2 text-right font-bold">{match.playerBreakdown ? <span className="inline-flex items-center justify-end gap-2"><span className="text-xs font-semibold text-blue-700">({match.playerBreakdown})</span><span>{match.playerScore}</span></span> : match.playerScore}</td></tr>)}</tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                  {(!archive.publicSideAction || archive.publicSideAction.length === 0) && <p className="rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">No side-action bracket paths saved in this archive.</p>}
+                  {(archive.publicSideAction || []).length > 0 && filteredArchivePublicSideAction.length === 0 && <p className="rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">No side-action bracket paths match these filters.</p>}
+                  <div className="overflow-auto rounded-2xl border border-blue-100">
+                    <div className="border-b border-blue-100 bg-blue-50 px-4 py-3"><h5 className="font-black text-blue-950">Side Action Payouts</h5></div>
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="bg-blue-800 text-white"><tr>
+                        <th className="p-3 text-left">{archiveSortButton(`${archive.id}-side`, "squad", "Squad")}</th>
+                        <th className="p-3 text-left">{archiveSortButton(`${archive.id}-side`, "name", "Bowler")}</th>
+                        <th className="p-3 text-right">{archiveSortButton(`${archive.id}-side`, "total", "Total", "desc")}</th>
+                        <th className="p-3 text-left">Details</th>
+                      </tr></thead>
+                      <tbody>
+                        {sortedArchiveRows(filteredArchiveSidePayouts, `${archive.id}-side`, "total", "desc").map((row, index) => <tr key={`${archive.id}-side-${index}`} className="border-t"><td className="p-3">{row.squad}</td><td className="p-3 font-semibold text-blue-950">{row.name}</td><td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(row.total || 0)}</td><td className="p-3 text-xs text-blue-800">{(row.details || []).join(" | ")}</td></tr>)}
+                        {(!archive.sideActionPayouts || archive.sideActionPayouts.length === 0) && <tr><td className="p-4 text-blue-700" colSpan={4}>No completed side-action payouts in this archive.</td></tr>}
+                        {(archive.sideActionPayouts || []).length > 0 && filteredArchiveSidePayouts.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={4}>No side-action payouts match these filters.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              )}
+            </CardContent>
+          </AppCard>
+          );
+        })}
+        {archives.length === 0 && <AppCard><CardContent className="p-4 text-sm font-semibold text-blue-700">No multi-event archives saved yet.</CardContent></AppCard>}
+        </>
+        )}
+      </div>
+    );
+  }
+
   if (mode === "leaderboards") {
     const leaderboardConfigs = [
       { id: "singles", label: "Singles", rows: singlesRows, nameLabel: "Bowler" },
@@ -11375,6 +12956,7 @@ function MultiDayEventsTab({
       { id: "team", label: "Team", rows: teamRows, nameLabel: "Team" },
       { id: "allEvents", label: "All Events", rows: allEventsRows, nameLabel: "Bowler" },
     ];
+    const paidWinnerConfigs = [...leaderboardConfigs, { id: "youth", label: "Youth", rows: youthRows, nameLabel: "Bowler" }];
     const activeLeaderboardConfig = leaderboardConfigs.find((config) => config.id === multiDayLeaderboardEvent) || leaderboardConfigs[0];
     const squadFilterOptions = squads
       .filter((squad) => (squad.entries || []).length > 0)
@@ -11390,7 +12972,12 @@ function MultiDayEventsTab({
       ].join(" ");
       return normalizeMatchText(searchableText).includes(leaderboardSearchTerm);
     };
-    const filteredLeaderboardRows = (activeLeaderboardConfig.rows || []).filter((row) => rowMatchesSquad(row) && rowMatchesSearch(row));
+    const rowHasEnteredScore = (row) => Number(row.scratch || 0) > 0;
+    const filteredLeaderboardRows = (activeLeaderboardConfig.rows || []).filter((row) =>
+      rowMatchesSquad(row) &&
+      rowMatchesSearch(row) &&
+      (multiDayLeaderboardSquadId !== "all" || rowHasEnteredScore(row))
+    );
     const getLeaderboardSort = (tableKey, scoreKey) =>
       multiDayLeaderboardSort?.[tableKey] || { key: scoreKey, direction: "desc" };
     const setLeaderboardSort = (tableKey, key, defaultDirection = "desc") => {
@@ -11416,8 +13003,26 @@ function MultiDayEventsTab({
       if (aValue !== bValue) return (aValue - bValue) * direction;
       return String(a.name || "").localeCompare(String(b.name || ""));
     });
+    const rowScoreKey = (row) => row.detailKey || row.name;
+    const placeLabelsByScore = (rows, scoreKey) => {
+      const labels = new Map();
+      const rankedRows = [...rows]
+        .filter((row) => Number(row[scoreKey] || 0) > 0)
+        .sort((a, b) => Number(b[scoreKey] || 0) - Number(a[scoreKey] || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+      rankedRows.forEach((row, index) => {
+        const score = Number(row[scoreKey] || 0);
+        const previous = rankedRows[index - 1];
+        const previousScore = Number(previous?.[scoreKey] || 0);
+        const next = rankedRows[index + 1];
+        const nextScore = Number(next?.[scoreKey] || 0);
+        const place = previous && previousScore === score ? labels.get(rowScoreKey(previous))?.replace("T", "") || String(index + 1) : String(index + 1);
+        labels.set(rowScoreKey(row), previousScore === score || nextScore === score ? `${place}T` : place);
+      });
+      return labels;
+    };
     const scoreTable = (title, rows, tableKey, scoreKey) => {
       const sortedRows = sortedLeaderboardRows(rows, tableKey, scoreKey);
+      const placeLabels = placeLabelsByScore(rows, scoreKey);
       const detailTableKey = `${multiDayLeaderboardEvent}-${tableKey}`;
       const detailSummary = (row) => {
         const detailRows = row.details || [];
@@ -11444,7 +13049,7 @@ function MultiDayEventsTab({
                 return (
                   <React.Fragment key={rowKey}>
                     <tr className={index === 0 ? "border-t bg-yellow-50" : "border-t"}>
-                      <td className="p-3 font-bold">#{index + 1}</td>
+                      <td className="p-3 font-bold">#{placeLabels.get(rowScoreKey(row)) || index + 1}</td>
                       <td className="p-3">
                         <button type="button" onClick={() => setExpandedMultiDayLeaderboardKey(expanded ? null : rowKey)} className="text-left font-black text-blue-950 underline-offset-4 hover:underline">
                           {row.name || "TBD"} <span className="text-xs text-blue-600">{expanded ? "▲" : "▼"}</span>
@@ -11456,7 +13061,20 @@ function MultiDayEventsTab({
                       <tr className="border-t bg-blue-50/60">
                         <td className="p-0" colSpan={3}>
                           <div className="p-3">
-                            {row.squadLabel && <div className="mb-2 text-xs font-bold uppercase tracking-wide text-blue-700">{row.squadLabel}</div>}
+                            {row.squadLabel && (
+                              <div className="mb-2 flex flex-wrap gap-1 text-xs font-bold uppercase tracking-wide text-blue-700">
+                                {multiDayLeaderboardEvent === "allEvents" && Array.isArray(row.squadLabels)
+                                  ? row.squadLabels.map((label) => {
+                                    const countsTowardAllEvents = (row.countedSquadLabels || []).includes(label);
+                                    return (
+                                      <span key={label} className={countsTowardAllEvents ? "rounded-full bg-green-700 px-2 py-1 font-black text-white" : "rounded-full bg-blue-50 px-2 py-1 text-blue-700"}>
+                                        {label}
+                                      </span>
+                                    );
+                                  })
+                                  : <span>{row.squadLabel}</span>}
+                              </div>
+                            )}
                             <table className="w-full text-xs">
                               <thead className="bg-blue-800 text-white">
                                 <tr>
@@ -11525,6 +13143,14 @@ function MultiDayEventsTab({
       .filter((row) => rowMatchesSearch(row))
       .sort((a, b) => a.name.localeCompare(b.name) || a.event.localeCompare(b.event) || a.squadLabel.localeCompare(b.squadLabel));
     const payoutCountForRows = (rows, eventId) => {
+      const preset = {
+        singles: 12,
+        doubles: 7,
+        team: 3,
+        allEvents: 4,
+        youth: 1,
+      }[eventId];
+      if (preset) return preset;
       const ratio = eventId === "allEvents" ? 14 : 8;
       const count = rows.length;
       if (!count) return 0;
@@ -11532,31 +13158,93 @@ function MultiDayEventsTab({
       const remainder = count % ratio;
       return Math.max(1, whole + (remainder >= ratio / 2 ? 1 : 0));
     };
-    const placeRows = (rows, scoreKey) => [...rows]
-      .filter((row) => Number(row[scoreKey] || 0) > 0)
-      .sort((a, b) => Number(b[scoreKey] || 0) - Number(a[scoreKey] || 0) || Number(b.scratch || 0) - Number(a.scratch || 0) || String(a.name || "").localeCompare(String(b.name || "")))
-      .map((row, index) => ({ ...row, place: index + 1 }));
-    const paidWinnerRows = leaderboardConfigs.flatMap((config) => {
+    const placeRows = (rows, scoreKey) => {
+      const placedRows = [...rows]
+        .filter((row) => Number(row[scoreKey] || 0) > 0)
+        .sort((a, b) => Number(b[scoreKey] || 0) - Number(a[scoreKey] || 0) || Number(b.scratch || 0) - Number(a.scratch || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+      let currentPlace = 0;
+      return placedRows.map((row, index) => {
+        const score = Number(row[scoreKey] || 0);
+        const previous = placedRows[index - 1];
+        const previousScore = Number(previous?.[scoreKey] || 0);
+        const next = placedRows[index + 1];
+        const nextScore = Number(next?.[scoreKey] || 0);
+        if (!previous || previousScore !== score) currentPlace = index + 1;
+        const tied = previousScore === score || nextScore === score;
+        return { ...row, place: currentPlace, placeLabel: tied ? `${currentPlace}T` : String(currentPlace) };
+      });
+    };
+    const payoutAmountForPlacedRow = (placedRows, placedRow, payoutPlan) => {
+      const place = Number(placedRow?.place || 0);
+      if (!place) return 0;
+      const tiedRows = placedRows.filter((row) => Number(row.place || 0) === place);
+      const tieCount = Math.max(1, tiedRows.length);
+      const tiedAmount = Array.from({ length: tieCount }, (_, offset) => payoutPlan[place - 1 + offset]?.amount || 0)
+        .reduce((sum, amount) => sum + Number(amount || 0), 0);
+      return tiedAmount / tieCount;
+    };
+    const visiblePaidWinners = (rows, payoutPlan, payoutCount) => {
+      const sortedRows = [...rows].sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+      const winners = [];
+      let currentPlace = 0;
+      sortedRows.forEach((row, index) => {
+        const score = Number(row.score || 0);
+        const previous = sortedRows[index - 1];
+        const previousScore = Number(previous?.score || 0);
+        if (!previous || previousScore !== score) currentPlace = index + 1;
+        if (currentPlace > payoutCount) return;
+        const tiedRows = sortedRows.filter((candidate) => Number(candidate.score || 0) === score);
+        const tied = tiedRows.length > 1;
+        const tiedAmount = Array.from({ length: tiedRows.length }, (_, offset) => payoutPlan[currentPlace - 1 + offset]?.amount || 0)
+          .reduce((sum, amount) => sum + Number(amount || 0), 0);
+        winners.push({
+          ...row,
+          paidPlace: currentPlace,
+          paidPlaceLabel: tied ? `${currentPlace}T` : String(currentPlace),
+          divisionPlace: currentPlace,
+          divisionPlaceLabel: tied ? `${currentPlace}T` : String(currentPlace),
+          payoutAmount: tiedAmount / Math.max(1, tiedRows.length),
+          payoutCount,
+        });
+      });
+      return winners;
+    };
+    const paidWinnerKey = (row, eventId) => eventId === "singles" || eventId === "youth"
+      ? bowlerIdentityKey(row.name || "")
+      : row.detailKey || row.name;
+    const bestPaidRowsForDivision = (rows, scoreKey, eventId) => {
+      if (eventId !== "singles" && eventId !== "youth") return rows;
+      const bestRows = new Map();
+      rows.forEach((row) => {
+        const key = paidWinnerKey(row, eventId);
+        if (!key) return;
+        const current = bestRows.get(key);
+        if (!current || Number(row[scoreKey] || 0) > Number(current[scoreKey] || 0)) bestRows.set(key, row);
+      });
+      return [...bestRows.values()];
+    };
+    const paidWinnerRows = paidWinnerConfigs.flatMap((config) => {
       if (multiDayPaidWinnerEvent !== "all" && config.id !== multiDayPaidWinnerEvent) return [];
       const rows = config.rows || [];
       const payoutCount = payoutCountForRows(rows, config.id);
       if (!payoutCount) return [];
-      const scratchPlaced = placeRows(rows, "scratch");
-      const handicapPlaced = placeRows(rows, "total");
-      const scratchByKey = new Map(scratchPlaced.map((row) => [row.detailKey || row.name, row]));
-      const handicapByKey = new Map(handicapPlaced.map((row) => [row.detailKey || row.name, row]));
+      const scratchPlaced = placeRows(bestPaidRowsForDivision(rows, "scratch", config.id), "scratch");
+      const handicapPlaced = placeRows(bestPaidRowsForDivision(rows, "total", config.id), "total");
+      const payoutPlan = multiDayPayoutPlan(0, payoutCount, config.label);
+      const scratchByKey = new Map(scratchPlaced.map((row) => [paidWinnerKey(row, config.id), row]));
+      const handicapByKey = new Map(handicapPlaced.map((row) => [paidWinnerKey(row, config.id), row]));
       const chosenByKey = new Map();
-      rows.forEach((row) => {
-        const key = row.detailKey || row.name;
+      [...new Map([...scratchPlaced, ...handicapPlaced].map((row) => [paidWinnerKey(row, config.id), row])).values()].forEach((row) => {
+        const key = paidWinnerKey(row, config.id);
         const scratchRow = scratchByKey.get(key);
         const handicapRow = handicapByKey.get(key);
         if (!scratchRow && !handicapRow) return;
         if (!handicapRow) {
-          chosenByKey.set(key, { ...scratchRow, event: config.label, division: "Scratch", divisionPlace: scratchRow.place, score: scratchRow.scratch });
+          chosenByKey.set(key, { ...scratchRow, event: config.label, division: "Scratch", divisionPlace: scratchRow.place, divisionPlaceLabel: scratchRow.placeLabel, score: scratchRow.scratch, payoutAmount: payoutAmountForPlacedRow(scratchPlaced, scratchRow, payoutPlan) });
           return;
         }
         if (!scratchRow) {
-          chosenByKey.set(key, { ...handicapRow, event: config.label, division: "Handicap", divisionPlace: handicapRow.place, score: handicapRow.total });
+          chosenByKey.set(key, { ...handicapRow, event: config.label, division: "Handicap", divisionPlace: handicapRow.place, divisionPlaceLabel: handicapRow.placeLabel, score: handicapRow.total, payoutAmount: payoutAmountForPlacedRow(handicapPlaced, handicapRow, payoutPlan) });
           return;
         }
         const useHandicap = handicapRow.place < scratchRow.place;
@@ -11566,16 +13254,17 @@ function MultiDayEventsTab({
           event: config.label,
           division: useHandicap ? "Handicap" : "Scratch",
           divisionPlace: chosen.place,
+          divisionPlaceLabel: chosen.placeLabel,
           score: useHandicap ? chosen.total : chosen.scratch,
+          payoutAmount: payoutAmountForPlacedRow(useHandicap ? handicapPlaced : scratchPlaced, chosen, payoutPlan),
         });
       });
       const winners = [];
       ["Scratch", "Handicap"].forEach((division) => {
-        [...chosenByKey.values()]
+        const divisionRows = [...chosenByKey.values()]
           .filter((row) => row.division === division)
-          .sort((a, b) => a.divisionPlace - b.divisionPlace)
-          .slice(0, payoutCount)
-          .forEach((row, index) => winners.push({ ...row, paidPlace: index + 1, payoutCount }));
+          .sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || String(a.name || "").localeCompare(String(b.name || "")));
+        visiblePaidWinners(divisionRows, payoutPlan, payoutCount).forEach((row) => winners.push(row));
       });
       return winners;
     }).filter((row) => rowMatchesSearch(row) && (multiDayPaidWinnerDivision === "all" || row.division === multiDayPaidWinnerDivision));
@@ -11625,6 +13314,7 @@ function MultiDayEventsTab({
               <th className="p-3 text-left">Standing</th>
               <th className="p-3 text-left">Entry</th>
               <th className="p-3 text-right">Score</th>
+              <th className="p-3 text-right">Payout</th>
             </tr>
           </thead>
           <tbody>
@@ -11632,13 +13322,14 @@ function MultiDayEventsTab({
               <tr key={`${row.event}-${row.division}-${row.name}-${index}`} className="border-t">
                 <td className="p-3 font-bold text-blue-950">{row.event}</td>
                 <td className="p-3">{row.division}</td>
-                <td className="p-3 font-black">#{row.paidPlace}</td>
-                <td className="p-3">#{row.divisionPlace}</td>
+                <td className="p-3 font-black">#{row.paidPlaceLabel || row.paidPlace}</td>
+                <td className="p-3">#{row.divisionPlaceLabel || row.divisionPlace}</td>
                 <td className="p-3 font-semibold">{row.name}</td>
                 <td className="p-3 text-right font-black">{row.score || "-"}</td>
+                <td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(row.payoutAmount || 0)}</td>
               </tr>
             ))}
-            {paidWinnerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>Enter scores to see projected paid winners.</td></tr>}
+            {paidWinnerRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={7}>Enter scores to see projected paid winners.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -11673,7 +13364,7 @@ function MultiDayEventsTab({
               {[
                 { id: "standings", label: "Standings" },
                 { id: "lookup", label: "Bowler Lookup" },
-                { id: "paid", label: "Paid Winners" },
+                { id: "paid", label: "Payouts" },
               ].map((view) => (
                 <button
                   key={view.id}
@@ -11714,10 +13405,10 @@ function MultiDayEventsTab({
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2 md:max-w-2xl">
                   <div>
-                    <Label>Paid Winners Event</Label>
+                    <Label>Payout Event</Label>
                     <select value={multiDayPaidWinnerEvent} onChange={(event) => setMultiDayPaidWinnerEvent(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">
-                      <option value="all">All Paid Winners</option>
-                      {leaderboardConfigs.map((config) => <option key={config.id} value={config.id}>{config.label}</option>)}
+                      <option value="all">All Payouts</option>
+                      {paidWinnerConfigs.map((config) => <option key={config.id} value={config.id}>{config.label}</option>)}
                     </select>
                   </div>
                   <div>
@@ -24574,6 +26265,11 @@ const [multiDayWorkingSquadId, setMultiDayWorkingSquadId] = useState("");
     <MultiDayEventsTab mode="setup" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
+{activeTab === "multiDayInfo" && (
+  <AppErrorBoundary key="multiDayInfo">
+    <MultiDayEventsTab mode="info" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+  </AppErrorBoundary>
+)}
 {activeTab === "multiDayRegistration" && (
   <AppErrorBoundary key="multiDayRegistration">
     <MultiDayEventsTab mode="registration" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
@@ -24611,7 +26307,7 @@ const [multiDayWorkingSquadId, setMultiDayWorkingSquadId] = useState("");
 )}
 {activeTab === "multiDayArchive" && (
   <AppErrorBoundary key="multiDayArchive">
-    <MultiDayEventsTab mode="archive" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="archive" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
  {activeTab === "bracket" && (
