@@ -5091,6 +5091,67 @@ function tournamentDraftRecordFromItem(draft, index) {
   };
 }
 
+function mergeFilledValues(remote = {}, local = {}) {
+  const merged = { ...(remote || {}) };
+  Object.entries(local || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === "") return;
+    merged[key] = value;
+  });
+  return merged;
+}
+
+function mergeTruthyFlags(remote = {}, local = {}) {
+  const merged = { ...(remote || {}) };
+  Object.entries(local || {}).forEach(([key, value]) => {
+    if (value === true) merged[key] = true;
+    else if (!(key in merged)) merged[key] = value;
+  });
+  return merged;
+}
+
+function mergeMatchplayBowlerGames(remoteBowlers = [], localBowlers = []) {
+  const remoteByKey = new Map((remoteBowlers || []).map((bowler) => [String(bowler.id || bowler.seed || bowler.name || ""), bowler]));
+  const localKeys = new Set();
+  const mergedLocals = (localBowlers || []).map((localBowler) => {
+    const key = String(localBowler.id || localBowler.seed || localBowler.name || "");
+    localKeys.add(key);
+    const remoteBowler = remoteByKey.get(key);
+    if (!remoteBowler) return localBowler;
+    const maxGames = Math.max(remoteBowler.games?.length || 0, localBowler.games?.length || 0);
+    const games = Array.from({ length: maxGames }, (_, index) => {
+      const localScore = localBowler.games?.[index];
+      return localScore !== undefined && localScore !== null && localScore !== "" && Number(localScore || 0) > 0
+        ? localScore
+        : remoteBowler.games?.[index] || localScore || 0;
+    });
+    return { ...remoteBowler, ...localBowler, games };
+  });
+  const remoteOnly = (remoteBowlers || []).filter((bowler) => !localKeys.has(String(bowler.id || bowler.seed || bowler.name || "")));
+  return [...mergedLocals, ...remoteOnly];
+}
+
+function mergeMatchplaySnapshotForSave(remoteSnapshot = {}, localSnapshot = {}) {
+  if (!isMatchplayTournament(localSnapshot.tournamentFormat, localSnapshot.tournamentInfo || {})) return localSnapshot;
+  const remoteMatchplayState = remoteSnapshot.matchplayState || {};
+  const localMatchplayState = localSnapshot.matchplayState || {};
+  return {
+    ...remoteSnapshot,
+    ...localSnapshot,
+    bowlers: mergeMatchplayBowlerGames(remoteSnapshot.bowlers || [], localSnapshot.bowlers || []),
+    matchplayState: {
+      ...DEFAULT_MATCHPLAY_STATE,
+      ...remoteMatchplayState,
+      ...localMatchplayState,
+      openingScores: mergeFilledValues(remoteMatchplayState.openingScores, localMatchplayState.openingScores),
+      roundScores: mergeFilledValues(remoteMatchplayState.roundScores, localMatchplayState.roundScores),
+      roundLanes: mergeFilledValues(remoteMatchplayState.roundLanes, localMatchplayState.roundLanes),
+      savedOpeningPods: mergeTruthyFlags(remoteMatchplayState.savedOpeningPods, localMatchplayState.savedOpeningPods),
+      savedOpeningPodGames: mergeTruthyFlags(remoteMatchplayState.savedOpeningPodGames, localMatchplayState.savedOpeningPodGames),
+      savedWinnerRounds: mergeTruthyFlags(remoteMatchplayState.savedWinnerRounds, localMatchplayState.savedWinnerRounds),
+    },
+  };
+}
+
 async function loadSupabaseRestRows(table, query = "", signal, accessToken = "") {
   if (!supabaseUrl || !supabasePublishableKey) throw new Error("Supabase config is missing.");
   const baseUrl = supabaseUrl.replace(/\/$/, "");
@@ -19711,10 +19772,25 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const identityRecords = (bowlerIdentities || []).map(bowlerIdentityRecordFromItem);
     const reservationRecords = allReservationItemsFromState(reservationState).map(reservationRecordFromItem);
     const archiveRecords = (tournamentHistory || []).map(archivedTournamentRecordFromItem);
-    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || {});
+    let activeSnapshotForSave = activeTournamentSnapshotRef.current || {};
+    if (isMatchplayTournament(activeSnapshotForSave.tournamentFormat, activeSnapshotForSave.tournamentInfo || {})) {
+      try {
+        setSupabaseSaveStatus("Merging latest Matchplay scores...");
+        const remoteRows = await withTimeout(
+          supabaseRestRequest("active_tournament_snapshots", "?select=data&id=eq.active", { accessToken }),
+          "Reading latest Matchplay snapshot",
+          5000
+        );
+        const remoteSnapshot = dataFromRow((remoteRows || [])[0] || {});
+        activeSnapshotForSave = mergeMatchplaySnapshotForSave(remoteSnapshot, activeSnapshotForSave);
+      } catch (error) {
+        console.warn("Could not merge latest Matchplay snapshot before save", error);
+      }
+    }
+    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeSnapshotForSave);
     const draftRecords = (savedTournamentDrafts || []).map(tournamentDraftRecordFromItem);
     const publicInfoSnapshots = [
-      activeTournamentSnapshotRef.current,
+      activeSnapshotForSave,
       ...[...(savedTournamentDrafts || [])]
         .sort((a, b) => new Date(b?.savedAt || 0).getTime() - new Date(a?.savedAt || 0).getTime())
         .map((draft) => draft?.snapshot),
@@ -19860,8 +19936,24 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
 
     setSupabaseSaveStatus("Saving live scores...");
-    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeTournamentSnapshotRef.current || buildActiveTournamentSnapshot());
+    let activeSnapshotForSave = activeTournamentSnapshotRef.current || buildActiveTournamentSnapshot();
+    if (isMatchplayTournament(activeSnapshotForSave.tournamentFormat, activeSnapshotForSave.tournamentInfo || {})) {
+      try {
+        setSupabaseSaveStatus("Merging latest Matchplay scores...");
+        const remoteRows = await withTimeout(
+          supabaseRestRequest("active_tournament_snapshots", "?select=data&id=eq.active", { accessToken }),
+          "Reading latest Matchplay snapshot",
+          5000
+        );
+        const remoteSnapshot = dataFromRow((remoteRows || [])[0] || {});
+        activeSnapshotForSave = mergeMatchplaySnapshotForSave(remoteSnapshot, activeSnapshotForSave);
+      } catch (error) {
+        console.warn("Could not merge latest Matchplay snapshot before live save", error);
+      }
+    }
+    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeSnapshotForSave);
     await withTimeout(
+
       supabaseRestRequest("active_tournament_snapshots", "?on_conflict=id", {
         method: "POST",
         body: activeSnapshotRecord,
