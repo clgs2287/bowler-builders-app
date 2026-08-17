@@ -132,6 +132,7 @@ const DEFAULT_LANE_ELIMINATOR_STATE = {
   memberScores: {},
 };
 const DEFAULT_MATCHPLAY_STATE = {
+  openingPairingMode: "acrossPair",
   openingScores: {},
   roundScores: {},
   openingTiebreakers: {},
@@ -2925,6 +2926,7 @@ function matchplayRoundTitle(playerCount) {
 function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
   const scores = matchplayState.openingScores || {};
   const tiebreakers = matchplayState.openingTiebreakers || {};
+  const pairingMode = matchplayState.openingPairingMode || DEFAULT_MATCHPLAY_STATE.openingPairingMode;
   const assigned = (bowlers || [])
     .filter((bowler) => bowler?.name?.trim() && lanePositionParts(bowler.lane).lane)
     .map((bowler, index) => ({ ...bowler, rosterIndex: index }))
@@ -2958,6 +2960,14 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
         .sort((a, b) => laneAssignmentSortValue(a.lane) - laneAssignmentSortValue(b.lane) || String(a.name || "").localeCompare(String(b.name || "")));
     const leftLanePlayers = playersOnLane(leftLane);
     const rightLanePlayers = playersOnLane(rightLane);
+    if (pairingMode === "sameLaneNeighbors") {
+      return [
+        [leftLanePlayers[0] || null, leftLanePlayers[1] || null],
+        [leftLanePlayers[2] || null, leftLanePlayers[3] || null],
+        [rightLanePlayers[0] || null, rightLanePlayers[1] || null],
+        [rightLanePlayers[2] || null, rightLanePlayers[3] || null],
+      ];
+    }
     return [
       [leftLanePlayers[0] || null, rightLanePlayers[0] || null],
       [leftLanePlayers[1] || null, rightLanePlayers[1] || null],
@@ -15447,6 +15457,25 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
       savedWinnerRounds: {},
     }));
   };
+  const updateOpeningPairingMode = (mode) => {
+    if (!mode || mode === (matchplayState.openingPairingMode || DEFAULT_MATCHPLAY_STATE.openingPairingMode)) return;
+    const hasScores = Object.values(matchplayState.openingScores || {}).some((score) => Number(score || 0) > 0) ||
+      Object.values(matchplayState.roundScores || {}).some((score) => Number(score || 0) > 0);
+    if (hasScores && !window.confirm("Changing the opening match pairing will clear matchplay scores and saved rounds. Continue?")) return;
+    setMatchplayState((current) => ({
+      ...DEFAULT_MATCHPLAY_STATE,
+      ...(current || {}),
+      openingPairingMode: mode,
+      openingScores: {},
+      roundScores: {},
+      openingTiebreakers: {},
+      roundTiebreakers: {},
+      roundLanes: {},
+      savedOpeningPods: {},
+      savedOpeningPodGames: {},
+      savedWinnerRounds: {},
+    }));
+  };
   const openingPodGameKey = (pair, gameIndex) => `${pair}-g${gameIndex}`;
   const isOpeningPodGameComplete = (pod, gameIndex) =>
     pod.matches.every((match) => {
@@ -15636,6 +15665,24 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
             <StatCard label="Lane Pairs" value={pods.length} />
             <StatCard label="Opening Winners" value={openingWinners.length} />
             <StatCard label="Champion" value={winnerBracket.champion?.name || "TBD"} />
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+            <label className="block text-xs font-bold uppercase tracking-wide text-blue-700" htmlFor="matchplay-opening-pairing">
+              Opening match pairing
+            </label>
+            <select
+              id="matchplay-opening-pairing"
+              className="mt-2 w-full rounded-2xl border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-950 shadow-sm md:max-w-md"
+              value={matchplayState.openingPairingMode || DEFAULT_MATCHPLAY_STATE.openingPairingMode}
+              onChange={(event) => updateOpeningPairingMode(event.target.value)}
+            >
+              <option value="acrossPair">Across the pair: 1A vs 2E, 1B vs 2F</option>
+              <option value="sameLaneNeighbors">Same lane neighbors: 1A vs 1B, 1C vs 1D</option>
+            </select>
+            <p className="mt-2 text-xs font-semibold text-blue-700">
+              Same lane neighbors keeps opening matches on the same lane until winners are erased/moved into the paid finals.
+            </p>
           </div>
 
           {assignedCount === 0 && (
