@@ -1852,7 +1852,12 @@ function normalizeMatchText(value) {
 }
 
 function getIdentityKey(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/\s+/g, " ");
 }
 
 function getBowlerIdentityAliases(identity = {}) {
@@ -12571,8 +12576,10 @@ function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = 
   const [publicTitleView, setPublicTitleView] = useState("leaderboard");
   const [publicTitleSort, setPublicTitleSort] = useState({ column: "titles", direction: "desc" });
   const [publicHofYearFilter, setPublicHofYearFilter] = useState("All");
-  const publicIdentityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
-  const publicRealNameFor = (nickname) => publicIdentityMap.get(getIdentityKey(nickname))?.realName || "";
+  const publicRealNameFor = (name) => {
+    const identity = findBowlerIdentityForName(bowlerIdentities, name);
+    return String(identity?.realName || identity?.real_name || "").trim();
+  };
   const availableSeasons = Array.from(new Set((tournamentHistory || []).map((t) => t.season || "Unassigned"))).sort((a, b) => String(b).localeCompare(String(a)));
   const publicArchiveHistory = seasonFilter === "All"
     ? tournamentHistory || []
@@ -17280,8 +17287,10 @@ function TitlesTab({ tournamentHistory, manualTitles, setManualTitles, bowlerIde
   const [editingManualTitle, setEditingManualTitle] = useState(null);
   const [titleDetailFilters, setTitleDetailFilters] = useState({ bowler: "", tournament: "", season: "All", series: "All" });
   const [identitySort, setIdentitySort] = useState({ column: "realName", direction: "asc" });
-  const identityMap = new Map((bowlerIdentities || []).map((identity) => [getIdentityKey(identity.nickname), identity]));
-  const realNameFor = (nickname) => identityMap.get(getIdentityKey(nickname))?.realName || "";
+  const realNameFor = (name) => {
+    const identity = findBowlerIdentityForName(bowlerIdentities, name);
+    return String(identity?.realName || identity?.real_name || "").trim();
+  };
   const isSectionCollapsed = (sectionId) => Boolean(collapsedTitleSections[sectionId]);
   const toggleTitleSection = (sectionId) => {
     setCollapsedTitleSections((current) => ({
