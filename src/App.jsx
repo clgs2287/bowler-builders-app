@@ -18180,39 +18180,59 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
   const fullBrackets = Math.floor(totalEntries / 8);
   const leftoverEntries = totalEntries % 8;
 
-  const bracketPlans = (() => {
-    const plans = [{ id: "full-only", label: `${fullBrackets} full bracket${fullBrackets === 1 ? "" : "s"}, no byes`, brackets: fullBrackets, byes: 0, usedEntries: fullBrackets * 8, leftoverEntries, fullPayoutBrackets: fullBrackets, byePayoutBrackets: 0 }];
-    for (let byes = 1; byes <= 7; byes += 1) {
-      const totalSlotsNeeded = totalEntries + byes;
-      if (totalSlotsNeeded % 8 !== 0) continue;
-      const bracketCount = totalSlotsNeeded / 8;
-      if (bracketCount <= fullBrackets) continue;
-      if (totalEntries < bracketCount) continue;
-      plans.push({ id: `with-${byes}-byes`, label: `${bracketCount} brackets with ${byes} bye${byes === 1 ? "" : "s"}`, brackets: bracketCount, byes, usedEntries: totalEntries, leftoverEntries: 0, fullPayoutBrackets: bracketCount - byes, byePayoutBrackets: byes });
-    }
-    return plans.sort((a, b) => b.usedEntries - a.usedEntries || a.byes - b.byes);
-  })();
-
-  const selectedPlan = bracketPlans.find((plan) => plan.id === selectedPlanId) || bracketPlans[0];
-  const hasGeneratedBrackets = brackets.length > 0;
-
-  const previewBracketEntries = (() => {
-    if (!selectedPlan || !tickets.length || selectedPlan.brackets <= 0) return [];
+  const bracketPlanBaseRows = (() => {
     const byBowler = tickets.reduce((map, ticket) => {
       const key = ticket.bowler.seed;
-      map[key] = map[key] || { seed: ticket.bowler.seed, name: ticket.bowler.name, purchased: 0, used: 0, refunded: 0 };
+      map[key] = map[key] || { seed: ticket.bowler.seed, name: ticket.bowler.name, purchased: 0, used: 0, refunded: 0, forcedRefunds: 0 };
       map[key].purchased += 1;
       return map;
     }, {});
+    return Object.values(byBowler);
+  })();
 
-    const previewRows = Object.values(byBowler).map((bowler) => ({
+  const placeBracketTicketsExactly = (usageRows = [], bracketCount = 0, byes = 0) => {
+    const groups = Array.from({ length: bracketCount }, () => []);
+    const capacities = Array.from({ length: bracketCount }, (_, index) => 8 - (index < byes ? 1 : 0));
+    const leftovers = [];
+    const rows = [...usageRows].sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
+
+    rows.forEach((row) => {
+      const queue = [...(row.queue || [])];
+      for (let ticketIndex = 0; ticketIndex < Number(row.used || 0); ticketIndex += 1) {
+        const ticket = queue[ticketIndex];
+        if (!ticket) continue;
+        const availableIndexes = groups
+          .map((group, index) => ({ group, index, room: capacities[index] - group.length }))
+          .filter(({ group, room }) => room > 0 && !group.some((item) => String(item.bowler.seed) === String(ticket.bowler.seed)))
+          .sort((a, b) => a.group.length - b.group.length || b.room - a.room || a.index - b.index);
+        const target = availableIndexes[0];
+        if (target) groups[target.index].push(ticket);
+        else leftovers.push(ticket);
+      }
+      leftovers.push(...queue.slice(Number(row.used || 0)));
+    });
+
+    const placementByes = groups.reduce((sum, group, index) => sum + Math.max(0, capacities[index] - group.length), 0);
+    const emptyBrackets = groups.filter((group) => group.length === 0).length;
+    return { groups, capacities, leftovers, placementByes, emptyBrackets };
+  };
+
+  const buildBracketPlan = (bracketCount, byes, { id = "", label = "" } = {}) => {
+    const safeBracketCount = Math.max(0, Number(bracketCount || 0));
+    const safeByes = Math.max(0, Number(byes || 0));
+    const usedSlots = Math.max(0, safeBracketCount * 8 - safeByes);
+    const cappedRows = bracketPlanBaseRows.map((bowler) => ({
       ...bowler,
-      used: Math.min(bowler.purchased, selectedPlan.brackets),
+      used: Math.min(bowler.purchased, safeBracketCount),
+      forcedRefunds: Math.max(0, bowler.purchased - safeBracketCount),
     }));
-
-    let surplus = Math.max(0, previewRows.reduce((sum, row) => sum + row.used, 0) - selectedPlan.usedEntries);
+    const cappedUsableEntries = cappedRows.reduce((sum, row) => sum + row.used, 0);
+    const shortage = Math.max(0, usedSlots - cappedUsableEntries);
+    const tooManyByes = safeByes > safeBracketCount;
+    const feasible = safeBracketCount > 0 && !tooManyByes && shortage === 0;
+    let surplus = feasible ? Math.max(0, cappedUsableEntries - usedSlots) : 0;
     while (surplus > 0) {
-      const candidates = previewRows
+      const candidates = cappedRows
         .filter((row) => row.used > 0)
         .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
       if (!candidates.length) break;
@@ -18222,16 +18242,148 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
         surplus -= 1;
       }
     }
-
-    const usedBySeed = Object.fromEntries(previewRows.map((row) => [row.seed, row.used]));
-
-    return Object.values(byBowler)
+    const entryRows = cappedRows
       .map((bowler) => {
-        const used = Number(usedBySeed[bowler.seed] || 0);
-        const refunded = Math.max(0, bowler.purchased - used);
-        return { ...bowler, used, refunded, refundAmount: refunded * bracketPrice };
+        const refunded = Math.max(0, bowler.purchased - bowler.used);
+        return { ...bowler, refunded, refundAmount: refunded * bracketPrice };
       })
       .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
+    const forcedRefundEntries = entryRows.reduce((sum, row) => sum + row.forcedRefunds, 0);
+    const placement = feasible
+      ? placeBracketTicketsExactly(
+          entryRows.map((row) => ({
+            ...row,
+            queue: Array.from({ length: Number(row.used || 0) }, (_, index) => ({
+              id: `preview-${row.seed}-${index}`,
+              bowler: { seed: row.seed, name: row.name },
+            })),
+          })),
+          safeBracketCount,
+          safeByes
+        )
+      : null;
+    const exactPlacement = Boolean(feasible && placement && placement.leftovers.length === 0 && placement.placementByes === safeByes && placement.emptyBrackets === 0);
+    const totalRefundEntries = Math.max(0, totalEntries - (exactPlacement ? usedSlots : cappedUsableEntries));
+    const regularLeftoverEntries = Math.max(0, totalRefundEntries - forcedRefundEntries);
+    return {
+      id: id || `${safeBracketCount}-brackets-${safeByes}-byes`,
+      label: label || `${safeBracketCount} bracket${safeBracketCount === 1 ? "" : "s"}${safeByes ? ` with ${safeByes} bye${safeByes === 1 ? "" : "s"}` : ", no byes"}`,
+      brackets: safeBracketCount,
+      byes: safeByes,
+      requestedEntries: usedSlots,
+      usedEntries: exactPlacement ? usedSlots : cappedUsableEntries,
+      cappedUsableEntries,
+      shortage,
+      feasible: exactPlacement,
+      tooManyByes,
+      placementByes: placement?.placementByes ?? 0,
+      forcedRefundEntries,
+      regularLeftoverEntries,
+      leftoverEntries: totalRefundEntries,
+      fullPayoutBrackets: safeBracketCount - safeByes,
+      byePayoutBrackets: safeByes,
+      entryRows,
+      issue: tooManyByes
+        ? "More byes than brackets."
+        : shortage > 0
+          ? `Short ${shortage} usable entr${shortage === 1 ? "y" : "ies"} because bowlers can only appear once per bracket.`
+          : feasible && !exactPlacement
+            ? "Cannot place this option exactly without creating extra byes."
+          : "",
+    };
+  };
+
+  const bracketPlanTargets = [];
+  const bracketPlans = (() => {
+    const plansById = new Map();
+    const addPlan = (plan) => {
+      if (!plan || plan.brackets <= 0 || plansById.has(plan.id)) return;
+      plansById.set(plan.id, plan);
+    };
+
+    const naturalFullPlan = buildBracketPlan(fullBrackets, 0, {
+      id: "full-only",
+      label: `${fullBrackets} full bracket${fullBrackets === 1 ? "" : "s"}, no byes`,
+    });
+    const nextFullPlan = buildBracketPlan(fullBrackets + 1, 0, {
+      id: "next-full-target",
+      label: `${fullBrackets + 1} full brackets, no byes`,
+    });
+    bracketPlanTargets.push(naturalFullPlan, nextFullPlan);
+
+    const candidates = [];
+    const collectPlan = (plan) => {
+      if (!plan || plan.brackets <= 0) return;
+      if (!candidates.some((candidate) => candidate.id === plan.id)) candidates.push(plan);
+    };
+
+    collectPlan(naturalFullPlan);
+
+    for (let byes = 1; byes <= 7; byes += 1) {
+      const totalSlotsNeeded = totalEntries + byes;
+      if (totalSlotsNeeded % 8 !== 0) continue;
+      const bracketCount = totalSlotsNeeded / 8;
+      if (bracketCount <= fullBrackets) continue;
+      if (totalEntries < bracketCount) continue;
+      collectPlan(buildBracketPlan(bracketCount, byes, {
+        id: `with-${byes}-byes`,
+        label: `${bracketCount} brackets with ${byes} bye${byes === 1 ? "" : "s"}`,
+      }));
+    }
+
+    const maxBracketsToConsider = Math.min(Math.ceil(totalEntries / 8) + 1, Math.max(1, totalEntries));
+    const minBracketsToConsider = Math.max(1, fullBrackets - 3);
+    for (let bracketCount = maxBracketsToConsider; bracketCount >= minBracketsToConsider; bracketCount -= 1) {
+      for (let byes = 0; byes <= Math.min(7, bracketCount); byes += 1) {
+        const requestedEntries = bracketCount * 8 - byes;
+        if (requestedEntries <= 0 || requestedEntries > totalEntries) continue;
+        collectPlan(buildBracketPlan(bracketCount, byes));
+      }
+    }
+
+    const validPool = candidates.filter((plan) => plan.feasible);
+    const maxValidBrackets = Math.max(0, ...validPool.map((plan) => plan.brackets));
+    const maxValidEntries = Math.max(0, ...validPool.map((plan) => plan.usedEntries));
+
+    validPool
+      .filter((plan) => plan.brackets === maxValidBrackets || plan.usedEntries === maxValidEntries)
+      .sort((a, b) => b.brackets - a.brackets || a.byes - b.byes || b.usedEntries - a.usedEntries)
+      .slice(0, 5)
+      .forEach(addPlan);
+
+    [naturalFullPlan, nextFullPlan].forEach((plan) => {
+      if (!plan.feasible) addPlan({ ...plan, targetOnly: true });
+    });
+
+    return Array.from(plansById.values()).sort((a, b) =>
+      Number(a.targetOnly) - Number(b.targetOnly) ||
+      Number(b.feasible) - Number(a.feasible) ||
+      b.brackets - a.brackets ||
+      b.usedEntries - a.usedEntries ||
+      a.byes - b.byes
+    );
+  })();
+
+  const selectedPlan = bracketPlans.find((plan) => plan.id === selectedPlanId) || bracketPlans[0];
+  const hasGeneratedBrackets = brackets.length > 0;
+  const planCanGenerate = (plan) => Boolean(plan?.feasible && !plan?.targetOnly);
+  const selectedPlanCanGenerate = planCanGenerate(selectedPlan);
+  const planStatusLabel = (plan) => plan.targetOnly ? "TARGET" : planCanGenerate(plan) ? "VALID" : "ISSUE";
+  const planStatusClass = (plan) => plan.targetOnly
+    ? "rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800"
+    : plan.feasible
+      ? "rounded-full bg-green-100 px-2 py-1 text-xs font-bold text-green-800"
+      : "rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-800";
+  const planNote = (plan) => {
+    if (plan.issue) return plan.issue;
+    if (plan.regularLeftoverEntries > 0) return `${plan.regularLeftoverEntries} regular entr${plan.regularLeftoverEntries === 1 ? "y" : "ies"} would be leftover/refunded.`;
+    if (plan.targetOnly && plan.shortage > 0) return `Need ${plan.shortage} more usable entr${plan.shortage === 1 ? "y" : "ies"} to fill this exact option.`;
+    return "";
+  };
+
+  const previewBracketEntries = (() => {
+    if (!selectedPlan || !tickets.length || selectedPlan.brackets <= 0) return [];
+    return selectedPlan.entryRows || [];
   })();
   const previewRefunds = previewBracketEntries.filter((bowler) => bowler.refunded > 0).sort((a, b) => b.refunded - a.refunded || a.name.localeCompare(b.name));
   const previewRefundTotal = previewRefunds.reduce((sum, row) => sum + row.refundAmount, 0);
@@ -18245,6 +18397,10 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
       window.alert("You need enough bracket entries before generating side-pot brackets.");
       return;
     }
+    if (!selectedPlanCanGenerate) {
+      window.alert(selectedPlan.issue || "This bracket plan cannot be generated exactly. Select one of the valid plan options.");
+      return;
+    }
 
     const allByBowler = tickets.reduce((map, ticket) => {
       const key = ticket.bowler.seed;
@@ -18253,59 +18409,23 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
     }, {});
 
     const leftoverTickets = [];
+    const usedBySeed = Object.fromEntries((selectedPlan.entryRows || []).map((row) => [row.seed, Number(row.used || 0)]));
     const usageRows = Object.values(allByBowler).map((queue) => ({
       seed: queue[0].bowler.seed,
       name: queue[0].bowler.name,
       queue: shuffle(queue),
       purchased: queue.length,
-      used: Math.min(queue.length, selectedPlan.brackets),
+      used: Math.min(queue.length, Number(usedBySeed[queue[0].bowler.seed] || 0)),
     }));
 
-    let surplus = Math.max(0, usageRows.reduce((sum, row) => sum + row.used, 0) - selectedPlan.usedEntries);
-    while (surplus > 0) {
-      const candidates = usageRows
-        .filter((row) => row.used > 0)
-        .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
-      if (!candidates.length) break;
-      for (const row of candidates) {
-        if (surplus <= 0) break;
-        row.used -= 1;
-        surplus -= 1;
-      }
+    const placement = placeBracketTicketsExactly(usageRows, selectedPlan.brackets, selectedPlan.byes);
+    const bracketTicketGroups = placement.groups;
+    leftoverTickets.push(...placement.leftovers);
+
+    if (leftoverTickets.length > selectedPlan.leftoverEntries || placement.placementByes !== selectedPlan.byes || placement.emptyBrackets > 0) {
+      window.alert("This plan could not be placed exactly without creating extra byes. Select a lower bracket option or adjust bracket entries before generating.");
+      return;
     }
-
-    const ticketsToUse = [];
-    usageRows.forEach((row) => {
-      ticketsToUse.push(...row.queue.slice(0, row.used));
-      leftoverTickets.push(...row.queue.slice(row.used));
-    });
-
-    const buckets = ticketsToUse.reduce((map, ticket) => {
-      const key = ticket.bowler.seed;
-      map[key] = [...(map[key] || []), ticket];
-      return map;
-    }, {});
-
-    const bracketTicketGroups = Array.from({ length: selectedPlan.brackets }, () => []);
-    const maxSlotsByBracket = Array.from({ length: selectedPlan.brackets }, (_, index) => 8 - (index < selectedPlan.byes ? 1 : 0));
-    const bowlerQueues = Object.values(buckets).sort((a, b) => b.length - a.length);
-
-    bowlerQueues.forEach((queue) => {
-      queue.forEach((ticket) => {
-        let bestIndex = -1;
-        let smallestSize = Infinity;
-        bracketTicketGroups.forEach((group, index) => {
-          const hasThisBowler = group.some((item) => item.bowler.seed === ticket.bowler.seed);
-          const hasRoom = group.length < maxSlotsByBracket[index];
-          if (!hasThisBowler && hasRoom && group.length < smallestSize) {
-            bestIndex = index;
-            smallestSize = group.length;
-          }
-        });
-        if (bestIndex >= 0) bracketTicketGroups[bestIndex].push(ticket);
-        else leftoverTickets.push(ticket);
-      });
-    });
 
     const generated = [];
     const usedPairs = new Set();
@@ -18522,7 +18642,7 @@ row.matches.push({
     return Object.values(playerMap).sort((a, b) => b.alive - a.alive || a.name.localeCompare(b.name));
   })();
 
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={generateBrackets} disabled={hasGeneratedBrackets}>{hasGeneratedBrackets ? "Brackets Locked" : "Generate Brackets"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Leftover Entries" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div><div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50"}><div className="flex-1"><h3 className="font-bold text-blue-950">{plan.label}</h3>{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}</div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Leftover:</strong> {plan.leftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p></div><p className="mt-2 text-xs text-blue-600">Full: {currency(25)} / {currency(10)} - With bye: {currency(20)} / {currency(10)}</p></button>)}</div></CardContent></AppCard>}
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-400" onClick={generateBrackets} disabled={hasGeneratedBrackets || !selectedPlanCanGenerate}>{hasGeneratedBrackets ? "Brackets Locked" : selectedPlanCanGenerate ? "Generate Brackets" : "Select Valid Plan"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Total Refunds" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div>{selectedPlan && !selectedPlanCanGenerate && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">{planNote(selectedPlan)}</div>}<div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? planCanGenerate(plan) ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : plan.targetOnly ? "rounded-2xl border-2 border-amber-500 bg-amber-50 p-4 text-left shadow-md" : "rounded-2xl border-2 border-red-500 bg-red-50 p-4 text-left shadow-md" : planCanGenerate(plan) ? "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50" : plan.targetOnly ? "rounded-2xl border border-amber-200 bg-white p-4 text-left shadow-sm hover:bg-amber-50" : "rounded-2xl border border-red-200 bg-white p-4 text-left shadow-sm hover:bg-red-50"}><div className="flex items-start justify-between gap-2"><h3 className="font-bold text-blue-950">{plan.label}</h3><div className="flex flex-col items-end gap-1">{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}<span className={planStatusClass(plan)}>{planStatusLabel(plan)}</span></div></div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Requested:</strong> {plan.requestedEntries}</p><p><strong>Usable:</strong> {plan.cappedUsableEntries}</p><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Total refunds:</strong> {plan.leftoverEntries}</p><p><strong>Forced refunds:</strong> {plan.forcedRefundEntries}</p><p><strong>Regular leftover:</strong> {plan.regularLeftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p></div>{planNote(plan) && <p className={plan.targetOnly ? "mt-3 rounded-xl bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800" : planCanGenerate(plan) ? "mt-3 rounded-xl bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800" : "mt-3 rounded-xl bg-red-100 px-3 py-2 text-xs font-bold text-red-800"}>{planNote(plan)}</p>}<p className="mt-2 text-xs text-blue-600">Full: {currency(25)} / {currency(10)} - With bye: {currency(20)} / {currency(10)}</p></button>)}</div></CardContent></AppCard>}
       {!hasGeneratedBrackets && selectedPlan && (
         <AppCard>
           <CardContent className="p-3 md:p-5">
@@ -19059,7 +19179,14 @@ row.matches.push({
         champions.forEach((winner) => addPayout(winner, "Bracket", firstPayout / champions.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 1st`));
         if (champions.length === 1) {
           const runnerUps = finalPlayers.map(resolvePlayer).filter((player) => player.name !== "BYE" && String(player.seed) !== String(champions[0].seed));
-          runnerUps.forEach((runnerUp) => addPayout(runnerUp, "Bracket", secondPayout / Math.max(1, runnerUps.length), `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`));
+          if (runnerUps.length === 1) {
+            addPayout(runnerUps[0], "Bracket", secondPayout, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`);
+          } else if (runnerUps.length > 1) {
+            const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2) }));
+            const secondScore = Math.max(...runnerUpScores.map((item) => item.score));
+            const secondPlace = secondScore > 0 ? runnerUpScores.filter((item) => item.score === secondScore).map((item) => item.player) : [];
+            secondPlace.forEach((runnerUp) => addPayout(runnerUp, "Bracket", secondPayout / secondPlace.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`));
+          }
         }
       }
     });
@@ -19322,7 +19449,14 @@ function SideActionPayoutsTab({
         champions.forEach((winner) => addPayout(payoutMap, winner, "Bracket", firstPayout / champions.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 1st`));
         if (champions.length === 1) {
           const runnerUps = finalPlayers.map(resolvePlayer).filter((player) => player.name !== "BYE" && String(player.seed) !== String(champions[0].seed));
-          runnerUps.forEach((runnerUp) => addPayout(payoutMap, runnerUp, "Bracket", secondPayout / Math.max(1, runnerUps.length), `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`));
+          if (runnerUps.length === 1) {
+            addPayout(payoutMap, runnerUps[0], "Bracket", secondPayout, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`);
+          } else if (runnerUps.length > 1) {
+            const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2) }));
+            const secondScore = Math.max(...runnerUpScores.map((item) => item.score));
+            const secondPlace = secondScore > 0 ? runnerUpScores.filter((item) => item.score === secondScore).map((item) => item.player) : [];
+            secondPlace.forEach((runnerUp) => addPayout(payoutMap, runnerUp, "Bracket", secondPayout / secondPlace.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`));
+          }
         }
       }
     });
@@ -19548,6 +19682,7 @@ const [reservationState, setReservationState] = useState({
 const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
 const [selectedPublicEventKey, setSelectedPublicEventKey] = useState("");
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
+
   const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
   const supabasePublicDataLoadedRef = useRef(false);
@@ -21480,6 +21615,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     </div>
   );
 }
+
+
+
+
 
 
 
