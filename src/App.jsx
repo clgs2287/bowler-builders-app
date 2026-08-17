@@ -2926,6 +2926,10 @@ function matchplayStoredScore(scores = {}, key, fallbackScore) {
   return numericFallback > 0 ? numericFallback : "";
 }
 
+function isMatchplayByePlayer(player) {
+  return Boolean(player && normalizeMatchText(player.name || "") === "bye");
+}
+
 function matchplayRoundTitle(playerCount) {
   if (playerCount <= 2) return "Championship";
   if (playerCount <= 4) return "Semifinal";
@@ -3000,34 +3004,38 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
           right: rightPlayer ? { ...rightPlayer, matchplaySeed: rightSeed } : null,
         };
       });
-      const players = pairMatches.flatMap((match) => [match.left, match.right]).filter(Boolean);
+      const players = pairMatches.flatMap((match) => [match.left, match.right]).filter((player) => player && !isMatchplayByePlayer(player));
       const matches = [];
 
       pairMatches.forEach((pairMatch) => {
         const left = pairMatch.left || null;
         const right = pairMatch.right || null;
+        const leftBye = isMatchplayByePlayer(left);
+        const rightBye = isMatchplayByePlayer(right);
         const leftGameValues = [];
         const rightGameValues = [];
         const leftGames = Array.from({ length: 3 }, (_, gameIndex) => {
-          const scoreValue = matchplayStoredScore(scores, matchplayScoreKey(pair, matches.length, "left", gameIndex), left?.games?.[gameIndex]);
+          const scoreValue = leftBye ? "" : matchplayStoredScore(scores, matchplayScoreKey(pair, matches.length, "left", gameIndex), left?.games?.[gameIndex]);
           leftGameValues.push(scoreValue);
           return Number(scoreValue || 0);
         });
         const rightGames = Array.from({ length: 3 }, (_, gameIndex) => {
-          const scoreValue = matchplayStoredScore(scores, matchplayScoreKey(pair, matches.length, "right", gameIndex), right?.games?.[gameIndex]);
+          const scoreValue = rightBye ? "" : matchplayStoredScore(scores, matchplayScoreKey(pair, matches.length, "right", gameIndex), right?.games?.[gameIndex]);
           rightGameValues.push(scoreValue);
           return Number(scoreValue || 0);
         });
         const leftTotal = leftGames.reduce((sum, score) => sum + score, 0);
         const rightTotal = rightGames.reduce((sum, score) => sum + score, 0);
-        const leftComplete = Boolean(left) && leftGameValues.every(isMatchplayScoreEntered);
-        const rightComplete = Boolean(right) && rightGameValues.every(isMatchplayScoreEntered);
-        const complete = Boolean(left && right) && leftComplete && rightComplete;
+        const leftComplete = Boolean(left && !leftBye) && leftGameValues.every(isMatchplayScoreEntered);
+        const rightComplete = Boolean(right && !rightBye) && rightGameValues.every(isMatchplayScoreEntered);
+        const complete = Boolean(left && right && !leftBye && !rightBye) && leftComplete && rightComplete;
         const tied = complete && leftTotal === rightTotal;
         const matchId = `${pair}-${matches.length}`;
         const tiebreakWinner = tied ? tiebreakers[matchId] : "";
-        const winner = !right && left
+        const winner = (rightBye || !right) && left && !leftBye
           ? left
+          : (leftBye || !left) && right && !rightBye
+            ? right
           : complete && leftTotal > rightTotal
             ? left
             : complete && rightTotal > leftTotal
@@ -11595,6 +11603,7 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
 
   const playerName = (player) => {
     if (!player) return "BYE";
+    if (isMatchplayByePlayer(player)) return "BYE";
     const label = player.name || "TBD";
     return player.matchplaySeed ? `${player.matchplaySeed}. ${label}` : label;
   };
@@ -11627,9 +11636,9 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
           <div className={playerClass(rightWon)}>
             <p className="truncate">{playerName(match.right)}</p>
             {playerLane(match.right) && <p className="text-[10px] font-semibold text-blue-700">{playerLane(match.right)}</p>}
-            <p className="mt-1 text-[10px] font-semibold text-slate-600">G: {match.right ? renderGames(match.rightGames, match.rightGameValues) : "BYE"}</p>
+            <p className="mt-1 text-[10px] font-semibold text-slate-600">G: {match.right && !isMatchplayByePlayer(match.right) ? renderGames(match.rightGames, match.rightGameValues) : "BYE"}</p>
           </div>
-          <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? renderOpeningTotal(match.rightGames, match.rightGameValues) : "BYE"}</span>
+          <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right && !isMatchplayByePlayer(match.right) ? renderOpeningTotal(match.rightGames, match.rightGameValues) : "BYE"}</span>
         </div>
         {match.tied && match.winner && (
           <p className="mt-2 rounded-lg bg-yellow-50 px-2 py-1 text-[10px] font-black uppercase text-yellow-900">
@@ -15341,11 +15350,14 @@ function MatchplayViewerBracketSheet({ pods = [], winnerBracket = { rounds: [], 
   };
   const playerLine = (player) => {
     if (!player) return "BYE";
+    if (isMatchplayByePlayer(player)) return "BYE";
     const seed = player.matchplaySeed ? `${player.matchplaySeed}. ` : player.seed ? `${player.seed}. ` : "";
     return `${seed}${player.name || "TBD"}`;
   };
   const playerScore = (match, side) => {
     if (match.roundType === "opening") {
+      if (side === "left" && isMatchplayByePlayer(match.left)) return "BYE";
+      if (side === "right" && isMatchplayByePlayer(match.right)) return "BYE";
       if (side === "left") return match.leftGameValues?.some(isMatchplayScoreEntered) ? match.leftTotal : "";
       return match.right ? (match.rightGameValues?.some(isMatchplayScoreEntered) ? match.rightTotal : "") : "BYE";
     }
@@ -15658,6 +15670,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
     </div>
   );
   const playerLabel = (player) => player ? `${player.lane || ""} ${player.name || "TBD"}`.trim() : "BYE";
+  const matchplayPlayerNeedsScores = (player) => Boolean(player && !isMatchplayByePlayer(player));
   const printMatchplayViewerSheet = () => {
     document.body.classList.add("bb-print-matchplay-sheet");
     window.setTimeout(() => {
@@ -15810,6 +15823,8 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                   {pod.matches.map((match) => {
                     const leftWon = match.winner && String(match.winner.seed) === String(match.left?.seed);
                     const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
+                    const leftNeedsScores = matchplayPlayerNeedsScores(match.left);
+                    const rightNeedsScores = matchplayPlayerNeedsScores(match.right);
                     const matchLabel = `Match ${match.matchNumber}`;
                     const winnerCellClass = "bg-green-100 font-black text-green-950";
                     const tiedNeedsWinner = match.tied && !match.winner;
@@ -15828,18 +15843,18 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                         <tr className={leftWon ? "border-t bg-green-100" : "border-t"}>
                           <td className={`p-3 font-black text-blue-950 ${leftWon || rightWon ? "bg-green-50" : ""}`} rowSpan={2}>{matchLabel}</td>
                           <td className={`p-3 font-semibold text-blue-950 ${leftWon ? winnerCellClass : ""}`}>{playerLabel(match.left)}</td>
-                          <td className={`p-2 text-center ${leftWon ? winnerCellClass : ""}`}>{match.left ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "left", match.leftGames, match.left, podSaved, savedPodGames) : " - -"}</td>
-                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{match.leftGameValues?.some(isMatchplayScoreEntered) ? match.leftTotal : " - -"}</td>
+                          <td className={`p-2 text-center ${leftWon ? winnerCellClass : ""}`}>{leftNeedsScores ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "left", match.leftGames, match.left, podSaved, savedPodGames) : isMatchplayByePlayer(match.left) ? "BYE" : " - -"}</td>
+                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{leftNeedsScores ? (match.leftGameValues?.some(isMatchplayScoreEntered) ? match.leftTotal : " - -") : isMatchplayByePlayer(match.left) ? "BYE" : " - -"}</td>
                           <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>
-                            {leftWon ? "ADVANCE" : tiedNeedsWinner ? openingRolloffButton("left") : match.complete ? "OUT" : "ACTIVE"}
+                            {leftWon ? "ADVANCE" : isMatchplayByePlayer(match.left) ? "BYE" : tiedNeedsWinner ? openingRolloffButton("left") : match.complete ? "OUT" : "ACTIVE"}
                           </td>
                         </tr>
                         <tr className={rightWon ? "border-t bg-green-100" : "border-t"}>
                           <td className={`p-3 font-semibold text-blue-950 ${rightWon ? winnerCellClass : ""}`}>{playerLabel(match.right)}</td>
-                          <td className={`p-2 text-center ${rightWon ? winnerCellClass : ""}`}>{match.right ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "right", match.rightGames, match.right, podSaved, savedPodGames) : "BYE"}</td>
-                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{match.rightGameValues?.some(isMatchplayScoreEntered) ? match.rightTotal : " - -"}</td>
+                          <td className={`p-2 text-center ${rightWon ? winnerCellClass : ""}`}>{rightNeedsScores ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "right", match.rightGames, match.right, podSaved, savedPodGames) : "BYE"}</td>
+                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{rightNeedsScores ? (match.rightGameValues?.some(isMatchplayScoreEntered) ? match.rightTotal : " - -") : "BYE"}</td>
                           <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>
-                            {rightWon ? "ADVANCE" : tiedNeedsWinner && match.right ? openingRolloffButton("right") : match.complete ? "OUT" : match.winner && !match.right ? "BYE" : "ACTIVE"}
+                            {rightWon ? "ADVANCE" : tiedNeedsWinner && rightNeedsScores ? openingRolloffButton("right") : match.complete ? "OUT" : match.winner && !rightNeedsScores ? "BYE" : "ACTIVE"}
                           </td>
                         </tr>
                       </React.Fragment>
