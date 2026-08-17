@@ -2968,10 +2968,18 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
       ];
     }
     const [leftLane, rightLane] = laneNumbers;
-    const playersOnLane = (laneNumber) =>
-      (pairMap[pair] || [])
+    const playersOnLane = (laneNumber) => {
+      const bowlersByLetter = (pairMap[pair] || [])
         .filter((bowler) => Number(lanePositionParts(bowler.lane).lane) === Number(laneNumber))
-        .sort((a, b) => laneAssignmentSortValue(a.lane) - laneAssignmentSortValue(b.lane) || String(a.name || "").localeCompare(String(b.name || "")));
+        .sort((a, b) => laneAssignmentSortValue(a.lane) - laneAssignmentSortValue(b.lane) || String(a.name || "").localeCompare(String(b.name || "")))
+        .reduce((map, bowler) => {
+          const letter = lanePositionParts(bowler.lane).letter;
+          if (letter && !map[letter]) map[letter] = bowler;
+          return map;
+        }, {});
+
+      return getLaneLettersForStyle(Number(laneNumber), "singles").map((letter) => bowlersByLetter[letter] || null);
+    };
     const leftLanePlayers = playersOnLane(leftLane);
     const rightLanePlayers = playersOnLane(rightLane);
     if (pairingMode === "sameLaneNeighbors") {
