@@ -2916,6 +2916,16 @@ function matchplayRoundLaneKey(roundIndex, matchIndex) {
   return `matchplay-round-${roundIndex}-m${matchIndex}-lanes`;
 }
 
+function isMatchplayScoreEntered(value) {
+  return value !== "" && value !== undefined && value !== null && Number.isFinite(Number(value));
+}
+
+function matchplayStoredScore(scores = {}, key, fallbackScore) {
+  if (Object.prototype.hasOwnProperty.call(scores, key)) return scores[key];
+  const numericFallback = Number(fallbackScore || 0);
+  return numericFallback > 0 ? numericFallback : "";
+}
+
 function matchplayRoundTitle(playerCount) {
   if (playerCount <= 2) return "Championship";
   if (playerCount <= 4) return "Semifinal";
@@ -2996,17 +3006,23 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
       pairMatches.forEach((pairMatch) => {
         const left = pairMatch.left || null;
         const right = pairMatch.right || null;
+        const leftGameValues = [];
+        const rightGameValues = [];
         const leftGames = Array.from({ length: 3 }, (_, gameIndex) => {
-          const savedScore = scores[matchplayScoreKey(pair, matches.length, "left", gameIndex)];
-          return Number(savedScore ?? left?.games?.[gameIndex] ?? 0);
+          const scoreValue = matchplayStoredScore(scores, matchplayScoreKey(pair, matches.length, "left", gameIndex), left?.games?.[gameIndex]);
+          leftGameValues.push(scoreValue);
+          return Number(scoreValue || 0);
         });
         const rightGames = Array.from({ length: 3 }, (_, gameIndex) => {
-          const savedScore = scores[matchplayScoreKey(pair, matches.length, "right", gameIndex)];
-          return Number(savedScore ?? right?.games?.[gameIndex] ?? 0);
+          const scoreValue = matchplayStoredScore(scores, matchplayScoreKey(pair, matches.length, "right", gameIndex), right?.games?.[gameIndex]);
+          rightGameValues.push(scoreValue);
+          return Number(scoreValue || 0);
         });
         const leftTotal = leftGames.reduce((sum, score) => sum + score, 0);
         const rightTotal = rightGames.reduce((sum, score) => sum + score, 0);
-        const complete = Boolean(left && right) && leftGames.every((score) => score > 0) && rightGames.every((score) => score > 0);
+        const leftComplete = Boolean(left) && leftGameValues.every(isMatchplayScoreEntered);
+        const rightComplete = Boolean(right) && rightGameValues.every(isMatchplayScoreEntered);
+        const complete = Boolean(left && right) && leftComplete && rightComplete;
         const tied = complete && leftTotal === rightTotal;
         const matchId = `${pair}-${matches.length}`;
         const tiebreakWinner = tied ? tiebreakers[matchId] : "";
@@ -3031,6 +3047,8 @@ function buildMatchplayOpeningPods(bowlers = [], matchplayState = {}) {
           right,
           leftGames,
           rightGames,
+          leftGameValues,
+          rightGameValues,
           leftTotal,
           rightTotal,
           complete,
@@ -3079,9 +3097,11 @@ function buildMatchplayWinnerRounds(openingWinners = [], matchplayState = {}) {
       const matchLanePair = String(roundLanes[laneKey] ?? autoLanePair ?? "").trim();
       const leftKey = matchplayRoundScoreKey(roundIndex, matchIndex, "left");
       const rightKey = matchplayRoundScoreKey(roundIndex, matchIndex, "right");
-      const leftScore = Number(scores[leftKey] || 0);
-      const rightScore = Number(scores[rightKey] || 0);
-      const complete = Boolean(left && right) && leftScore > 0 && rightScore > 0;
+      const leftScoreValue = Object.prototype.hasOwnProperty.call(scores, leftKey) ? scores[leftKey] : "";
+      const rightScoreValue = Object.prototype.hasOwnProperty.call(scores, rightKey) ? scores[rightKey] : "";
+      const leftScore = Number(leftScoreValue || 0);
+      const rightScore = Number(rightScoreValue || 0);
+      const complete = Boolean(left && right) && isMatchplayScoreEntered(leftScoreValue) && isMatchplayScoreEntered(rightScoreValue);
       const tied = complete && leftScore === rightScore;
       const tiebreakWinner = tied ? tiebreakers[matchId] : "";
       const winner = !right && left
@@ -3114,6 +3134,8 @@ function buildMatchplayWinnerRounds(openingWinners = [], matchplayState = {}) {
         right,
         leftKey,
         rightKey,
+        leftScoreValue,
+        rightScoreValue,
         leftScore,
         rightScore,
         complete,
@@ -3144,10 +3166,7 @@ function buildMatchplayWinnerRounds(openingWinners = [], matchplayState = {}) {
 
 function countMatchplayLineageGames(matchplayState = {}) {
   const countScores = (scores = {}) =>
-    Object.values(scores).filter((score) => {
-      const numericScore = Number(score);
-      return Number.isFinite(numericScore) && numericScore > 0;
-    }).length;
+    Object.values(scores).filter(isMatchplayScoreEntered).length;
 
   return countScores(matchplayState.openingScores) + countScores(matchplayState.roundScores);
 }
@@ -11588,7 +11607,8 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
   const renderOpeningMatch = (match, matchNumber) => {
     const leftWon = match.winner && String(match.winner.seed) === String(match.left?.seed);
     const rightWon = match.winner && String(match.winner.seed) === String(match.right?.seed);
-    const renderGames = (games = []) => games.map((score) => Number(score || 0) || "-").join(" / ");
+    const renderGames = (games = [], values = []) => games.map((score, index) => isMatchplayScoreEntered(values[index]) ? Number(score || 0) : "-").join(" / ");
+    const renderOpeningTotal = (games = [], values = []) => values.some(isMatchplayScoreEntered) ? games.reduce((sum, score) => sum + Number(score || 0), 0) : "-";
 
     return (
       <div className={match.winner ? `${bigScreen ? "min-h-[230px]" : ""} bb-public-match-card rounded-2xl border border-green-300 bg-green-50 p-2 shadow-sm` : `${bigScreen ? "min-h-[230px]" : ""} bb-public-match-card rounded-2xl border border-blue-200 bg-white p-2 shadow-sm`}>
@@ -11600,16 +11620,16 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
           <div className={playerClass(leftWon)}>
             <p className="truncate">{playerName(match.left)}</p>
             {playerLane(match.left) && <p className="text-[10px] font-semibold text-blue-700">{playerLane(match.left)}</p>}
-            <p className="mt-1 text-[10px] font-semibold text-slate-600">G: {renderGames(match.leftGames)}</p>
+            <p className="mt-1 text-[10px] font-semibold text-slate-600">G: {renderGames(match.leftGames, match.leftGameValues)}</p>
           </div>
-          <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.leftTotal || "-"}</span>
+          <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{renderOpeningTotal(match.leftGames, match.leftGameValues)}</span>
 
           <div className={playerClass(rightWon)}>
             <p className="truncate">{playerName(match.right)}</p>
             {playerLane(match.right) && <p className="text-[10px] font-semibold text-blue-700">{playerLane(match.right)}</p>}
-            <p className="mt-1 text-[10px] font-semibold text-slate-600">G: {match.right ? renderGames(match.rightGames) : "BYE"}</p>
+            <p className="mt-1 text-[10px] font-semibold text-slate-600">G: {match.right ? renderGames(match.rightGames, match.rightGameValues) : "BYE"}</p>
           </div>
-          <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? match.rightTotal || "-" : "BYE"}</span>
+          <span className="min-w-[48px] self-center rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? renderOpeningTotal(match.rightGames, match.rightGameValues) : "BYE"}</span>
         </div>
         {match.tied && match.winner && (
           <p className="mt-2 rounded-lg bg-yellow-50 px-2 py-1 text-[10px] font-black uppercase text-yellow-900">
@@ -11632,9 +11652,9 @@ function PublicMatchplayBracketView({ bowlers = [], matchplayState = {}, tournam
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-1 text-xs">
           <span className={playerClass(leftWon)}>{playerName(match.left)}</span>
-          <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.leftScore || "-"}</span>
+          <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{isMatchplayScoreEntered(match.leftScoreValue) ? match.leftScore : "-"}</span>
           <span className={playerClass(rightWon)}>{playerName(match.right)}</span>
-          <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? match.rightScore || "-" : "BYE"}</span>
+          <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-black text-blue-950">{match.right ? (isMatchplayScoreEntered(match.rightScoreValue) ? match.rightScore : "-") : "BYE"}</span>
         </div>
         {match.tied && match.winner && (
           <p className="mt-2 rounded-lg bg-yellow-50 px-2 py-1 text-[10px] font-black uppercase text-yellow-900">
@@ -15326,9 +15346,11 @@ function MatchplayViewerBracketSheet({ pods = [], winnerBracket = { rounds: [], 
   };
   const playerScore = (match, side) => {
     if (match.roundType === "opening") {
-      return side === "left" ? match.leftTotal || "" : match.right ? match.rightTotal || "" : "BYE";
+      if (side === "left") return match.leftGameValues?.some(isMatchplayScoreEntered) ? match.leftTotal : "";
+      return match.right ? (match.rightGameValues?.some(isMatchplayScoreEntered) ? match.rightTotal : "") : "BYE";
     }
-    return side === "left" ? match.leftScore || "" : match.right ? match.rightScore || "" : "BYE";
+    if (side === "left") return isMatchplayScoreEntered(match.leftScoreValue) ? match.leftScore : "";
+    return match.right ? (isMatchplayScoreEntered(match.rightScoreValue) ? match.rightScore : "") : "BYE";
   };
   const matchLaneLabel = (match) => cleanText(match?.lanePair ? `Lanes ${match.lanePair}` : "", 14);
   const roundLabel = (match) => match?.tied && match?.winner ? "Rolloff" : "";
@@ -15420,7 +15442,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
   const allOpeningPodsComplete = pods.length > 0 && pods.every((pod) => pod.matches.every((match) => Boolean(match.winner)));
   const winnerBracket = allOpeningPodsComplete ? buildMatchplayWinnerRounds(openingWinners, matchplayState) : { rounds: [], champion: null };
   const updateOpeningScore = (scoreKey, value, player, gameIndex) => {
-    const score = clampBowlingScoreInput(value, 1, 300);
+    const score = clampBowlingScoreInput(value, 0, 300);
     setMatchplayState((current) => ({
       ...DEFAULT_MATCHPLAY_STATE,
       ...(current || {}),
@@ -15459,8 +15481,8 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
   };
   const updateOpeningPairingMode = (mode) => {
     if (!mode || mode === (matchplayState.openingPairingMode || DEFAULT_MATCHPLAY_STATE.openingPairingMode)) return;
-    const hasScores = Object.values(matchplayState.openingScores || {}).some((score) => Number(score || 0) > 0) ||
-      Object.values(matchplayState.roundScores || {}).some((score) => Number(score || 0) > 0);
+    const hasScores = Object.values(matchplayState.openingScores || {}).some(isMatchplayScoreEntered) ||
+      Object.values(matchplayState.roundScores || {}).some(isMatchplayScoreEntered);
     if (hasScores && !window.confirm("Changing the opening match pairing will clear matchplay scores and saved rounds. Continue?")) return;
     setMatchplayState((current) => ({
       ...DEFAULT_MATCHPLAY_STATE,
@@ -15480,7 +15502,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
   const isOpeningPodGameComplete = (pod, gameIndex) =>
     pod.matches.every((match) => {
       if (!match.left || !match.right) return true;
-      return Number(match.leftGames?.[gameIndex] || 0) > 0 && Number(match.rightGames?.[gameIndex] || 0) > 0;
+      return isMatchplayScoreEntered(match.leftGameValues?.[gameIndex]) && isMatchplayScoreEntered(match.rightGameValues?.[gameIndex]);
     });
   const saveOpeningPodGame = (pair, gameIndex) => {
     setMatchplayState((current) => ({
@@ -15532,7 +15554,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
       ...(current || {}),
       roundScores: {
         ...(current?.roundScores || {}),
-        [scoreKey]: clampBowlingScoreInput(value, 1, 300),
+        [scoreKey]: clampBowlingScoreInput(value, 0, 300),
       },
     }));
   };
@@ -15620,14 +15642,14 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
           <Input
             key={scoreKey}
             type="number"
-            min={1}
+            min={0}
             max={300}
             inputMode="numeric"
             disabled={gameLocked}
             className={`h-8 w-14 text-center text-xs font-bold ${gameLocked ? "bg-slate-100 text-slate-700" : ""}`}
             data-matchplay-opening-score="true"
             data-matchplay-tab-order={tabOrder}
-            value={matchplayState.openingScores?.[scoreKey] ?? player?.games?.[gameIndex] ?? ""}
+            value={matchplayStoredScore(matchplayState.openingScores || {}, scoreKey, player?.games?.[gameIndex])}
             onChange={(event) => updateOpeningScore(scoreKey, event.target.value, player, gameIndex)}
             onKeyDown={handleOpeningScoreTab}
           />
@@ -15807,7 +15829,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                           <td className={`p-3 font-black text-blue-950 ${leftWon || rightWon ? "bg-green-50" : ""}`} rowSpan={2}>{matchLabel}</td>
                           <td className={`p-3 font-semibold text-blue-950 ${leftWon ? winnerCellClass : ""}`}>{playerLabel(match.left)}</td>
                           <td className={`p-2 text-center ${leftWon ? winnerCellClass : ""}`}>{match.left ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "left", match.leftGames, match.left, podSaved, savedPodGames) : " - -"}</td>
-                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{match.leftTotal || " - -"}</td>
+                          <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>{match.leftGameValues?.some(isMatchplayScoreEntered) ? match.leftTotal : " - -"}</td>
                           <td className={`p-3 text-right font-black ${leftWon ? winnerCellClass : ""}`}>
                             {leftWon ? "ADVANCE" : tiedNeedsWinner ? openingRolloffButton("left") : match.complete ? "OUT" : "ACTIVE"}
                           </td>
@@ -15815,7 +15837,7 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                         <tr className={rightWon ? "border-t bg-green-100" : "border-t"}>
                           <td className={`p-3 font-semibold text-blue-950 ${rightWon ? winnerCellClass : ""}`}>{playerLabel(match.right)}</td>
                           <td className={`p-2 text-center ${rightWon ? winnerCellClass : ""}`}>{match.right ? renderScoreBoxes(pod.pair, podIndex, match.matchIndex, "right", match.rightGames, match.right, podSaved, savedPodGames) : "BYE"}</td>
-                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{match.rightTotal || " - -"}</td>
+                          <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>{match.rightGameValues?.some(isMatchplayScoreEntered) ? match.rightTotal : " - -"}</td>
                           <td className={`p-3 text-right font-black ${rightWon ? winnerCellClass : ""}`}>
                             {rightWon ? "ADVANCE" : tiedNeedsWinner && match.right ? openingRolloffButton("right") : match.complete ? "OUT" : match.winner && !match.right ? "BYE" : "ACTIVE"}
                           </td>
@@ -15912,12 +15934,12 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                                   {match.left ? (
                                     <Input
                                       type="number"
-                                      min={1}
+                                      min={0}
                                       max={300}
                                       inputMode="numeric"
                                       disabled={roundSaved}
                                       className={`h-8 w-16 text-center text-xs font-bold ${roundSaved ? "bg-slate-100 text-slate-700" : ""}`}
-                                      value={matchplayState.roundScores?.[match.leftKey] ?? ""}
+                                      value={match.leftScoreValue}
                                       onChange={(event) => updateRoundScore(match.leftKey, event.target.value)}
                                     />
                                   ) : " - -"}
@@ -15932,12 +15954,12 @@ function MatchplayTab({ bowlers, setBowlers, matchplayState, setMatchplayState, 
                                   {match.right ? (
                                     <Input
                                       type="number"
-                                      min={1}
+                                      min={0}
                                       max={300}
                                       inputMode="numeric"
                                       disabled={roundSaved}
                                       className={`h-8 w-16 text-center text-xs font-bold ${roundSaved ? "bg-slate-100 text-slate-700" : ""}`}
-                                      value={matchplayState.roundScores?.[match.rightKey] ?? ""}
+                                      value={match.rightScoreValue}
                                       onChange={(event) => updateRoundScore(match.rightKey, event.target.value)}
                                     />
                                   ) : "BYE"}
@@ -16687,11 +16709,11 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
 
       winnerBracket.rounds.forEach((round) => {
         round.matches.forEach((match) => {
-          if (String(match.left?.seed || "") === String(entry.seed) && Number(match.leftScore || 0) > 0) {
+          if (String(match.left?.seed || "") === String(entry.seed) && isMatchplayScoreEntered(match.leftScoreValue)) {
             scores.push(Number(match.leftScore));
           }
 
-          if (String(match.right?.seed || "") === String(entry.seed) && Number(match.rightScore || 0) > 0) {
+          if (String(match.right?.seed || "") === String(entry.seed) && isMatchplayScoreEntered(match.rightScoreValue)) {
             scores.push(Number(match.rightScore));
           }
         });
