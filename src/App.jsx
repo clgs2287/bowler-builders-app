@@ -16598,7 +16598,36 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     for (let i = 0; i < row.players; i += 1) payoutAssignments.push(row.finalPerPlayer);
   });
 
-  const archiveTournament = () => {
+  const saveArchivedTournamentToSupabase = async (archiveItem, message = "Archive changes saved.") => {
+    if (!archiveItem || !supabase) return true;
+    const accessToken = supabaseSession?.access_token;
+    if (!accessToken) {
+      setSupabaseSaveStatus("Sign in again before saving archive changes.");
+      window.alert("Sign in again before saving archive changes.");
+      return false;
+    }
+    try {
+      setSupabaseSaveStatus("Saving archived tournament...");
+      await withTimeout(
+        supabaseRestRequest("archived_tournaments", "?on_conflict=id", {
+          method: "POST",
+          body: [archivedTournamentRecordFromItem(archiveItem)],
+          accessToken,
+          prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+        "Saving archived tournament",
+        20000
+      );
+      setSupabaseSaveStatus(message);
+      return true;
+    } catch (error) {
+      setSupabaseSaveStatus(`Archive save issue: ${error?.message || error}`);
+      window.alert(`Could not save archived tournament: ${error?.message || error}`);
+      return false;
+    }
+  };
+
+  const archiveTournament = async () => {
     const archiveName = tournamentInfo.name || "Tournament";
     const archiveDetails = [tournamentInfo.date, tournamentInfo.center || tournamentInfo.location].filter(Boolean).join(" - ");
     const existingArchive = tournamentHistory.some((tournament) =>
@@ -16853,6 +16882,8 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
     };
 
     setTournamentHistory((current) => [archived, ...current]);
+    const archiveSaved = await saveArchivedTournamentToSupabase(archived, `Archived "${archived.name}" saved.`);
+    if (!archiveSaved) return;
     window.alert(`Archived "${archived.name}". The active tournament workspace is still open until you use Reset Active Tournament.`);
   };
 
@@ -16959,7 +16990,10 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
                 <h2 className="text-xl font-semibold text-blue-900">{selectedArchivedTournament.name}</h2>
                 <p className="text-sm text-blue-700">{selectedArchivedTournament.date} - {selectedArchivedTournament.center || selectedArchivedTournament.location || "No center"} - Season {selectedArchivedTournament.season || "Unassigned"}</p>
               </div>
-              <Button variant="outline" className="rounded-2xl" onClick={() => setSelectedArchivedTournamentId(null)}>Close Tournament</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" className="rounded-2xl" onClick={() => saveArchivedTournamentToSupabase(selectedArchivedTournament)}>Save Archive Changes</Button>
+                <Button variant="outline" className="rounded-2xl" onClick={() => setSelectedArchivedTournamentId(null)}>Close Tournament</Button>
+              </div>
             </div>
             <div className="mb-4 flex flex-wrap gap-2">
               {[
@@ -19998,7 +20032,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     const titleRecords = (manualTitles || []).map(manualTitleRecordFromItem);
     const identityRecords = (bowlerIdentities || []).map(bowlerIdentityRecordFromItem);
     const reservationRecords = allReservationItemsFromState(reservationState).map(reservationRecordFromItem);
-    const archiveRecords = (tournamentHistory || []).map(archivedTournamentRecordFromItem);
     let activeSnapshotForSave = activeTournamentSnapshotRef.current || {};
     if (isMatchplayTournament(activeSnapshotForSave.tournamentFormat, activeSnapshotForSave.tournamentInfo || {})) {
       try {
@@ -20144,11 +20177,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     await syncTable("manual_titles", titleRecords);
     await syncTable("bowler_identities", identityRecords);
     await syncTable("reservations", reservationRecords, { removeStale: false });
-    await syncTable("archived_tournaments", archiveRecords, { removeStale: false });
     await syncTable("active_tournament_snapshots", [activeSnapshotRecord]);
     await syncTable("tournament_drafts", draftRecords);
 
-    setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${archiveRecords.length} archives, ${draftRecords.length} drafts, active snapshot`);
+    setSupabaseSaveStatus(`Saved ${scheduleRecords.length} schedule, ${titleRecords.length} title/HOF, ${identityRecords.length} name rows, ${reservationRecords.length} reservations, ${draftRecords.length} drafts, active snapshot`);
   };
 
   const syncSupabaseLiveSnapshotOnce = async () => {
@@ -20483,7 +20515,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       manualTitles,
       bowlerIdentities,
       reservationState,
-      tournamentHistory,
       savedTournamentDrafts,
       qualifyingGames,
       useHandicapScores,
@@ -20511,7 +20542,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     manualTitles,
     bowlerIdentities,
     reservationState,
-    tournamentHistory,
     savedTournamentDrafts,
     qualifyingGames,
     savedScoreGames,
