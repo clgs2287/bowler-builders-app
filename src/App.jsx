@@ -1879,6 +1879,12 @@ function getCanonicalBowlerName(name = "", bowlerIdentities = []) {
   return String(identity?.nickname || name || "").trim();
 }
 
+function getCanonicalBowlerGroupKey(name = "", bowlerIdentities = []) {
+  const cleanName = String(name || "").trim();
+  const identity = findBowlerIdentityForName(bowlerIdentities, cleanName);
+  return getIdentityKey(identity?.realName || identity?.real_name || identity?.nickname || cleanName);
+}
+
 function getBowlerNameLookupList(name = "", bowlerIdentities = []) {
   const cleanName = String(name || "").trim();
   const identity = findBowlerIdentityForName(bowlerIdentities, cleanName);
@@ -12658,11 +12664,12 @@ const filteredPublicTitles = publicAllTitles.filter((title) => {
 });
 
 const publicTitleCounts = filteredPublicTitles.reduce((map, title) => {
-  const key = String(title.bowler || "").trim().toLowerCase();
+  const key = getCanonicalBowlerGroupKey(title.bowler, bowlerIdentities);
+  const displayBowler = getCanonicalBowlerName(title.bowler, bowlerIdentities) || title.bowler;
 
   const current =
     map[key] || {
-      bowler: title.bowler,
+      bowler: displayBowler,
       titles: 0,
       majors: 0,
       fkmTitles: 0,
@@ -17339,10 +17346,11 @@ const allTitles = [
   const manualTitleIds = new Set((manualTitles || []).map((title) => String(title.id)));
 
   const titleCounts = allTitles.reduce((map, title) => {
-    const key = title.bowler.trim().toLowerCase();
+    const key = getCanonicalBowlerGroupKey(title.bowler, bowlerIdentities);
+    const displayBowler = getCanonicalBowlerName(title.bowler, bowlerIdentities) || title.bowler;
 const current =
   map[key] || {
-    bowler: title.bowler,
+    bowler: displayBowler,
     titles: 0,
     fkmTitles: 0,
     nonFkmTitles: 0,
