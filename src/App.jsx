@@ -10097,7 +10097,7 @@ const registrationStatus =
     </Card>
   );
 }
-function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifyingGames }) {
+function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifyingGames, tournamentFormat }) {
   const gamesCount = Math.max(1, Number(qualifyingGames || 4));
   const tournamentStyle = tournamentInfo?.tournamentStyle || "singles";
   const teamSize = getTournamentTeamSize(tournamentStyle);
@@ -10108,6 +10108,7 @@ function ScoresheetsTab({ tournamentInfo, bowlers, useHandicapScores, qualifying
     return match ? Number(match[0]) : 0;
   };
   const [printMode, setPrintMode] = useState("scoresheets");
+  const showDirectEliminatorSheet = isDirectEliminatorFinalsFormat(tournamentFormat);
   const lanePairs = bowlers.filter((b) => b.name?.trim()).reduce((groups, b) => {
     const normalizedLane = normalizeLane(b.lane);
     const laneNumber = getLaneNumberFromInput(normalizedLane);
@@ -10235,6 +10236,131 @@ const printableSheets =
   const printableLaneEliminatorPairs = laneEliminatorPairs.length
     ? laneEliminatorPairs
     : Array.from({ length: 8 }, (_, index) => `Pair ${index + 1}`);
+  const availableLaneNumbers = parseLaneNumbers(tournamentInfo?.lanesUsed || "");
+  const eliminatorSheetLanes = availableLaneNumbers.length
+    ? availableLaneNumbers.slice(0, 8)
+    : Array.from({ length: 8 }, (_, index) => index + 1);
+  const directEliminatorPairs = Array.from(
+    { length: Math.ceil(eliminatorSheetLanes.length / 2) },
+    (_, index) => eliminatorSheetLanes.slice(index * 2, index * 2 + 2)
+  ).filter((pair) => pair.length > 0);
+  const downloadDirectEliminatorSheetsPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+    const pageWidth = 8.5;
+    const pageHeight = 11;
+    const marginX = 0.35;
+    const marginY = 0.35;
+    const slipGap = 0.16;
+    const slipWidth = pageWidth - marginX * 2;
+    const slipHeight = (pageHeight - marginY * 2 - slipGap) / 2;
+    const title = tournamentInfo.name || "Tournament";
+    let qrDataUrl = "";
+
+    try {
+      qrDataUrl = await loadImageDataUrl(finalsQrUrl);
+    } catch (error) {
+      console.warn("Could not add eliminator finals QR to PDF", error);
+    }
+
+    const drawLine = (x1, y1, x2, y2) => {
+      doc.setLineWidth(0.008);
+      doc.line(x1, y1, x2, y2);
+    };
+
+    const drawText = (text, x, y, options = {}) => {
+      doc.text(String(text || ""), x, y, options);
+    };
+
+    const drawTable = (x, y, lane) => {
+      const widths = [0.4, 1.65, 0.52, 0.58, 0.59];
+      const headers = ["Seed", "Bowler", "Avg", "Score", "Total"];
+      const rowHeight = 0.48;
+      const headerHeight = 0.24;
+      const tableWidth = widths.reduce((sum, width) => sum + width, 0);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      drawText(`Lane ${lane}`, x, y);
+
+      const top = y + 0.12;
+      doc.setFontSize(8);
+      let cursor = x;
+      headers.forEach((header, index) => {
+        doc.rect(cursor, top, widths[index], headerHeight);
+        drawText(header, cursor + widths[index] / 2, top + 0.16, { align: "center" });
+        cursor += widths[index];
+      });
+
+      [0, 1].forEach((_, rowIndex) => {
+        cursor = x;
+        const rowTop = top + headerHeight + rowIndex * rowHeight;
+        widths.forEach((width) => {
+          doc.rect(cursor, rowTop, width, rowHeight);
+          cursor += width;
+        });
+      });
+
+      return tableWidth;
+    };
+
+    const drawSlip = (pair, x, y) => {
+      const right = x + slipWidth;
+      const qrSize = 0.55;
+
+      doc.setDrawColor(0, 0, 0);
+      doc.setTextColor(0, 0, 0);
+      doc.setLineWidth(0.01);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(title.length > 42 ? 10 : 12);
+      const titleLines = doc.splitTextToSize(title, slipWidth - qrSize - 0.5);
+      drawText(titleLines.slice(0, 2), x, y + 0.12);
+
+      doc.setFontSize(8);
+      drawText(`${tournamentInfo.center || ""}${tournamentInfo.date ? ` - ${tournamentInfo.date}` : ""}`, x, y + 0.48);
+
+      doc.setFontSize(13);
+      drawText(`Lane Pair ${pair.join("-")}`, x + slipWidth / 2, y + 0.34, { align: "center" });
+
+      doc.setFontSize(18);
+      drawText("1 Game Eliminator", x, y + 0.85);
+
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, "PNG", right - qrSize, y + 0.05, qrSize, qrSize);
+        doc.setFontSize(6.5);
+        drawText("Public Finals", right - qrSize / 2, y + 0.69, { align: "center" });
+      }
+
+      drawLine(x, y + 1.02, right, y + 1.02);
+
+      doc.setFontSize(8.2);
+      drawText("Top 4 overall advance to stepladder", x, y + 1.25);
+      drawText("Carry-in: Qualifying average + score", right, y + 1.25, { align: "right" });
+
+      const tableY = y + 1.58;
+      const laneGap = 0.22;
+      const tableWidth = 3.74;
+      drawTable(x, tableY, pair[0] || "");
+      if (pair[1]) drawTable(x + tableWidth + laneGap, tableY, pair[1]);
+    };
+
+    directEliminatorPairs.forEach((pair, index) => {
+      if (index > 0 && index % 2 === 0) doc.addPage();
+      const row = index % 2;
+      const y = marginY + row * (slipHeight + slipGap);
+      drawSlip(pair, marginX, y);
+      if (row === 0) {
+        doc.setDrawColor(160, 160, 160);
+        doc.setLineDashPattern([0.05, 0.05], 0);
+        drawLine(marginX, marginY + slipHeight + slipGap / 2, pageWidth - marginX, marginY + slipHeight + slipGap / 2);
+        doc.setLineDashPattern([], 0);
+      }
+    });
+
+    const safeName = safeStorageFileName(`${title}-eliminator-sheets`).replace(/\.jpg$/, ".pdf");
+    doc.save(safeName);
+  };
   const getLaneLetter = (lane, indexOnLane) => {
     const n = Number(lane || 0);
     if (!n) return "";
@@ -10518,16 +10644,14 @@ Lane {lanePairForGame(
   Download Finals Slips PDF
 </Button>
 
-<Button
-  variant="outline"
-  className="rounded-2xl"
-  onClick={() => {
-    setPrintMode("finals");
-    setTimeout(() => window.print(), 100);
-  }}
->
-  Print Finals Slips
-</Button>
+{showDirectEliminatorSheet && (
+  <Button
+    className="rounded-2xl bg-blue-700 hover:bg-blue-800"
+    onClick={downloadDirectEliminatorSheetsPdf}
+  >
+    Download Eliminator Sheets PDF
+  </Button>
+)}
 
 <Button
   className="rounded-2xl bg-slate-800 hover:bg-slate-900"
@@ -21844,7 +21968,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 )}
         {activeTab === "registration" && <RegistrationTab entries={bowlers.length} bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} setUseHandicapScores={setUseHandicapScores} sidePotState={sidePotState} setSidePotState={setSidePotState} tournamentHistory={tournamentHistory} tournamentInfo={tournamentInfo} bowlerIdentities={bowlerIdentities} setReservationState={setReservationState} />}
         {activeTab === "results" && <BowlersTable bowlers={bowlers} setBowlers={setBowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} setSavedScoreGames={setSavedScoreGames} tournamentInfo={tournamentInfo} eliminatorTournamentState={eliminatorTournamentState} setEliminatorTournamentState={setEliminatorTournamentState} qualifyingAdjustments={qualifyingAdjustments} setQualifyingAdjustments={setQualifyingAdjustments}   />}
-        {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} />}
+        {activeTab === "scoresheets" && <ScoresheetsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} qualifyingGames={qualifyingGames} tournamentFormat={tournamentFormat} />}
         {activeTab === "finance" && <FinanceTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} financials={financials} />}
         {activeTab === "payouts" && <PayoutsTab entries={entries} lineageEntries={bowlers.length} payoutState={payoutState} setPayoutState={setPayoutState} financials={financials} payoutRows={payoutRows} tournamentFormat={tournamentFormat} tournamentStyle={tournamentStyle} matchplayLineageGames={matchplayLineageGames} />}
         {activeTab === "summary" && <SummaryCashSheetTab entries={entries} bowlers={bowlers} payoutRows={payoutRows} financials={financials} useHandicapScores={useHandicapScores} tournamentInfo={tournamentInfo} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} paidPayouts={paidPayouts}setPaidPayouts={setPaidPayouts}/>}
