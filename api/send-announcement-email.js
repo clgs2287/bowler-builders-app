@@ -43,7 +43,7 @@ const normalizeRecipients = (recipients = []) => {
   return Array.from(byEmail.values());
 };
 
-const verifyOwner = async (request) => {
+const verifyAdmin = async (request) => {
   const authHeader = request.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!token) return { ok: false, status: 401, error: "Admin login is required." };
@@ -81,15 +81,8 @@ const verifyOwner = async (request) => {
     });
     const profiles = await profileResponse.json().catch(() => []);
     profile = Array.isArray(profiles) ? profiles[0] : null;
-    if (!profileResponse.ok || !profile) return { ok: false, status: 403, error: "Owner access is required." };
+    if (!profileResponse.ok || !profile) return { ok: false, status: 403, error: "Approved admin access is required." };
   }
-
-  const ownerEmails = String(process.env.OWNER_ADMIN_EMAILS || "cory.lagner@gmail.com")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-  const isOwner = String(profile.role || "").toLowerCase() === "owner" || ownerEmails.includes(String(profile.email || user.email || "").toLowerCase());
-  if (!isOwner) return { ok: false, status: 403, error: "Owner access is required." };
 
   return { ok: true, profile, user, token };
 };
@@ -191,8 +184,8 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: "Method not allowed" });
   }
 
-  const owner = await verifyOwner(request);
-  if (!owner.ok) return response.status(owner.status).json({ error: owner.error });
+  const admin = await verifyAdmin(request);
+  if (!admin.ok) return response.status(admin.status).json({ error: admin.error });
 
   try {
     const body = request.body || {};
@@ -209,7 +202,7 @@ export default async function handler(request, response) {
     if (!subject) return response.status(400).json({ error: "Subject is required." });
     if (!message) return response.status(400).json({ error: "Message is required." });
     if (!recipients.length) return response.status(400).json({ error: "No valid recipients were provided." });
-    const unsubscribedEmails = await loadUnsubscribedEmails(owner.token);
+    const unsubscribedEmails = await loadUnsubscribedEmails(admin.token);
     const sendableRecipients = isTest
       ? recipients
       : recipients.filter((recipient) => !unsubscribedEmails.has(recipient.email));
