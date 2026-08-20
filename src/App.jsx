@@ -12741,7 +12741,9 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       season: tournament.season || "Unassigned",
     })))
     .reduce((map, result) => {
-      const key = result.bowlerId || String(result.name || "").trim().toLowerCase();
+      const resultName = String(result.name || result.bowlerId || "").trim();
+      const key = getCanonicalBowlerGroupKey(resultName, bowlerIdentities);
+      const displayName = getCanonicalBowlerName(resultName, bowlerIdentities) || resultName;
       const allGames = result.overallGames?.length ? result.overallGames : result.games || [];
       const qualifyingGames = result.qualifyingGames?.length ? result.qualifyingGames : result.games || [];
       const finalsGames = result.finalsGames || [];
@@ -12749,7 +12751,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       const numericQualifyingGames = qualifyingGames.map((g) => Number(g || 0)).filter((g) => g > 0);
       const numericFinalsGames = finalsGames.map((g) => Number(g || 0)).filter((g) => g > 0);
       const current = map[key] || {
-        name: result.name,
+        name: displayName,
         tournaments: 0,
         games: 0,
         qualifyingGames: 0,
@@ -16137,7 +16139,7 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
   );
 }
 
-function StatsHistoryTab({ tournamentHistory }) {
+function StatsHistoryTab({ tournamentHistory, bowlerIdentities = [] }) {
   const [search, setSearch] = useState("");
   const [seasonFilter, setSeasonFilter] = useState("All");
   const [statsMode, setStatsMode] = useState("scratch");
@@ -16159,7 +16161,9 @@ const filteredHistory =
   const playerStats = filteredHistory
     .flatMap((tournament) => (tournament.results || []).map((result) => ({ ...result, tournamentName: tournament.name, tournamentDate: tournament.date, season: tournament.season || "Unassigned" })))
     .reduce((map, result) => {
-      const key = result.bowlerId || result.name.trim().toLowerCase();
+      const resultName = String(result.name || result.bowlerId || "").trim();
+      const key = getCanonicalBowlerGroupKey(resultName, bowlerIdentities);
+      const displayName = getCanonicalBowlerName(resultName, bowlerIdentities) || resultName;
 const allGames =
   result.overallGames?.length
     ? result.overallGames
@@ -16186,7 +16190,7 @@ const numericFinalsGames = finalsGames
   .filter((g) => g > 0);
 
 const current = map[key] || {
-  name: result.name,
+  name: displayName,
   tournaments: 0,
 
   games: 0,
@@ -21628,7 +21632,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     tournamentInfo={tournamentInfo}
   />
 )}
-        {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} /></AppErrorBoundary>}
+        {activeTab === "stats" && <AppErrorBoundary key="stats"><StatsHistoryTab tournamentHistory={tournamentHistory} bowlerIdentities={bowlerIdentities} /></AppErrorBoundary>}
         {activeTab === "archives" && <AppErrorBoundary key="archives"><ArchivedTournamentsTab tournamentInfo={tournamentInfo} bowlers={bowlers} useHandicapScores={useHandicapScores} payoutRows={payoutRows} financials={financials} tournamentFormat={tournamentFormat} tournamentHistory={tournamentHistory} setTournamentHistory={setTournamentHistory} restoreTournament={restoreTournament} qualifyingGames={qualifyingGames} savedScoreGames={savedScoreGames} savedFinalsRounds={savedFinalsRounds} qualifyingAdjustments={qualifyingAdjustments} payoutState={payoutState} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} sidePotState={sidePotState} tournamentRecap={tournamentRecap} isOwnerAdmin={isOwnerAdmin} supabaseSession={supabaseSession} setSupabaseSaveStatus={setSupabaseSaveStatus} /></AppErrorBoundary>}
         {activeTab === "titles" && <AppErrorBoundary key="titles"><TitlesTab tournamentHistory={tournamentHistory} manualTitles={manualTitles} setManualTitles={setManualTitles} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isOwnerAdmin={isOwnerAdmin} /></AppErrorBoundary>}
 {activeTab === "tournamentInfo" && (
