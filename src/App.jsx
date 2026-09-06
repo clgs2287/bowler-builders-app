@@ -7464,16 +7464,38 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     });
   const exportRows = [["Rank", "Name", ...(useHandicapScores ? ["Average", "Qualifying Handicap"] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => `G${gi + 1}`), "Scratch", ...(useHandicapScores ? ["Handicap", "Total"] : [])], ...sorted.map((b) => [b.rank, b.name, ...(useHandicapScores ? [bowlerAverageDisplay(b), qualifyingHandicapTotal(b, qualifyingGames)] : []), ...Array.from({ length: qualifyingGames }, (_, gi) => Number(b.games?.[gi] || 0)), b.scratch, ...(useHandicapScores ? [qualifyingHandicapTotal(b, qualifyingGames), b.handicap] : [])])];
   const activeGameIsSaved = activeScoreGameIndex !== null && Boolean(savedScoreGames[activeScoreGameIndex]);
-  const printableScoreEntryGroups = scoreEntryRows.reduce((groups, row) => {
+  const filledPrintableScoreEntryGroups = scoreEntryRows.reduce((groups, row) => {
     const lane = lanePositionParts(row.bowler.lane).lane || "Unassigned";
     groups[lane] = [...(groups[lane] || []), row];
     return groups;
   }, {});
-  const printableScoreEntryLaneKeys = Object.keys(printableScoreEntryGroups).sort((a, b) => {
+  const printableScoreEntryLaneKeys = Array.from(new Set([
+    ...parseLaneNumbers(tournamentInfo?.lanesUsed || "").map(String),
+    ...Object.keys(filledPrintableScoreEntryGroups),
+  ])).sort((a, b) => {
     if (a === "Unassigned") return 1;
     if (b === "Unassigned") return -1;
     return Number(a || 9999) - Number(b || 9999);
   });
+  const printableScoreEntryGroups = printableScoreEntryLaneKeys.reduce((groups, laneKey) => {
+    if (laneKey === "Unassigned") {
+      groups[laneKey] = filledPrintableScoreEntryGroups[laneKey] || [];
+      return groups;
+    }
+
+    const laneNumber = Number(laneKey);
+    const assignedRows = filledPrintableScoreEntryGroups[laneKey] || [];
+    const rowsByLetter = assignedRows.reduce((lookup, row) => {
+      const letter = lanePositionParts(row.bowler.lane).letter;
+      if (letter) lookup[letter] = row;
+      return lookup;
+    }, {});
+
+    groups[laneKey] = getLaneLettersForStyle(laneNumber, tournamentInfo?.tournamentStyle || "singles").map((letter) =>
+      rowsByLetter[letter] || { bowler: null, index: null, lanePosition: `${laneKey}${letter}` }
+    );
+    return groups;
+  }, {});
 
 const saveCurrentGame = () => {
   if (activeScoreGameIndex === null) return;
@@ -7740,25 +7762,25 @@ const removeQualifyingAdjustment = (bowlerId) => {
     </thead>
 
     <tbody>
-      {printableScoreEntryGroups[laneKey].map(({ bowler: b, index }, displayIndex) => (
-        <tr key={`print-score-row-${b.seed}-${index}`}>
-          <td className="w-28 border border-black p-1 font-bold">{b.name || ""}</td>
-          <td className="border border-black p-1 text-center">{b.lane || ""}</td>
+      {printableScoreEntryGroups[laneKey].map(({ bowler: b, index, lanePosition }, displayIndex) => (
+        <tr key={`print-score-row-${laneKey}-${lanePosition || b?.lane || b?.seed || displayIndex}`}>
+          <td className="w-28 border border-black p-1 font-bold">{b?.name || ""}</td>
+          <td className="border border-black p-1 text-center">{b?.lane || lanePosition || ""}</td>
           {useHandicapScores && (
             <td className="w-10 border border-black p-0.5 text-center font-bold">
-              {bowlerAverageDisplay(b)}
+              {b ? bowlerAverageDisplay(b) : ""}
             </td>
           )}
           {useHandicapScores && (
             <td className="w-9 border border-black p-0.5 text-center font-bold">
-              {handicapPerGame(b)}
+              {b ? handicapPerGame(b) : ""}
             </td>
           )}
           {Array.from({ length: qualifyingGames }, (_, gi) => (
-            <td key={`print-score-cell-${b.seed}-${gi}`} className="h-8 border border-black p-0.5" />
+            <td key={`print-score-cell-${laneKey}-${lanePosition || b?.lane || b?.seed || displayIndex}-${gi}`} className="h-8 border border-black p-0.5" />
           ))}
           <td className="border border-black p-1" />
-          {useHandicapScores && <td className="w-10 border border-black p-0.5 text-center font-bold">{qualifyingHandicapTotal(b, qualifyingGames)}</td>}
+          {useHandicapScores && <td className="w-10 border border-black p-0.5 text-center font-bold">{b ? qualifyingHandicapTotal(b, qualifyingGames) : ""}</td>}
           {useHandicapScores && <td className="w-11 border border-black p-0.5" />}
         </tr>
       ))}
