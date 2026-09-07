@@ -973,16 +973,19 @@ const numberInputStyles = String.raw`
 
   .bb-public-stats-table th:nth-child(1),
   .bb-public-stats-table td:nth-child(1) {
-    width: 36%;
+    width: 34%;
   }
 
   .bb-public-stats-table th:nth-child(2),
-  .bb-public-stats-table td:nth-child(2),
+  .bb-public-stats-table td:nth-child(2) {
+    width: 11%;
+  }
+
   .bb-public-stats-table th:nth-child(3),
   .bb-public-stats-table td:nth-child(3),
   .bb-public-stats-table th:nth-child(7),
   .bb-public-stats-table td:nth-child(7) {
-    width: 9%;
+    width: 10%;
   }
 
   .bb-public-stats-table th:nth-child(4),
@@ -991,7 +994,7 @@ const numberInputStyles = String.raw`
   .bb-public-stats-table td:nth-child(5),
   .bb-public-stats-table th:nth-child(6),
   .bb-public-stats-table td:nth-child(6) {
-    width: 12.33%;
+    width: 12%;
   }
 
   .bb-public-qual-col {
