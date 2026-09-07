@@ -2691,6 +2691,101 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState,
   return { manualQualifiers, scores, suggested, qualifiers, size, seeded, bracketRounds, champion: previousWinners?.[0] || null };
 }
 
+function filterScoreMapBySavedRound(scoreMap = {}, isSavedRoundKey = () => false) {
+  if (!scoreMap || typeof scoreMap !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(scoreMap).filter(([key]) => isSavedRoundKey(key))
+  );
+}
+
+function bracketRoundIndexFromScoreKey(scoreKey = "", totalRounds = 0) {
+  const key = String(scoreKey || "");
+  const roundMatch = key.match(/^r(\d+)-/);
+  if (roundMatch) return Number(roundMatch[1]) - 1;
+  if (key.startsWith("semi-")) return Math.max(0, totalRounds - 2);
+  if (key.startsWith("championship")) return Math.max(0, totalRounds - 1);
+  return -1;
+}
+
+function maskBracketStateForPublishedSnapshot({
+  bracketState = {},
+  savedFinalsRounds = {},
+  bowlers = [],
+  useHandicapScores = false,
+  tournamentInfo = {},
+} = {}) {
+  const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
+  const entries = getTournamentEntryCount(bowlers || [], tournamentStyle);
+  const manualQualifiers = bracketState.manualQualifiers || "";
+  const qualifiers = Number(manualQualifiers || Math.ceil(entries / 4));
+  const size = getBracketSize(qualifiers);
+  const totalRounds = typeof size === "number" ? Math.log2(size) : 0;
+  const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
+  const isSavedRoundKey = (key) => {
+    const roundIndex = bracketRoundIndexFromScoreKey(key, totalRounds);
+    return roundIndex >= 0 && Boolean(savedFinalsRounds?.[`bracketRound${roundIndex}`]);
+  };
+  const isSavedRolloffWinnerKey = (key) => {
+    if (matchScoring === "bestOf3") return isSavedRoundKey(`${key}-g1-l`);
+    return isSavedRoundKey(`${key}-l`);
+  };
+
+  return {
+    ...bracketState,
+    scores: filterScoreMapBySavedRound(bracketState.scores, isSavedRoundKey),
+    scratchScores: filterScoreMapBySavedRound(bracketState.scratchScores, isSavedRoundKey),
+    memberScores: filterScoreMapBySavedRound(bracketState.memberScores, isSavedRoundKey),
+    rolloffScores: filterScoreMapBySavedRound(bracketState.rolloffScores, isSavedRoundKey),
+    rolloffWinners: filterScoreMapBySavedRound(bracketState.rolloffWinners, isSavedRolloffWinnerKey),
+  };
+}
+
+function maskEliminatorStateForPublishedSnapshot(eliminatorState = {}, savedFinalsRounds = {}) {
+  return {
+    ...eliminatorState,
+    game1Scores: savedFinalsRounds?.eliminatorGame1 ? eliminatorState.game1Scores || {} : {},
+    game1MemberScores: savedFinalsRounds?.eliminatorGame1 ? eliminatorState.game1MemberScores || {} : {},
+    game2Scores: savedFinalsRounds?.eliminatorGame2 ? eliminatorState.game2Scores || {} : {},
+    game2MemberScores: savedFinalsRounds?.eliminatorGame2 ? eliminatorState.game2MemberScores || {} : {},
+    stepScores: savedFinalsRounds?.stepladderFinal ? eliminatorState.stepScores || {} : {},
+    stepMemberScores: savedFinalsRounds?.stepladderFinal ? eliminatorState.stepMemberScores || {} : {},
+  };
+}
+
+function maskQualifyingScoresForPublishedSnapshot(bowlers = [], savedScoreGames = {}, qualifyingGames = 4) {
+  const gameCount = Math.max(1, Number(qualifyingGames || 4));
+  return (bowlers || []).map((bowler) => ({
+    ...bowler,
+    games: Array.from({ length: gameCount }, (_, gameIndex) =>
+      savedScoreGames?.[gameIndex] ? Number(bowler.games?.[gameIndex] || 0) : 0
+    ),
+  }));
+}
+
+function buildPublishedTournamentSnapshot(snapshot = {}) {
+  const publishedBowlers = maskQualifyingScoresForPublishedSnapshot(
+    snapshot.bowlers || [],
+    snapshot.savedScoreGames || {},
+    snapshot.qualifyingGames || 4
+  );
+
+  return {
+    ...snapshot,
+    bowlers: publishedBowlers,
+    bracketState: maskBracketStateForPublishedSnapshot({
+      bracketState: snapshot.bracketState || {},
+      savedFinalsRounds: snapshot.savedFinalsRounds || {},
+      bowlers: publishedBowlers,
+      useHandicapScores: Boolean(snapshot.useHandicapScores),
+      tournamentInfo: snapshot.tournamentInfo || {},
+    }),
+    eliminatorState: maskEliminatorStateForPublishedSnapshot(
+      snapshot.eliminatorState || {},
+      snapshot.savedFinalsRounds || {}
+    ),
+  };
+}
+
 function playerIsRealFinalsPlayer(player) {
   return Boolean(player && player.name && player.name !== "BYE");
 }
@@ -21145,7 +21240,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     const titleRecords = (manualTitles || []).map(manualTitleRecordFromItem);
     const identityRecords = (bowlerIdentities || []).map(bowlerIdentityRecordFromItem);
     const reservationRecords = allReservationItemsFromState(reservationState).map(reservationRecordFromItem);
-    let activeSnapshotForSave = activeTournamentSnapshotRef.current || {};
+    let activeSnapshotForSave = activeTournamentSnapshotRef.current || buildActiveTournamentSnapshot();
     if (isMatchplayTournament(activeSnapshotForSave.tournamentFormat, activeSnapshotForSave.tournamentInfo || {})) {
       try {
         setSupabaseSaveStatus("Merging latest Matchplay scores...");
@@ -21160,10 +21255,11 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         console.warn("Could not merge latest Matchplay snapshot before save", error);
       }
     }
-    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeSnapshotForSave);
+    const publishedActiveSnapshotForSave = buildPublishedTournamentSnapshot(activeSnapshotForSave);
+    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(publishedActiveSnapshotForSave);
     const draftRecords = (savedTournamentDrafts || []).map(tournamentDraftRecordFromItem);
     const publicInfoSnapshots = [
-      activeSnapshotForSave,
+      publishedActiveSnapshotForSave,
       ...[...(savedTournamentDrafts || [])]
         .sort((a, b) => new Date(b?.savedAt || 0).getTime() - new Date(a?.savedAt || 0).getTime())
         .map((draft) => draft?.snapshot),
@@ -21324,7 +21420,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         console.warn("Could not merge latest Matchplay snapshot before live save", error);
       }
     }
-    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(activeSnapshotForSave);
+    const activeSnapshotRecord = activeSnapshotRecordFromSnapshot(buildPublishedTournamentSnapshot(activeSnapshotForSave));
     await withTimeout(
 
       supabaseRestRequest("active_tournament_snapshots", "?on_conflict=id", {
