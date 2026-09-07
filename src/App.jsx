@@ -994,6 +994,10 @@ const numberInputStyles = String.raw`
     width: 12.33%;
   }
 
+  .bb-public-qual-col {
+    display: none !important;
+  }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -14042,7 +14046,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("average")} className="font-bold">Overall Avg{sortLabel("average")}</button></th>
             {statsMode === "scratch" && (
               <>
-                <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("qualifyingAverage")} className="font-bold">Qual Avg{sortLabel("qualifyingAverage")}</button></th>
+                <th className="bb-public-qual-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("qualifyingAverage")} className="font-bold">Qual Avg{sortLabel("qualifyingAverage")}</button></th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsAverage")} className="font-bold">Finals Avg{sortLabel("finalsAverage")}</button></th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsGames")} className="font-bold">Finals Gms{sortLabel("finalsGames")}</button></th>
               </>
@@ -14081,7 +14085,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                   <td className="p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
                   {statsMode === "scratch" && (
                     <>
-                      <td className="p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
+                      <td className="bb-public-qual-col p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
                       <td className="bb-mobile-hide p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
                       <td className="bb-mobile-hide p-2 text-right md:p-3">{p.finalsGames}</td>
                     </>
