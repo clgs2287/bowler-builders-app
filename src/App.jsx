@@ -11842,7 +11842,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
       direction: current.key === key && current.direction === "desc" ? "asc" : "desc",
     }));
   const sortLabel = (key) =>
-    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ?" : " ?") : "";
+    leaderboardSort.key === key ? (leaderboardSort.direction === "asc" ? " ↑" : " ↓") : "";
   const displayedRows = [...filtered].sort((a, b) => {
     const direction = leaderboardSort.direction === "asc" ? 1 : -1;
     if (leaderboardSort.key === "scratch") {
@@ -13818,7 +13818,9 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   };
 
   const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
-  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ?" : " ?") : "";
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ↑" : " ↓") : "";
+  const publicTitleSortLabel = (column) =>
+    publicTitleSort.column === column ? (publicTitleSort.direction === "asc" ? " ↑" : " ↓") : "";
   useEffect(() => {
     if (statsMode === "handicap" && statsSort.key === "titles") {
       setStatsSort({ key: "default", direction: "desc" });
@@ -13875,8 +13877,6 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       <SeriesLegend className="sm:max-w-xl" />
     </div>
   );
-  const publicTitleSortLabel = (column) =>
-    publicTitleSort.column === column ? (publicTitleSort.direction === "asc" ? " ^" : " v") : "";
   const changePublicTitleSort = (column) => {
     setPublicTitleSort((current) => ({
       column,
@@ -17265,7 +17265,7 @@ current.results.push(result);
   };
 
   const toggleStatsSort = (key) => setStatsSort((current) => ({ key, direction: current.key === key && current.direction === "desc" ? "asc" : "desc" }));
-  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ?" : " ?") : "";
+  const sortLabel = (key) => statsSort.key === key ? (statsSort.direction === "asc" ? " ↑" : " ↓") : "";
   useEffect(() => {
     if (statsMode === "handicap" && statsSort.key === "titles") {
       setStatsSort({ key: "default", direction: "desc" });
@@ -18515,7 +18515,7 @@ else current.nonFkmTitles += titleCount;
   };
 
   const identitySortLabel = (column) =>
-    identitySort.column === column ? (identitySort.direction === "asc" ? " ?" : " ?") : "";
+    identitySort.column === column ? (identitySort.direction === "asc" ? " ↑" : " ↓") : "";
 
   const sortedBowlerIdentities = [...(bowlerIdentities || [])].sort((a, b) => {
     const direction = identitySort.direction === "asc" ? 1 : -1;
