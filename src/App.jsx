@@ -1770,6 +1770,16 @@ function isDirectEliminatorFinalsFormat(tournamentFormat = "") {
   return tournamentFormat === "eliminatorDirect";
 }
 
+function getEliminatorCutCount(entries = 0, eliminatorState = {}) {
+  const entryCount = Math.max(0, Number(entries || 0));
+  const manualCut = Number(eliminatorState?.manualQualifiers || 0);
+  if (entryCount <= 0) return 0;
+  if (Number.isFinite(manualCut) && manualCut > 0) {
+    return Math.max(1, Math.min(entryCount, Math.floor(manualCut)));
+  }
+  return Math.ceil(entryCount / 4);
+}
+
 function formatTournamentFormatLabel(tournamentFormat = "") {
   if (tournamentFormat === "tbd") return "TBD";
   if (tournamentFormat === "sweeper") return "Sweeper";
@@ -2146,7 +2156,10 @@ if (savedFinalsRounds.stepladderFinal) {
   const game2Scores = eliminatorState?.game2Scores || {};
   const stepScores = eliminatorState?.stepScores || {};
 
-  const cutCount = Math.ceil(bowlers.length / 4);
+  const cutCount = getEliminatorCutCount(
+    getTournamentEntryCount(bowlers || [], tournamentInfo.tournamentStyle || "singles"),
+    eliminatorState
+  );
 
   const cutBowlers = getRankedBowlers(
     bowlers,
@@ -12718,7 +12731,7 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
   const stepMemberScores = eliminatorState.stepMemberScores || {};
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entryLabel = getTournamentTeamSize(tournamentStyle) > 1 ? "Teams" : "Bowlers";
-  const cutCount = Math.ceil(entries / 4);
+  const cutCount = getEliminatorCutCount(entries, eliminatorState);
   const cutBowlers = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle).slice(0, cutCount);
   const baseRows = cutBowlers.map((b) => {
     const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
@@ -14573,7 +14586,7 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
     const game1Scores = eliminatorState.game1Scores || {};
     const game2Scores = eliminatorState.game2Scores || {};
     const stepScores = eliminatorState.stepScores || {};
-    const cutCount = Math.ceil(entries / 4);
+    const cutCount = getEliminatorCutCount(entries, eliminatorState);
     const cutBowlers = ranked.slice(0, cutCount);
     const baseRows = cutBowlers.map((b) => {
       const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
@@ -15429,7 +15442,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   const finalsScoreMode = getFinalsScoreMode(tournamentInfo);
   const finalsMaxScore = getFinalsScratchMax(tournamentStyle, finalsScoreMode);
   const entryLabel = getTournamentTeamSize(tournamentStyle) > 1 ? "Teams" : "Bowlers";
-  const cutCount = Math.ceil(entries / 4);
+  const suggestedCutCount = Math.ceil(entries / 4);
+  const cutCount = getEliminatorCutCount(entries, eliminatorState);
   const cutBowlers = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle).slice(0, cutCount);
   const baseRows = cutBowlers.map((b) => {
     const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
@@ -15507,7 +15521,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     finalsGameScore(championship.right, stepScores["step-3-r"], useHandicapScores),
     false
   );
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><h2 className="text-center text-xl font-semibold text-blue-900 md:text-left">{formatTournamentFormatLabel(tournamentFormat)}</h2><Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearEliminatorScores}>Clear Eliminator Scores</Button></div><div className="grid gap-3 md:grid-cols-6"><StatCard label={`Cut ${entryLabel}`} value={cutCount} /><StatCard label={directToStepladder ? "Eliminator Advancers" : "Game 1 Advancers"} value={skipEliminator ? "Skipped" : game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={skipEliminator || directToStepladder ? "Skipped" : 4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} />{getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}</div><p className="mt-4 text-sm text-blue-700">{skipEliminator ? "The finals cut is already four entries, so this event starts directly with the stepladder." : directToStepladder ? "The eliminator uses qualifying average as carry-forward. Top 4 advance directly to stepladder." : "Eliminator games use qualifying average as carry-forward. In handicap events, finals scores add the bowler or team handicap."}</p></CardContent></AppCard>{!skipEliminator && <><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">{directToStepladder ? "Eliminator" : "Eliminator Game 1"}</h2>
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><h2 className="text-center text-xl font-semibold text-blue-900 md:text-left">{formatTournamentFormatLabel(tournamentFormat)}</h2><Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearEliminatorScores}>Clear Eliminator Scores</Button></div><div className="mb-4 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"><div><Label>Manual Finals Cut</Label><p className="mt-1 text-xs font-semibold text-blue-700">Leave blank for automatic 1-in-4 cut. Payout cashers can still be set separately in Finance.</p></div><div className="flex items-center gap-2"><SmallNumberInput value={eliminatorState.manualQualifiers || ""} onChange={(value) => setEliminatorState((current) => ({ ...current, manualQualifiers: value || "" }))} width="w-24" /><span className="text-xs font-bold text-blue-700">Auto: {suggestedCutCount}</span></div></div><div className="grid gap-3 md:grid-cols-6"><StatCard label={`Cut ${entryLabel}`} value={cutCount} /><StatCard label={directToStepladder ? "Eliminator Advancers" : "Game 1 Advancers"} value={skipEliminator ? "Skipped" : game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={skipEliminator || directToStepladder ? "Skipped" : 4} /><StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} />{getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}</div><p className="mt-4 text-sm text-blue-700">{skipEliminator ? "The finals cut is already four entries, so this event starts directly with the stepladder." : directToStepladder ? "The eliminator uses qualifying average as carry-forward. Top 4 advance directly to stepladder." : "Eliminator games use qualifying average as carry-forward. In handicap events, finals scores add the bowler or team handicap."}</p></CardContent></AppCard>{!skipEliminator && <><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">{directToStepladder ? "Eliminator" : "Eliminator Game 1"}</h2>
 
 <p className="mb-4 text-sm text-blue-700">
   Average + Game 1. Top half advances.
@@ -17662,7 +17676,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
       const game1Scores = eliminatorState?.game1Scores || {};
       const game2Scores = eliminatorState?.game2Scores || {};
       const stepScores = eliminatorState?.stepScores || {};
-      const cutCount = Math.ceil(entryCount / 4);
+      const cutCount = getEliminatorCutCount(entryCount, eliminatorState);
       const cutBowlers = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle).slice(0, cutCount);
       const baseRows = cutBowlers.map((row) => {
         const average = completedGamesCount(row) > 0 ? (useHandicapScores ? row.handicap : row.scratch) / completedGamesCount(row) : 0;
