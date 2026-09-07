@@ -4921,8 +4921,10 @@ function AdminControlCard({
   onRequestControl = () => {},
   onSaveAndRelease = () => {},
   onRefresh = () => {},
+  onReloadApp = () => {},
   takingControl = false,
   releasingControl = false,
+  requiresReloadBeforeControl = false,
 }) {
   const active = adminControlLockIsActive(lock);
   const mine = active && adminControlLockIsMine(lock, sessionId);
@@ -4965,6 +4967,11 @@ function AdminControlCard({
               Control requested. Wait for {ownerLabel} to save and release.
             </p>
           )}
+          {requiresReloadBeforeControl && !active && !mine && (
+            <p className="mt-1 text-xs font-black text-amber-800">
+              Control is available, but refresh the app before taking over so you load the latest saved tournament.
+            </p>
+          )}
           {status && <p className="mt-1 text-xs font-bold text-blue-800">{status}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
@@ -4977,9 +4984,15 @@ function AdminControlCard({
             </Button>
           )}
           {!mine && (
-            <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={active ? onRequestControl : onTakeControl} disabled={takingControl || requestIsMine}>
-              {takingControl ? "Working..." : active ? requestIsMine ? "Control Requested" : "Request Control" : "Start Control"}
-            </Button>
+            requiresReloadBeforeControl && !active ? (
+              <Button className="rounded-2xl bg-amber-600 hover:bg-amber-700" onClick={onReloadApp}>
+                Refresh App to Take Control
+              </Button>
+            ) : (
+              <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={active ? onRequestControl : onTakeControl} disabled={takingControl || requestIsMine}>
+                {takingControl ? "Working..." : active ? requestIsMine ? "Control Requested" : "Request Control" : "Start Control"}
+              </Button>
+            )
           )}
         </div>
       </CardContent>
@@ -5597,8 +5610,10 @@ function DashboardTab({
   onRequestAdminControl = () => {},
   onSaveAndReleaseAdminControl = () => {},
   onRefreshAdminControl = () => {},
+  onReloadAdminControl = () => {},
   takingAdminControl = false,
   releasingAdminControl = false,
+  requiresAdminControlReload = false,
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const announcementFileInputRef = useRef(null);
@@ -5773,8 +5788,10 @@ function DashboardTab({
           onRequestControl={onRequestAdminControl}
           onSaveAndRelease={onSaveAndReleaseAdminControl}
           onRefresh={onRefreshAdminControl}
+          onReloadApp={onReloadAdminControl}
           takingControl={takingAdminControl}
           releasingControl={releasingAdminControl}
+          requiresReloadBeforeControl={requiresAdminControlReload}
         />
       )}
       {supabaseAdminProfile && !isOwnerAdmin && (
@@ -20679,6 +20696,7 @@ const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState
 const [selectedPublicEventKey, setSelectedPublicEventKey] = useState("");
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
 const [releasingAdminControl, setReleasingAdminControl] = useState(false);
+const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(false);
 
   const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
@@ -20876,6 +20894,9 @@ const [releasingAdminControl, setReleasingAdminControl] = useState(false);
       );
       const lock = Array.isArray(rows) ? rows[0] || null : null;
       setAdminControlLock(lock);
+      if (lock && adminControlLockIsActive(lock) && !adminControlLockIsMine(lock, adminControlSessionIdRef.current)) {
+        setAdminControlRequiresReload(true);
+      }
       return lock;
     } catch (error) {
       console.warn("Could not load admin control lock", error);
@@ -20925,9 +20946,21 @@ const [releasingAdminControl, setReleasingAdminControl] = useState(false);
 
   const claimAdminControl = async ({ force = false } = {}) => {
     if (!supabase || !supabaseAdminProfile || !supabaseSession?.access_token) return true;
-    if (force) adminControlPausedRef.current = false;
+    if (force) {
+      adminControlPausedRef.current = false;
+      setAdminControlRequiresReload(false);
+    }
 
     const currentLock = await loadAdminControlLock();
+    if (
+      adminControlRequiresReload &&
+      !force &&
+      (!currentLock || !adminControlLockIsActive(currentLock))
+    ) {
+      setSupabaseSaveStatus("Save blocked: refresh the app before taking control so you load the latest saved tournament.");
+      setAdminControlStatus("Refresh the app before taking control.");
+      return false;
+    }
     const otherHasFreshControl =
       currentLock &&
       adminControlLockIsActive(currentLock) &&
@@ -20986,7 +21019,13 @@ const [releasingAdminControl, setReleasingAdminControl] = useState(false);
   };
 
   const takeAdminControl = async () => {
+    if (adminControlRequiresReload) {
+      setAdminControlStatus("Refresh the app before taking control.");
+      setSupabaseSaveStatus("Save blocked: refresh the app before taking control so you load the latest saved tournament.");
+      return;
+    }
     adminControlPausedRef.current = false;
+    setAdminControlRequiresReload(false);
     setTakingAdminControl(true);
     try {
       await claimAdminControl({ force: true });
@@ -22282,7 +22321,7 @@ const [releasingAdminControl, setReleasingAdminControl] = useState(false);
   );
   const currentAdminControlActive = adminControlLockIsActive(adminControlLock);
   const currentAdminHasControl = currentAdminControlActive && adminControlLockIsMine(adminControlLock, adminControlSessionIdRef.current);
-  const adminCanSave = !supabaseAdminProfile || !currentAdminControlActive || currentAdminHasControl;
+  const adminCanSave = !supabaseAdminProfile || (!adminControlRequiresReload && (!currentAdminControlActive || currentAdminHasControl));
   const publicRoutingDataReady = hasLoadedSavedData && hasLoadedHistory && (!supabase || supabaseLoadReady);
   const lockAdmin = async () => {
     await releaseAdminControl();
@@ -22603,8 +22642,10 @@ const [releasingAdminControl, setReleasingAdminControl] = useState(false);
       onRequestAdminControl={requestAdminControl}
       onSaveAndReleaseAdminControl={saveAndReleaseAdminControl}
       onRefreshAdminControl={loadAdminControlLock}
+      onReloadAdminControl={() => window.location.reload()}
       takingAdminControl={takingAdminControl}
       releasingAdminControl={releasingAdminControl}
+      requiresAdminControlReload={adminControlRequiresReload}
 
     />
   </AppErrorBoundary>
