@@ -20681,10 +20681,11 @@ function SideActionPayoutsTab({
             <StatCard label="Total Payouts" value={currency(payoutRows.reduce((sum, row) => sum + row.total, 0))} />
           </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[760px] text-xs md:text-sm">
+            <table className="w-full min-w-[820px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
   <tr>
     <th className="p-2 text-left md:p-3">Bowler</th>
+    <th className="p-2 text-center md:p-3">Lane</th>
     <th className="p-2 text-center md:p-3">1sts</th>
     <th className="p-2 text-center md:p-3">2nds</th>
     <th className="p-2 text-center md:p-3">HG</th>
@@ -20712,8 +20713,10 @@ function SideActionPayoutsTab({
         {isExpanded ? "- " : "+ "}
         {row.name}
       </button>
+    </td>
+    <td className="p-2 text-center md:p-3">
       {row.game4Lane && (
-        <span className="ml-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800">
+        <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800">
           {row.game4Lane}
         </span>
       )}
@@ -20745,7 +20748,7 @@ function SideActionPayoutsTab({
   </tr>
   {isExpanded && (
     <tr className="border-t bg-blue-50">
-      <td colSpan={8} className="p-3">
+      <td colSpan={9} className="p-3">
         <div className="grid gap-2 md:grid-cols-2">
           {row.details.map((detail, detailIndex) => (
             <div key={`side-pay-detail-${row.seed}-${detailIndex}`} className="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-semibold text-blue-900">
@@ -20760,7 +20763,7 @@ function SideActionPayoutsTab({
   </React.Fragment>
 );
 })}
-                {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No side-action payouts calculated yet.</td></tr>}
+                {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No side-action payouts calculated yet.</td></tr>}
               </tbody>
             </table>
           </div>
