@@ -8793,6 +8793,9 @@ function ReservationsTab({
   const [announcementTestEmail, setAnnouncementTestEmail] = useState("");
   const [announcementSending, setAnnouncementSending] = useState("");
   const [announcementIncludeFlyer, setAnnouncementIncludeFlyer] = useState(true);
+  const [announcementUnsubscribedEmails, setAnnouncementUnsubscribedEmails] = useState([]);
+  const [announcementSuppressedEmails, setAnnouncementSuppressedEmails] = useState([]);
+  const [announcementSuppressionStatus, setAnnouncementSuppressionStatus] = useState("");
   const currentScheduledTournamentKey = reservationKeyFromState(reservationState);
   const activeDashboardTournamentKey = tournamentInfo.scheduleEventId || (
     tournamentInfo.name || tournamentInfo.date || tournamentInfo.center
@@ -8838,6 +8841,63 @@ function ReservationsTab({
       : [];
   const announcementFlyer = selectedAnnouncementImages.find((image) => image?.src) || null;
   const canSendAnnouncementEmails = Boolean(supabaseSession?.access_token);
+  const announcementRecipientEmailSet = useMemo(
+    () => new Set(announcementRecipients.map((recipient) => recipient.email)),
+    [announcementRecipients]
+  );
+  const announcementUnsubscribedRecipientCount = announcementUnsubscribedEmails.filter((email) =>
+    announcementRecipientEmailSet.has(email)
+  ).length;
+  const announcementSuppressedRecipientCount = announcementSuppressedEmails.filter((item) =>
+    announcementRecipientEmailSet.has(item.email)
+  ).length;
+  const sendableAnnouncementCount = Math.max(
+    0,
+    announcementRecipients.length - announcementUnsubscribedRecipientCount - announcementSuppressedRecipientCount
+  );
+
+  useEffect(() => {
+    const accessToken = supabaseSession?.access_token || "";
+    if (!accessToken) {
+      setAnnouncementUnsubscribedEmails([]);
+      setAnnouncementSuppressedEmails([]);
+      setAnnouncementSuppressionStatus("");
+      return;
+    }
+
+    let cancelled = false;
+    setAnnouncementSuppressionStatus("Loading skipped email lists...");
+    Promise.all([
+      loadSupabaseRestRows("announcement_unsubscribes", "?select=email&order=email.asc", undefined, accessToken),
+      loadSupabaseRestRows("announcement_suppressed_emails", "?select=email,reason&order=email.asc", undefined, accessToken),
+    ])
+      .then(([unsubscribeRows, suppressedRows]) => {
+        if (cancelled) return;
+        setAnnouncementUnsubscribedEmails(
+          (Array.isArray(unsubscribeRows) ? unsubscribeRows : [])
+            .map((row) => String(row.email || "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+        setAnnouncementSuppressedEmails(
+          (Array.isArray(suppressedRows) ? suppressedRows : [])
+            .map((row) => ({
+              email: String(row.email || "").trim().toLowerCase(),
+              reason: String(row.reason || "suppressed").trim(),
+            }))
+            .filter((row) => row.email)
+        );
+        setAnnouncementSuppressionStatus("");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn("Could not load announcement skipped email lists", error);
+        setAnnouncementSuppressionStatus("Skipped email lists could not be loaded.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseSession?.access_token]);
 
   useEffect(() => {
     if (!activeDashboardTournamentKey || activeDashboardTournamentKey === currentScheduledTournamentKey) return;
@@ -9299,7 +9359,8 @@ function ReservationsTab({
       });
       const failedCount = Array.isArray(result.failed) ? result.failed.length : 0;
       const skippedCount = Number(result.skippedUnsubscribed || 0);
-      setRosterNotice(`Announcement sent to ${result.sent || 0} recipient${Number(result.sent || 0) === 1 ? "" : "s"}${skippedCount ? `; ${skippedCount} unsubscribed skipped` : ""}${failedCount ? `; ${failedCount} failed.` : "."}`);
+      const suppressedCount = Number(result.skippedSuppressed || 0);
+      setRosterNotice(`Announcement sent to ${result.sent || 0} recipient${Number(result.sent || 0) === 1 ? "" : "s"}${skippedCount ? `; ${skippedCount} unsubscribed skipped` : ""}${suppressedCount ? `; ${suppressedCount} suppressed skipped` : ""}${failedCount ? `; ${failedCount} failed.` : "."}`);
     } catch (error) {
       window.alert(error.message || "Announcement email could not be sent.");
     } finally {
@@ -9480,11 +9541,49 @@ function ReservationsTab({
                 <p className="text-sm font-semibold text-blue-700">
                   Send a tournament announcement to de-duplicated emails from past reservations. Current list: {announcementRecipients.length} recipient{announcementRecipients.length === 1 ? "" : "s"}.
                 </p>
+                <p className="mt-1 text-sm font-bold text-slate-700">
+                  Sendable now: {sendableAnnouncementCount}. Skipping {announcementUnsubscribedRecipientCount} unsubscribed and {announcementSuppressedRecipientCount} suppressed.
+                </p>
               </div>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800">
                 Admin access
               </span>
             </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-600">Unsubscribed</p>
+                <p className="mt-1 text-lg font-black text-blue-950">{announcementUnsubscribedEmails.length}</p>
+                {announcementUnsubscribedEmails.length ? (
+                  <div className="mt-2 max-h-24 overflow-auto text-xs font-semibold text-slate-700">
+                    {announcementUnsubscribedEmails.slice(0, 20).map((email) => (
+                      <p key={email}>{email}</p>
+                    ))}
+                    {announcementUnsubscribedEmails.length > 20 && <p>+{announcementUnsubscribedEmails.length - 20} more</p>}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs font-semibold text-slate-500">No app unsubscribes found.</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-600">Suppressed</p>
+                <p className="mt-1 text-lg font-black text-blue-950">{announcementSuppressedEmails.length}</p>
+                {announcementSuppressedEmails.length ? (
+                  <div className="mt-2 max-h-24 overflow-auto text-xs font-semibold text-slate-700">
+                    {announcementSuppressedEmails.slice(0, 20).map((item) => (
+                      <p key={item.email}>{item.email}{item.reason ? ` - ${item.reason}` : ""}</p>
+                    ))}
+                    {announcementSuppressedEmails.length > 20 && <p>+{announcementSuppressedEmails.length - 20} more</p>}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs font-semibold text-slate-500">No suppressed emails found.</p>
+                )}
+              </div>
+            </div>
+            {announcementSuppressionStatus && (
+              <p className="mt-2 text-xs font-bold text-amber-700">{announcementSuppressionStatus}</p>
+            )}
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">

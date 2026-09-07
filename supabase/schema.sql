@@ -92,6 +92,12 @@ create table if not exists public.announcement_unsubscribes (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.announcement_suppressed_emails (
+  email text primary key,
+  reason text not null default 'suppressed',
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.public_app_settings (
   id text primary key,
   value jsonb not null default '{}'::jsonb,
@@ -178,6 +184,7 @@ alter table public.active_tournament_snapshots enable row level security;
 alter table public.tournament_drafts enable row level security;
 alter table public.admin_profiles enable row level security;
 alter table public.announcement_unsubscribes enable row level security;
+alter table public.announcement_suppressed_emails enable row level security;
 alter table public.public_app_settings enable row level security;
 alter table public.reservation_public_counts enable row level security;
 alter table public.reservation_public_roster enable row level security;
@@ -203,6 +210,7 @@ revoke insert on public.reservations from anon;
 grant select, insert on public.reservations to authenticated;
 grant select on public.admin_profiles to authenticated;
 grant select on public.announcement_unsubscribes to authenticated;
+grant select on public.announcement_suppressed_emails to authenticated;
 grant insert, update, delete on public.app_settings to authenticated;
 grant insert, update, delete on public.schedule_events to authenticated;
 grant insert, update, delete on public.manual_titles to authenticated;
@@ -594,6 +602,12 @@ using (public.is_admin() or user_id = auth.uid());
 drop policy if exists "Admins read announcement unsubscribes" on public.announcement_unsubscribes;
 create policy "Admins read announcement unsubscribes"
 on public.announcement_unsubscribes for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins read announcement suppressed emails" on public.announcement_suppressed_emails;
+create policy "Admins read announcement suppressed emails"
+on public.announcement_suppressed_emails for select
 to authenticated
 using (public.is_admin());
 
