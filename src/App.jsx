@@ -6360,41 +6360,75 @@ function buildBalancedRandomLaneFill({ openLanePositions = [], usedLanePositions
   const pairOrder = [];
   const openByPair = {};
   const countsByPair = {};
+  const countsByLane = {};
+  const lanesByPair = {};
   const ensurePair = (pair) => {
     if (!pair) return;
     if (!pairOrder.includes(pair)) pairOrder.push(pair);
-    if (!openByPair[pair]) openByPair[pair] = [];
+    if (!openByPair[pair]) openByPair[pair] = {};
     if (!countsByPair[pair]) countsByPair[pair] = 0;
+    if (!lanesByPair[pair]) lanesByPair[pair] = [];
+  };
+  const ensureLane = (pair, lane) => {
+    if (!pair || !lane) return;
+    ensurePair(pair);
+    const laneKey = String(lane);
+    if (!lanesByPair[pair].includes(laneKey)) {
+      lanesByPair[pair].push(laneKey);
+      lanesByPair[pair].sort((laneA, laneB) => Number(laneA) - Number(laneB));
+    }
+    if (!openByPair[pair][laneKey]) openByPair[pair][laneKey] = [];
+    if (!countsByLane[laneKey]) countsByLane[laneKey] = 0;
   };
 
   openLanePositions.forEach((lane) => {
     const normalizedLane = String(lane || "").trim().toUpperCase();
     const pair = lanePairFromAssignment(normalizedLane);
-    ensurePair(pair);
-    openByPair[pair].push(normalizedLane);
+    const { lane: laneNumber } = lanePositionParts(normalizedLane);
+    ensureLane(pair, laneNumber);
+    if (pair && laneNumber) {
+      openByPair[pair][laneNumber].push(normalizedLane);
+    }
   });
 
   usedLanePositions.forEach((lane) => {
     const pair = lanePairFromAssignment(lane);
+    const { lane: laneNumber } = lanePositionParts(lane);
     ensurePair(pair);
+    ensureLane(pair, laneNumber);
     countsByPair[pair] = Number(countsByPair[pair] || 0) + 1;
+    countsByLane[laneNumber] = Number(countsByLane[laneNumber] || 0) + 1;
   });
 
   Object.keys(openByPair).forEach((pair) => {
-    openByPair[pair] = shuffleArray(openByPair[pair]);
+    lanesByPair[pair].forEach((laneNumber) => {
+      openByPair[pair][laneNumber] = [...(openByPair[pair][laneNumber] || [])].sort(
+        (laneA, laneB) => laneAssignmentSortValue(laneA) - laneAssignmentSortValue(laneB)
+      );
+    });
   });
 
   const laneByIndex = {};
   shuffleArray(blankIndexes).forEach((index) => {
-    const availablePairs = pairOrder.filter((pair) => openByPair[pair]?.length);
+    const availablePairs = pairOrder.filter((pair) =>
+      lanesByPair[pair]?.some((laneNumber) => openByPair[pair]?.[laneNumber]?.length)
+    );
     if (!availablePairs.length) return;
     const minCount = Math.min(...availablePairs.map((pair) => Number(countsByPair[pair] || 0)));
     const candidatePairs = availablePairs.filter((pair) => Number(countsByPair[pair] || 0) === minCount);
     const selectedPair = shuffleArray(candidatePairs)[0];
-    const selectedLane = openByPair[selectedPair].shift();
+    const candidateLanes = (lanesByPair[selectedPair] || []).filter(
+      (laneNumber) => openByPair[selectedPair]?.[laneNumber]?.length
+    );
+    const minLaneCount = Math.min(...candidateLanes.map((laneNumber) => Number(countsByLane[laneNumber] || 0)));
+    const selectedLaneNumber = candidateLanes
+      .filter((laneNumber) => Number(countsByLane[laneNumber] || 0) === minLaneCount)
+      .sort((laneA, laneB) => Number(laneA) - Number(laneB))[0];
+    const selectedLane = openByPair[selectedPair]?.[selectedLaneNumber]?.shift();
     if (!selectedLane) return;
     laneByIndex[index] = selectedLane;
     countsByPair[selectedPair] = Number(countsByPair[selectedPair] || 0) + 1;
+    countsByLane[selectedLaneNumber] = Number(countsByLane[selectedLaneNumber] || 0) + 1;
   });
 
   return laneByIndex;
