@@ -44,6 +44,10 @@ const DEFAULT_TOURNAMENT_SERIES = "F.B.E.T.";
 const DEFAULT_RESERVATION_LIMIT = 48;
 const ARCHIVED_AVERAGE_MIN_GAMES = 30;
 const OWNER_ADMIN_EMAILS = ["cory.lagner@gmail.com"];
+const ADMIN_CONTROL_LOCK_ID = "active";
+const ADMIN_CONTROL_TIMEOUT_MS = 90000;
+const ADMIN_CONTROL_HEARTBEAT_MS = 12000;
+const ADMIN_CONTROL_SESSION_KEY = "bb-admin-control-session-id";
 const TOURNAMENT_SERIES_LABELS = {
   "M.I.S.T.": "Maine Invitational Scratch Tournament",
   "F.B.E.T.": "Frankie's Bowling Emporium Tournament",
@@ -69,6 +73,47 @@ function isMaintenanceModeEnabled() {
 
 function isOwnerAdminEmail(email = "") {
   return OWNER_ADMIN_EMAILS.includes(String(email || "").trim().toLowerCase());
+}
+
+function getAdminControlSessionId() {
+  try {
+    const existing = window.localStorage.getItem(ADMIN_CONTROL_SESSION_KEY);
+    if (existing) return existing;
+    const next = window.crypto?.randomUUID?.() || `admin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(ADMIN_CONTROL_SESSION_KEY, next);
+    return next;
+  } catch {
+    return `admin-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function getAdminDeviceLabel() {
+  if (typeof navigator === "undefined") return "Unknown device";
+  const agent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const browser = agent.includes("Edg/") ? "Edge" : agent.includes("Chrome/") ? "Chrome" : agent.includes("Firefox/") ? "Firefox" : agent.includes("Safari/") ? "Safari" : "Browser";
+  const device = /iPhone/i.test(agent) ? "iPhone" : /iPad/i.test(agent) ? "iPad" : /Android/i.test(agent) ? "Android" : /Windows/i.test(agent) || /Win/i.test(platform) ? "Windows" : /Mac/i.test(platform) ? "Mac" : "Device";
+  return `${device} ${browser}`;
+}
+
+function adminControlLockIsActive(lock) {
+  if (!lock?.heartbeat_at && !lock?.locked_at) return false;
+  const heartbeatTime = new Date(lock.heartbeat_at || lock.locked_at).getTime();
+  return Number.isFinite(heartbeatTime) && Date.now() - heartbeatTime < ADMIN_CONTROL_TIMEOUT_MS;
+}
+
+function adminControlLockIsMine(lock, sessionId) {
+  return Boolean(lock?.session_id && sessionId && String(lock.session_id) === String(sessionId));
+}
+
+function formatAdminControlTime(value) {
+  const time = new Date(value || "").getTime();
+  if (!Number.isFinite(time)) return "unknown";
+  const seconds = Math.max(0, Math.round((Date.now() - time) / 1000));
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  return `${minutes}m ago`;
 }
 
 function parseLogoLinkEntries(value = "") {
@@ -4868,6 +4913,59 @@ function SupabaseAdminStatusCard({ session, adminProfile }) {
   );
 }
 
+function AdminControlCard({
+  lock,
+  status = "",
+  sessionId = "",
+  onTakeControl = () => {},
+  onRefresh = () => {},
+  takingControl = false,
+}) {
+  const active = adminControlLockIsActive(lock);
+  const mine = active && adminControlLockIsMine(lock, sessionId);
+  const ownerLabel = lock?.email || "another admin";
+  const statusClass = mine
+    ? "border-green-300 bg-green-50"
+    : active
+      ? "border-amber-300 bg-amber-50"
+      : "border-blue-200 bg-blue-50";
+  const titleClass = mine ? "text-green-900" : active ? "text-amber-900" : "text-blue-900";
+  const detailClass = mine ? "text-green-800" : active ? "text-amber-800" : "text-blue-800";
+
+  return (
+    <AppCard className={statusClass}>
+      <CardContent className="flex flex-col gap-3 p-3 md:flex-row md:items-center md:justify-between md:p-4">
+        <div>
+          <h2 className={`text-lg font-semibold ${titleClass}`}>Admin Control</h2>
+          <p className={`text-sm font-black ${detailClass}`}>
+            {mine
+              ? "You have save control."
+              : active
+                ? `${ownerLabel} has save control.`
+                : "No active save controller."}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-blue-700">
+            {active
+              ? `${lock?.device_label || "Unknown device"}${lock?.active_tab ? ` on ${lock.active_tab}` : ""} - active ${formatAdminControlTime(lock?.heartbeat_at || lock?.locked_at)}`
+              : "Take control before tournament-day saves so older admin tabs cannot overwrite changes."}
+          </p>
+          {status && <p className="mt-1 text-xs font-bold text-blue-800">{status}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onRefresh}>
+            Refresh
+          </Button>
+          {!mine && (
+            <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onTakeControl} disabled={takingControl}>
+              {takingControl ? "Taking Control..." : active ? "Take Control" : "Start Control"}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </AppCard>
+  );
+}
+
 function sqlString(value) {
   if (value === null || value === undefined) return "null";
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -4897,6 +4995,7 @@ function SupabaseMigrationCard({
   supabaseLoadStatus = "Not loaded",
   supabaseSaveStatus = "Not saved",
   onSyncSupabaseNow = () => {},
+  adminCanSave = true,
 }) {
   const [dbCounts, setDbCounts] = useState(null);
   const [checking, setChecking] = useState(false);
@@ -5015,7 +5114,7 @@ function SupabaseMigrationCard({
           <Button variant="outline" className="rounded-2xl" onClick={checkDatabaseCounts} disabled={checking}>
             {checking ? "Checking..." : "Check DB Counts"}
           </Button>
-          <Button variant="outline" className="rounded-2xl" onClick={onSyncSupabaseNow}>
+          <Button variant="outline" className="rounded-2xl" onClick={onSyncSupabaseNow} disabled={!adminCanSave}>
             Save to Supabase Now
           </Button>
         </div>
@@ -5469,6 +5568,13 @@ function DashboardTab({
   isOwnerAdmin = false,
   onSaveCurrentTournament = () => {},
   onOpenScheduledTournament = null,
+  adminControlLock = null,
+  adminControlStatus = "",
+  adminControlSessionId = "",
+  adminCanSave = true,
+  onTakeAdminControl = () => {},
+  onRefreshAdminControl = () => {},
+  takingAdminControl = false,
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const announcementFileInputRef = useRef(null);
@@ -5630,8 +5736,19 @@ function DashboardTab({
             supabaseLoadStatus={supabaseLoadStatus}
             supabaseSaveStatus={supabaseSaveStatus}
             onSyncSupabaseNow={onSyncSupabaseNow}
+            adminCanSave={adminCanSave}
           />
         </>
+      )}
+      {supabaseAdminProfile && (
+        <AdminControlCard
+          lock={adminControlLock}
+          status={adminControlStatus}
+          sessionId={adminControlSessionId}
+          onTakeControl={onTakeAdminControl}
+          onRefresh={onRefreshAdminControl}
+          takingControl={takingAdminControl}
+        />
       )}
       {supabaseAdminProfile && !isOwnerAdmin && (
         <AppCard className={cloudSaveCardClass}>
@@ -5648,10 +5765,10 @@ function DashboardTab({
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncLiveScoresNow}>
+              <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncLiveScoresNow} disabled={!adminCanSave}>
                 Save Live Scores Now
               </Button>
-              <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncSupabaseNow}>
+              <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onSyncSupabaseNow} disabled={!adminCanSave}>
                 Save Setup Now
               </Button>
             </div>
@@ -6046,7 +6163,7 @@ function DashboardTab({
                     ID: {tournamentInfo.scheduleEventId || reservationTournamentKey({ name: tournamentInfo.name, date: tournamentInfo.date, center: tournamentInfo.center }) || "Select a scheduled tournament"}
                   </p>
                 </div>
-                <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onSaveCurrentTournament}>
+                <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onSaveCurrentTournament} disabled={!adminCanSave}>
                   Save Tournament
                 </Button>
               </div>
@@ -20543,6 +20660,13 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const supabaseQueuedSaveModeRef = useRef("");
   const supabaseLastFullSyncSignatureRef = useRef("");
   const restoredInitialPublicTabRef = useRef(false);
+  const adminControlSessionIdRef = useRef("");
+  const [adminControlLock, setAdminControlLock] = useState(null);
+  const [adminControlStatus, setAdminControlStatus] = useState("");
+  const [takingAdminControl, setTakingAdminControl] = useState(false);
+  if (!adminControlSessionIdRef.current) {
+    adminControlSessionIdRef.current = getAdminControlSessionId();
+  }
 
   const scrollAppToTop = () => {
     if (typeof window === "undefined") return;
@@ -20711,7 +20835,117 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     return { ok: true };
   };
 
+  const loadAdminControlLock = async () => {
+    if (!supabase || !supabaseSession?.access_token || !supabaseAdminProfile) return null;
+    try {
+      const rows = await withTimeout(
+        supabaseRestRequest("admin_activity_locks", `?select=*&id=eq.${ADMIN_CONTROL_LOCK_ID}`, {
+          accessToken: supabaseSession.access_token,
+        }),
+        "Loading admin control",
+        5000
+      );
+      const lock = Array.isArray(rows) ? rows[0] || null : null;
+      setAdminControlLock(lock);
+      return lock;
+    } catch (error) {
+      console.warn("Could not load admin control lock", error);
+      setAdminControlStatus(`Control check issue: ${error.message || "Could not load admin control."}`);
+      return null;
+    }
+  };
+
+  const writeAdminControlLock = async () => {
+    if (!supabase || !supabaseSession?.access_token || !supabaseAdminProfile) return null;
+    const now = new Date().toISOString();
+    const lock = {
+      id: ADMIN_CONTROL_LOCK_ID,
+      user_id: supabaseSession.user?.id || supabaseAdminProfile.user_id || null,
+      email: supabaseSession.user?.email || supabaseAdminProfile.email || "",
+      session_id: adminControlSessionIdRef.current,
+      device_label: getAdminDeviceLabel(),
+      active_tab: activeTab || "",
+      tournament_id: tournamentInfo?.scheduleEventId || reservationTournamentKey({
+        name: tournamentInfo?.name,
+        date: tournamentInfo?.date,
+        center: tournamentInfo?.center,
+      }) || "active",
+      tournament_name: tournamentInfo?.name || "Active tournament",
+      locked_at: now,
+      heartbeat_at: now,
+    };
+    await withTimeout(
+      supabaseRestRequest("admin_activity_locks", "?on_conflict=id", {
+        method: "POST",
+        body: lock,
+        accessToken: supabaseSession.access_token,
+        prefer: "resolution=merge-duplicates,return=minimal",
+      }),
+      "Saving admin control",
+      5000
+    );
+    setAdminControlLock(lock);
+    return lock;
+  };
+
+  const claimAdminControl = async ({ force = false } = {}) => {
+    if (!supabase || !supabaseAdminProfile || !supabaseSession?.access_token) return true;
+
+    const currentLock = await loadAdminControlLock();
+    const otherHasFreshControl =
+      currentLock &&
+      adminControlLockIsActive(currentLock) &&
+      !adminControlLockIsMine(currentLock, adminControlSessionIdRef.current);
+
+    if (otherHasFreshControl && !force) {
+      setSupabaseSaveStatus(`Save blocked: ${currentLock.email || "another admin"} has control. Use Take Control if you are the one running the tournament.`);
+      setAdminControlStatus(`Saving is blocked until ${currentLock.email || "the other admin"} releases control or you take control.`);
+      return false;
+    }
+
+    await writeAdminControlLock();
+    setAdminControlStatus(force ? "You took save control." : "You have save control.");
+    return true;
+  };
+
+  const takeAdminControl = async () => {
+    setTakingAdminControl(true);
+    try {
+      await claimAdminControl({ force: true });
+    } catch (error) {
+      setAdminControlStatus(`Take control issue: ${error.message || "Could not take control."}`);
+    } finally {
+      setTakingAdminControl(false);
+    }
+  };
+
+  const releaseAdminControl = async () => {
+    if (!supabase || !supabaseSession?.access_token) return;
+    const currentLock = adminControlLock || await loadAdminControlLock();
+    if (!adminControlLockIsMine(currentLock, adminControlSessionIdRef.current)) return;
+    try {
+      await withTimeout(
+        supabaseRestRequest(
+          "admin_activity_locks",
+          `?id=eq.${ADMIN_CONTROL_LOCK_ID}&session_id=eq.${postgrestEq(adminControlSessionIdRef.current)}`,
+          {
+            method: "DELETE",
+            accessToken: supabaseSession.access_token,
+            prefer: "return=minimal",
+          }
+        ),
+        "Releasing admin control",
+        5000
+      );
+      setAdminControlLock(null);
+      setAdminControlStatus("Admin control released.");
+    } catch (error) {
+      console.warn("Could not release admin control", error);
+    }
+  };
+
   const signOutSupabaseAdmin = async () => {
+    await releaseAdminControl();
     setSupabaseSession(null);
     setSupabaseAdminProfile(null);
     setSupabaseAuthLoading(false);
@@ -20740,6 +20974,37 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
   };
 
+  useEffect(() => {
+    if (!supabase || !supabaseAdminProfile || !supabaseSession?.access_token) {
+      setAdminControlLock(null);
+      setAdminControlStatus("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    const refreshControl = async () => {
+      try {
+        const ok = await claimAdminControl({ force: false });
+        if (!cancelled && ok) setAdminControlStatus("You have save control.");
+      } catch (error) {
+        if (!cancelled) setAdminControlStatus(`Control issue: ${error.message || "Could not refresh admin control."}`);
+      }
+    };
+
+    refreshControl();
+    const timerId = window.setInterval(refreshControl, ADMIN_CONTROL_HEARTBEAT_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, [activeTab, supabaseAdminProfile, supabaseSession?.access_token, tournamentInfo?.name, tournamentInfo?.scheduleEventId]);
+
+  const ensureAdminControlForSave = async () => {
+    const ok = await claimAdminControl({ force: false });
+    return Boolean(ok);
+  };
+
   const syncSupabaseCoreDataOnce = async () => {
     if (!supabase || !supabaseAdminProfile) {
       setSupabaseSaveStatus("Sign in as admin to save to Supabase");
@@ -20750,6 +21015,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       setSupabaseSaveStatus("Save issue: Supabase session token is missing. Clear login and sign in again.");
       return;
     }
+    if (!(await ensureAdminControlForSave())) return;
 
     setSupabaseSaveStatus("Saving...");
 
@@ -20919,6 +21185,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       setSupabaseSaveStatus("Save issue: Supabase session token is missing. Clear login and sign in again.");
       return;
     }
+    if (!(await ensureAdminControlForSave())) return;
 
     setSupabaseSaveStatus("Saving live scores...");
     let activeSnapshotForSave = activeTournamentSnapshotRef.current || buildActiveTournamentSnapshot();
@@ -21915,8 +22182,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     isAdminMode &&
     isOwnerAdminEmail(supabaseSession?.user?.email || supabaseAdminProfile?.email || "")
   );
+  const currentAdminControlActive = adminControlLockIsActive(adminControlLock);
+  const currentAdminHasControl = currentAdminControlActive && adminControlLockIsMine(adminControlLock, adminControlSessionIdRef.current);
+  const adminCanSave = !supabaseAdminProfile || !currentAdminControlActive || currentAdminHasControl;
   const publicRoutingDataReady = hasLoadedSavedData && hasLoadedHistory && (!supabase || supabaseLoadReady);
-  const lockAdmin = () => {
+  const lockAdmin = async () => {
+    await releaseAdminControl();
     setIsAdminMode(false);
     setActiveTab("tournamentInfo");
   };
@@ -22226,6 +22497,13 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       setBowlers={setBowlers} paidPayouts={paidPayouts} setPaidPayouts={setPaidPayouts}
       onSaveCurrentTournament={saveCurrentTournament}
       onOpenScheduledTournament={openScheduledTournamentWorkspace}
+      adminControlLock={adminControlLock}
+      adminControlStatus={adminControlStatus}
+      adminControlSessionId={adminControlSessionIdRef.current}
+      adminCanSave={adminCanSave}
+      onTakeAdminControl={takeAdminControl}
+      onRefreshAdminControl={loadAdminControlLock}
+      takingAdminControl={takingAdminControl}
 
     />
   </AppErrorBoundary>

@@ -98,6 +98,20 @@ create table if not exists public.announcement_suppressed_emails (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_activity_locks (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete set null,
+  email text,
+  session_id text not null default '',
+  device_label text not null default '',
+  active_tab text not null default '',
+  tournament_id text not null default '',
+  tournament_name text not null default '',
+  locked_at timestamptz not null default now(),
+  heartbeat_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.public_app_settings (
   id text primary key,
   value jsonb not null default '{}'::jsonb,
@@ -174,6 +188,11 @@ create trigger set_admin_profiles_updated_at
 before update on public.admin_profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_admin_activity_locks_updated_at on public.admin_activity_locks;
+create trigger set_admin_activity_locks_updated_at
+before update on public.admin_activity_locks
+for each row execute function public.set_updated_at();
+
 alter table public.app_settings enable row level security;
 alter table public.schedule_events enable row level security;
 alter table public.manual_titles enable row level security;
@@ -185,6 +204,7 @@ alter table public.tournament_drafts enable row level security;
 alter table public.admin_profiles enable row level security;
 alter table public.announcement_unsubscribes enable row level security;
 alter table public.announcement_suppressed_emails enable row level security;
+alter table public.admin_activity_locks enable row level security;
 alter table public.public_app_settings enable row level security;
 alter table public.reservation_public_counts enable row level security;
 alter table public.reservation_public_roster enable row level security;
@@ -211,6 +231,7 @@ grant select, insert on public.reservations to authenticated;
 grant select on public.admin_profiles to authenticated;
 grant select on public.announcement_unsubscribes to authenticated;
 grant select, insert, update on public.announcement_suppressed_emails to authenticated;
+grant select, insert, update, delete on public.admin_activity_locks to authenticated;
 grant insert, update, delete on public.app_settings to authenticated;
 grant insert, update, delete on public.schedule_events to authenticated;
 grant insert, update, delete on public.manual_titles to authenticated;
@@ -620,6 +641,19 @@ with check (public.is_admin());
 drop policy if exists "Admins update announcement suppressed emails" on public.announcement_suppressed_emails;
 create policy "Admins update announcement suppressed emails"
 on public.announcement_suppressed_emails for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins read admin activity locks" on public.admin_activity_locks;
+create policy "Admins read admin activity locks"
+on public.admin_activity_locks for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins write admin activity locks" on public.admin_activity_locks;
+create policy "Admins write admin activity locks"
+on public.admin_activity_locks for all
 to authenticated
 using (public.is_admin())
 with check (public.is_admin());
