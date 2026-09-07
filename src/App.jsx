@@ -20524,6 +20524,7 @@ function SideActionPayoutsTab({
   paidSideActionPayouts = {},
   setPaidSideActionPayouts,
 }) {
+  const [expandedPayoutRows, setExpandedPayoutRows] = useState({});
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const teamEntries = getTournamentTeamEntries(bowlers, tournamentStyle);
 
@@ -20573,13 +20574,27 @@ function SideActionPayoutsTab({
     return scored.filter((item) => item.score === maxScore).map((item) => item.player);
   };
 
-  const addPayout = (map, player, source, amount, detail) => {
+  const addPayout = (map, player, source, amount, detail, resultType = "") => {
     const livePlayer = resolvePlayer(player);
     if (!livePlayer || livePlayer.name === "BYE" || !amount) return;
     const key = String(livePlayer.seed);
-    const current = map[key] || { seed: livePlayer.seed, name: livePlayer.name, game4Lane: laneAssignmentForGame(livePlayer, 3, tournamentInfo), bracket: 0, highGame: 0, total: 0, details: [] };
+    const current = map[key] || {
+      seed: livePlayer.seed,
+      name: livePlayer.name,
+      game4Lane: laneAssignmentForGame(livePlayer, 3, tournamentInfo),
+      bracket: 0,
+      bracketFirsts: 0,
+      bracketSeconds: 0,
+      highGame: 0,
+      highGames: 0,
+      total: 0,
+      details: [],
+    };
     if (source === "Bracket") current.bracket += amount;
     if (source === "High Game") current.highGame += amount;
+    if (resultType === "bracket-first") current.bracketFirsts += 1;
+    if (resultType === "bracket-second") current.bracketSeconds += 1;
+    if (resultType === "high-game") current.highGames += 1;
     current.total += amount;
     current.details.push({ source, amount, detail });
     map[key] = current;
@@ -20603,16 +20618,16 @@ function SideActionPayoutsTab({
       const secondPayout = Number(bracket.payout?.second || 10);
 
       if (champions.length > 0) {
-        champions.forEach((winner) => addPayout(payoutMap, winner, "Bracket", firstPayout / champions.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 1st`));
+        champions.forEach((winner) => addPayout(payoutMap, winner, "Bracket", firstPayout / champions.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 1st`, "bracket-first"));
         if (champions.length === 1) {
           const runnerUps = finalPlayers.map(resolvePlayer).filter((player) => player.name !== "BYE" && String(player.seed) !== String(champions[0].seed));
           if (runnerUps.length === 1) {
-            addPayout(payoutMap, runnerUps[0], "Bracket", secondPayout, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`);
+            addPayout(payoutMap, runnerUps[0], "Bracket", secondPayout, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`, "bracket-second");
           } else if (runnerUps.length > 1) {
             const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2) }));
             const secondScore = Math.max(...runnerUpScores.map((item) => item.score));
             const secondPlace = secondScore > 0 ? runnerUpScores.filter((item) => item.score === secondScore).map((item) => item.player) : [];
-            secondPlace.forEach((runnerUp) => addPayout(payoutMap, runnerUp, "Bracket", secondPayout / secondPlace.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`));
+            secondPlace.forEach((runnerUp) => addPayout(payoutMap, runnerUp, "Bracket", secondPayout / secondPlace.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`, "bracket-second"));
           }
         }
       }
@@ -20624,7 +20639,7 @@ function SideActionPayoutsTab({
     const highScore = scores.length ? Math.max(...scores.map((item) => item.score)) : 0;
     const winners = scores.filter((item) => item.score === highScore).map((item) => item.bowler);
     const payoutEach = winners.length ? Math.floor(highGamePayoutPerGame / winners.length) : 0;
-    winners.forEach((winner) => addPayout(payoutMap, winner, "High Game", payoutEach, `Scratch Game ${gameIndex + 1} high game (${highScore})`));
+    winners.forEach((winner) => addPayout(payoutMap, winner, "High Game", payoutEach, `Scratch Game ${gameIndex + 1} high game (${highScore})`, "high-game"));
 
     if (useHandicapScores) {
       const handicapScores = handicapHighGameBowlers.map((b) => {
@@ -20636,18 +20651,18 @@ function SideActionPayoutsTab({
       const handicapPayoutEach = handicapWinners.length
   ? Math.floor(handicapHighGamePayoutPerGame / handicapWinners.length)
   : 0;
-      handicapWinners.forEach((winner) => addPayout(payoutMap, winner, "High Game", handicapPayoutEach, `Handicap Game ${gameIndex + 1} high game (${handicapHighScore})`));
+      handicapWinners.forEach((winner) => addPayout(payoutMap, winner, "High Game", handicapPayoutEach, `Handicap Game ${gameIndex + 1} high game (${handicapHighScore})`, "high-game"));
     }
 
     const teamScores = teamHighGameTeams.map((team) => ({ bowler: team, score: Number(team.games?.[gameIndex] || 0) })).filter((item) => item.score > 0);
     const teamHighScore = teamScores.length ? Math.max(...teamScores.map((item) => item.score)) : 0;
     const teamWinners = teamScores.filter((item) => item.score === teamHighScore).map((item) => item.bowler);
     const teamPayoutEach = teamWinners.length ? Math.floor(teamHighGamePayoutPerGame / teamWinners.length) : 0;
-    teamWinners.forEach((winner) => addPayout(payoutMap, winner, "High Game", teamPayoutEach, `Team Game ${gameIndex + 1} high game (${teamHighScore})`));
+    teamWinners.forEach((winner) => addPayout(payoutMap, winner, "High Game", teamPayoutEach, `Team Game ${gameIndex + 1} high game (${teamHighScore})`, "high-game"));
   });
 
   const payoutRows = Object.values(payoutMap).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-  const payoutCsv = [["Bowler", "Game 4 Lane", "Bracket", "High Game", "Total", "Details"], ...payoutRows.map((row) => [row.name, row.game4Lane || "", row.bracket, row.highGame, row.total, row.details.map((d) => `${d.source}: ${d.detail} ${currency(d.amount)}`).join(" | ")])];
+  const payoutCsv = [["Bowler", "Game 4 Lane", "Bracket 1sts", "Bracket 2nds", "High Games", "Bracket", "High Game", "Total", "Details"], ...payoutRows.map((row) => [row.name, row.game4Lane || "", row.bracketFirsts || 0, row.bracketSeconds || 0, row.highGames || 0, row.bracket, row.highGame, row.total, row.details.map((d) => `${d.source}: ${d.detail} ${currency(d.amount)}`).join(" | ")])];
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -20666,14 +20681,16 @@ function SideActionPayoutsTab({
             <StatCard label="Total Payouts" value={currency(payoutRows.reduce((sum, row) => sum + row.total, 0))} />
           </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="w-full min-w-[680px] text-xs md:text-sm">
+            <table className="w-full min-w-[760px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
   <tr>
     <th className="p-2 text-left md:p-3">Bowler</th>
+    <th className="p-2 text-center md:p-3">1sts</th>
+    <th className="p-2 text-center md:p-3">2nds</th>
+    <th className="p-2 text-center md:p-3">HG</th>
     <th className="p-2 text-right md:p-3">Brackets</th>
     <th className="p-2 text-right md:p-3">High Game</th>
     <th className="p-2 text-right md:p-3">Total</th>
-    <th className="p-2 text-left md:p-3">Details</th>
     <th className="p-2 text-center md:p-3">Paid?</th>
   </tr>
 </thead>
@@ -20681,22 +20698,32 @@ function SideActionPayoutsTab({
                 {payoutRows.map((row) => {
                   const paidKey = getTournamentPaidKey(tournamentInfo, row.seed);
                   const isPaid = Boolean(paidSideActionPayouts[paidKey]);
+                  const isExpanded = Boolean(expandedPayoutRows[row.seed]);
                   return (
-  <tr key={`side-pay-${row.seed}`} className="border-t">
+  <React.Fragment key={`side-pay-${row.seed}`}>
+  <tr className="border-t">
     <td className="p-2 font-semibold md:p-3">
-      <span>{row.name}</span>
+      <button
+        type="button"
+        className="text-left font-black text-blue-950 underline-offset-2 hover:underline"
+        onClick={() => setExpandedPayoutRows((current) => ({ ...current, [row.seed]: !current[row.seed] }))}
+        title="Show payout details"
+      >
+        {isExpanded ? "- " : "+ "}
+        {row.name}
+      </button>
       {row.game4Lane && (
         <span className="ml-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800">
           {row.game4Lane}
         </span>
       )}
     </td>
+    <td className="p-2 text-center font-bold md:p-3">{row.bracketFirsts || 0}</td>
+    <td className="p-2 text-center font-bold md:p-3">{row.bracketSeconds || 0}</td>
+    <td className="p-2 text-center font-bold md:p-3">{row.highGames || 0}</td>
     <td className="p-2 text-right md:p-3">{currency(row.bracket)}</td>
     <td className="p-2 text-right md:p-3">{currency(row.highGame)}</td>
     <td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td>
-    <td className="p-2 text-xs text-blue-800 md:p-3">
-      {row.details.map((d) => `${d.detail} ${currency(d.amount)}`).join(" - ")}
-    </td>
     <td className="p-2 text-center md:p-3">
       <button
         type="button"
@@ -20716,9 +20743,24 @@ function SideActionPayoutsTab({
       </button>
     </td>
   </tr>
+  {isExpanded && (
+    <tr className="border-t bg-blue-50">
+      <td colSpan={8} className="p-3">
+        <div className="grid gap-2 md:grid-cols-2">
+          {row.details.map((detail, detailIndex) => (
+            <div key={`side-pay-detail-${row.seed}-${detailIndex}`} className="rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs font-semibold text-blue-900">
+              <span>{detail.detail}</span>
+              <span className="ml-2 font-black text-green-700">{currency(detail.amount)}</span>
+            </div>
+          ))}
+        </div>
+      </td>
+    </tr>
+  )}
+  </React.Fragment>
 );
 })}
-                {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={6}>No side-action payouts calculated yet.</td></tr>}
+                {payoutRows.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No side-action payouts calculated yet.</td></tr>}
               </tbody>
             </table>
           </div>
