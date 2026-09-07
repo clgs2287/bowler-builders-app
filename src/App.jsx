@@ -6356,6 +6356,50 @@ function buildLaneAssignments(lanesUsed, count, tournamentStyle = "singles") {
   return Array.from({ length: count }, (_, index) => assignments[index] || "");
 }
 
+function buildBalancedRandomLaneFill({ openLanePositions = [], usedLanePositions = [], blankIndexes = [] } = {}) {
+  const pairOrder = [];
+  const openByPair = {};
+  const countsByPair = {};
+  const ensurePair = (pair) => {
+    if (!pair) return;
+    if (!pairOrder.includes(pair)) pairOrder.push(pair);
+    if (!openByPair[pair]) openByPair[pair] = [];
+    if (!countsByPair[pair]) countsByPair[pair] = 0;
+  };
+
+  openLanePositions.forEach((lane) => {
+    const normalizedLane = String(lane || "").trim().toUpperCase();
+    const pair = lanePairFromAssignment(normalizedLane);
+    ensurePair(pair);
+    openByPair[pair].push(normalizedLane);
+  });
+
+  usedLanePositions.forEach((lane) => {
+    const pair = lanePairFromAssignment(lane);
+    ensurePair(pair);
+    countsByPair[pair] = Number(countsByPair[pair] || 0) + 1;
+  });
+
+  Object.keys(openByPair).forEach((pair) => {
+    openByPair[pair] = shuffleArray(openByPair[pair]);
+  });
+
+  const laneByIndex = {};
+  shuffleArray(blankIndexes).forEach((index) => {
+    const availablePairs = pairOrder.filter((pair) => openByPair[pair]?.length);
+    if (!availablePairs.length) return;
+    const minCount = Math.min(...availablePairs.map((pair) => Number(countsByPair[pair] || 0)));
+    const candidatePairs = availablePairs.filter((pair) => Number(countsByPair[pair] || 0) === minCount);
+    const selectedPair = shuffleArray(candidatePairs)[0];
+    const selectedLane = openByPair[selectedPair].shift();
+    if (!selectedLane) return;
+    laneByIndex[index] = selectedLane;
+    countsByPair[selectedPair] = Number(countsByPair[selectedPair] || 0) + 1;
+  });
+
+  return laneByIndex;
+}
+
 function shuffleArray(values = []) {
   const shuffled = [...values];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
@@ -6776,9 +6820,11 @@ const updateBowler = (index, field, value) => {
     const confirmed = window.confirm(`Randomly assign ${blankNamedIndexes.length} unassigned bowler(s) into the remaining open lane spots? Manual lane assignments will stay unchanged.`);
     if (!confirmed) return;
 
-    const randomizedIndexes = shuffleArray(blankNamedIndexes);
-    const randomizedLanes = shuffleArray(openLanePositions).slice(0, randomizedIndexes.length);
-    const laneByIndex = Object.fromEntries(randomizedIndexes.map((index, positionIndex) => [index, randomizedLanes[positionIndex]]));
+    const laneByIndex = buildBalancedRandomLaneFill({
+      openLanePositions,
+      usedLanePositions: Array.from(usedLanePositions),
+      blankIndexes: blankNamedIndexes,
+    });
     setBowlers((current) => current.map((bowler, index) => laneByIndex[index] ? { ...bowler, lane: laneByIndex[index] } : bowler));
     setRegistrationSort({ key: "lane", direction: "asc" });
   };
