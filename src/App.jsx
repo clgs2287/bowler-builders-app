@@ -706,7 +706,8 @@ const numberInputStyles = String.raw`
   }
 
   .bb-public-leaderboard-table {
-    min-width: 25rem !important;
+    min-width: 0 !important;
+    table-layout: fixed;
   }
 
   .bb-public-leaderboard-table th,
@@ -716,29 +717,39 @@ const numberInputStyles = String.raw`
 
   .bb-public-rank-col {
     left: 0 !important;
-    width: 2.25rem !important;
-    min-width: 2.25rem !important;
+    width: 2.1rem !important;
+    min-width: 2.1rem !important;
   }
 
   .bb-public-name-col {
-    left: 2.25rem !important;
-    min-width: 5.75rem !important;
-    max-width: 5.75rem !important;
-    width: 5.75rem !important;
+    left: 2.1rem !important;
+    min-width: 6.45rem !important;
+    max-width: 6.45rem !important;
+    width: 6.45rem !important;
   }
 
   .bb-public-name-text {
-    max-width: 5rem !important;
+    max-width: 5.85rem !important;
   }
 
   .bb-public-score-col {
-    width: 2.65rem !important;
-    min-width: 2.65rem !important;
-    font-size: 0.68rem !important;
+    width: 3.15rem !important;
+    min-width: 3.15rem !important;
+    font-size: 0.66rem !important;
+    overflow-wrap: anywhere;
   }
 
   .bb-public-status-col {
-    min-width: 3.1rem !important;
+    width: 3.9rem !important;
+    min-width: 3.9rem !important;
+    font-size: 0.62rem !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-public-leaderboard-table th,
+  .bb-public-leaderboard-table td {
+    line-height: 1.1 !important;
+    white-space: normal !important;
   }
 
   .bb-public-finals-wrap {
@@ -906,7 +917,81 @@ const numberInputStyles = String.raw`
   }
 
   .bb-public-side-payout-table {
-    min-width: 22rem !important;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-public-side-payout-table th:nth-child(1),
+  .bb-public-side-payout-table td:nth-child(1) {
+    width: 34%;
+  }
+
+  .bb-public-side-payout-table th:nth-child(2),
+  .bb-public-side-payout-table td:nth-child(2),
+  .bb-public-side-payout-table th:nth-child(3),
+  .bb-public-side-payout-table td:nth-child(3),
+  .bb-public-side-payout-table th:nth-child(4),
+  .bb-public-side-payout-table td:nth-child(4) {
+    width: 8%;
+  }
+
+  .bb-public-side-payout-table th:nth-child(5),
+  .bb-public-side-payout-table td:nth-child(5),
+  .bb-public-side-payout-table th:nth-child(6),
+  .bb-public-side-payout-table td:nth-child(6),
+  .bb-public-side-payout-table th:nth-child(7),
+  .bb-public-side-payout-table td:nth-child(7) {
+    width: 14%;
+  }
+
+  .bb-public-side-payout-table th {
+    line-height: 1.05 !important;
+    white-space: normal !important;
+  }
+
+  .bb-public-side-payout-table td {
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+  }
+
+  .bb-public-side-payout-table td:first-child {
+    white-space: normal !important;
+  }
+
+  .bb-public-stats-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-public-stats-table th,
+  .bb-public-stats-table td {
+    padding: 0.24rem !important;
+    font-size: 0.64rem !important;
+    line-height: 1.08 !important;
+    white-space: normal !important;
+  }
+
+  .bb-public-stats-table th:nth-child(1),
+  .bb-public-stats-table td:nth-child(1) {
+    width: 36%;
+  }
+
+  .bb-public-stats-table th:nth-child(2),
+  .bb-public-stats-table td:nth-child(2),
+  .bb-public-stats-table th:nth-child(3),
+  .bb-public-stats-table td:nth-child(3),
+  .bb-public-stats-table th:nth-child(7),
+  .bb-public-stats-table td:nth-child(7) {
+    width: 9%;
+  }
+
+  .bb-public-stats-table th:nth-child(4),
+  .bb-public-stats-table td:nth-child(4),
+  .bb-public-stats-table th:nth-child(5),
+  .bb-public-stats-table td:nth-child(5),
+  .bb-public-stats-table th:nth-child(6),
+  .bb-public-stats-table td:nth-child(6) {
+    width: 12.33%;
   }
 
   .bb-public-side-details-col {
@@ -13948,7 +14033,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       </button>
     </div>
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-      <table className="bb-mobile-table bb-mobile-wide w-full min-w-[960px] text-xs md:text-sm">
+      <table className="bb-mobile-table bb-mobile-wide bb-public-stats-table w-full min-w-[960px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
             <th className="p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
@@ -17349,7 +17434,7 @@ current.results.push(result);
   </button>
 </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="bb-mobile-table bb-mobile-wide w-full min-w-[1040px] text-xs md:text-sm">
+            <table className="bb-mobile-table bb-mobile-wide bb-public-stats-table w-full min-w-[1040px] text-xs md:text-sm">
 <thead className="bg-blue-800 text-white">
   <tr>
     <th className="p-2 text-left md:p-3">
@@ -20538,7 +20623,7 @@ row.matches.push({
                           <td className="p-2 font-semibold md:p-3">
                             <button
                               type="button"
-                              className="max-w-[160px] truncate text-left font-black text-blue-950 underline-offset-2 hover:underline md:max-w-none"
+                              className="block max-w-full truncate text-left font-black text-blue-950 underline-offset-2 hover:underline md:max-w-none"
                               onClick={() => setExpandedPayoutRows((current) => ({ ...current, [row.seed]: !current[row.seed] }))}
                               title="Show payout details"
                             >
