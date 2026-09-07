@@ -11775,7 +11775,7 @@ function FinalsDisplayView({
 function StandingsPublic({ ranked, financials, useHandicapScores, tournamentFormat, tournamentStyle = "singles", allowBigScreen = false, archiveResults = [] }) {
   const [search, setSearch] = useState("");
   const [bigScreen, setBigScreen] = useState(false);
-  const [expandedSeed, setExpandedSeed] = useState(null);
+  const [expandedSeeds, setExpandedSeeds] = useState({});
   const [leaderboardSort, setLeaderboardSort] = useState({ key: "rank", direction: "asc" });
   useEffect(() => {
     if (!allowBigScreen && bigScreen) setBigScreen(false);
@@ -11949,6 +11949,9 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                 const colspan = useHandicapScores ? 7 : 5;
                 const bg = stickyBgClass(b);
 
+                const seedKey = String(b.seed);
+                const isExpanded = Boolean(expandedSeeds[seedKey]);
+
                 return (
                   <React.Fragment key={`${b.seed}-${b.name}`}>
                     {!search && leaderboardSort.key === "rank" && index === displayCashers && (
@@ -11962,7 +11965,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                         <button
                           type="button"
                           className={bigScreen ? "block max-w-none truncate text-left underline-offset-2 hover:underline" : "bb-public-name-text block max-w-[92px] truncate text-left underline-offset-2 hover:underline md:max-w-none"}
-                          onClick={() => setExpandedSeed((current) => current === b.seed ? null : b.seed)}
+                          onClick={() => setExpandedSeeds((current) => ({ ...current, [seedKey]: !current[seedKey] }))}
                           title="Click to show game scores"
                         >
                           {b.name}
@@ -11974,7 +11977,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                       <td className={`${diffCellClass} ${diff === null ? "" : diff >= 0 ? "text-green-700" : "text-red-600"}`}>{diff === null ? " - -" : `${diff >= 0 ? "+" : ""}${diff}`}</td>
                       <td className={statusCellClass}>{statusBadge(b)}</td>
                     </tr>
-                    {expandedSeed === b.seed && (
+                    {isExpanded && (
                       <tr className="border-t bg-white">
                         <td colSpan={colspan} className="p-2 md:p-3">
                           <div className="inline-flex w-max flex-nowrap gap-1 overflow-x-auto rounded-lg border border-blue-100 bg-blue-50 p-1 text-center text-[9px] sm:gap-1 sm:p-1.5 sm:text-[10px] md:ml-24 md:gap-1.5 md:p-1.5 md:text-xs lg:gap-2 lg:p-2 lg:text-sm">
