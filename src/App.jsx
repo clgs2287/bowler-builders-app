@@ -2589,6 +2589,29 @@ const customLanes = String(rotationSource || "")
   return pairs[(startIndex + step) % pairs.length];
 }
 
+function laneAssignmentForGame(player = {}, gameIndex = 0, tournamentInfo = {}) {
+  if (Array.isArray(player.members) && player.members.length) {
+    const memberLanes = player.members
+      .map((member) => laneAssignmentForGame(member, gameIndex, tournamentInfo))
+      .filter(Boolean);
+    return Array.from(new Set(memberLanes)).join(" / ");
+  }
+
+  if (!player?.lane) return "";
+
+  return lanePairForGame(
+    player.lane,
+    gameIndex,
+    tournamentInfo?.lanesUsed,
+    tournamentInfo?.movePairs || 1,
+    tournamentInfo?.movementMode || "custom",
+    {
+      odd: tournamentInfo?.customRotation || "",
+      even: tournamentInfo?.evenCustomRotation || "",
+    }
+  );
+}
+
 function bracketSeedOrder(size) {
   let seeds = [1, 2];
   while (seeds.length < size) {
@@ -20545,7 +20568,7 @@ function SideActionPayoutsTab({
     const livePlayer = resolvePlayer(player);
     if (!livePlayer || livePlayer.name === "BYE" || !amount) return;
     const key = String(livePlayer.seed);
-    const current = map[key] || { seed: livePlayer.seed, name: livePlayer.name, bracket: 0, highGame: 0, total: 0, details: [] };
+    const current = map[key] || { seed: livePlayer.seed, name: livePlayer.name, game4Lane: laneAssignmentForGame(livePlayer, 3, tournamentInfo), bracket: 0, highGame: 0, total: 0, details: [] };
     if (source === "Bracket") current.bracket += amount;
     if (source === "High Game") current.highGame += amount;
     current.total += amount;
@@ -20615,7 +20638,7 @@ function SideActionPayoutsTab({
   });
 
   const payoutRows = Object.values(payoutMap).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-  const payoutCsv = [["Bowler", "Bracket", "High Game", "Total", "Details"], ...payoutRows.map((row) => [row.name, row.bracket, row.highGame, row.total, row.details.map((d) => `${d.source}: ${d.detail} ${currency(d.amount)}`).join(" | ")])];
+  const payoutCsv = [["Bowler", "Game 4 Lane", "Bracket", "High Game", "Total", "Details"], ...payoutRows.map((row) => [row.name, row.game4Lane || "", row.bracket, row.highGame, row.total, row.details.map((d) => `${d.source}: ${d.detail} ${currency(d.amount)}`).join(" | ")])];
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -20651,7 +20674,14 @@ function SideActionPayoutsTab({
                   const isPaid = Boolean(paidSideActionPayouts[paidKey]);
                   return (
   <tr key={`side-pay-${row.seed}`} className="border-t">
-    <td className="p-2 font-semibold md:p-3">{row.name}</td>
+    <td className="p-2 font-semibold md:p-3">
+      <span>{row.name}</span>
+      {row.game4Lane && (
+        <span className="ml-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800">
+          G4 {row.game4Lane}
+        </span>
+      )}
+    </td>
     <td className="p-2 text-right md:p-3">{currency(row.bracket)}</td>
     <td className="p-2 text-right md:p-3">{currency(row.highGame)}</td>
     <td className="p-2 text-right font-black text-green-700 md:p-3">{currency(row.total)}</td>
