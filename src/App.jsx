@@ -8796,6 +8796,7 @@ function ReservationsTab({
   const [announcementUnsubscribedEmails, setAnnouncementUnsubscribedEmails] = useState([]);
   const [announcementSuppressedEmails, setAnnouncementSuppressedEmails] = useState([]);
   const [announcementSuppressionStatus, setAnnouncementSuppressionStatus] = useState("");
+  const [newSuppressedEmailsText, setNewSuppressedEmailsText] = useState("");
   const currentScheduledTournamentKey = reservationKeyFromState(reservationState);
   const activeDashboardTournamentKey = tournamentInfo.scheduleEventId || (
     tournamentInfo.name || tournamentInfo.date || tournamentInfo.center
@@ -9368,6 +9369,50 @@ function ReservationsTab({
     }
   };
 
+  const addAnnouncementSuppressedEmails = async () => {
+    const accessToken = supabaseSession?.access_token || "";
+    if (!accessToken) {
+      window.alert("Sign in as an approved admin before adding suppressed emails.");
+      return;
+    }
+    const emails = Array.from(new Set(
+      String(newSuppressedEmailsText || "")
+        .split(/[\s,;]+/)
+        .map((email) => email.trim().toLowerCase())
+        .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    ));
+    if (!emails.length) {
+      window.alert("Paste at least one valid email address.");
+      return;
+    }
+
+    try {
+      setAnnouncementSuppressionStatus("Saving suppressed emails...");
+      await supabaseRestRequest("announcement_suppressed_emails", "?on_conflict=email", {
+        method: "POST",
+        body: emails.map((email) => ({ email, reason: "mailjet blocked" })),
+        accessToken,
+        prefer: "resolution=merge-duplicates,return=minimal",
+      });
+      const rows = await loadSupabaseRestRows("announcement_suppressed_emails", "?select=email,reason&order=email.asc", undefined, accessToken);
+      setAnnouncementSuppressedEmails(
+        (Array.isArray(rows) ? rows : [])
+          .map((row) => ({
+            email: String(row.email || "").trim().toLowerCase(),
+            reason: String(row.reason || "suppressed").trim(),
+          }))
+          .filter((row) => row.email)
+      );
+      setNewSuppressedEmailsText("");
+      setAnnouncementSuppressionStatus("");
+      setRosterNotice(`Added ${emails.length} suppressed email${emails.length === 1 ? "" : "s"} for future announcement sends.`);
+    } catch (error) {
+      console.warn("Could not save suppressed announcement emails", error);
+      setAnnouncementSuppressionStatus("");
+      window.alert(error.message || "Suppressed emails could not be saved.");
+    }
+  };
+
   return (
     <AppCard>
       <CardContent className="p-3 md:p-5">
@@ -9579,6 +9624,24 @@ function ReservationsTab({
                 ) : (
                   <p className="mt-1 text-xs font-semibold text-slate-500">No suppressed emails found.</p>
                 )}
+                <div className="mt-3 space-y-2">
+                  <Label className="text-xs">Add Blocked Emails</Label>
+                  <textarea
+                    className="min-h-[72px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    value={newSuppressedEmailsText}
+                    onChange={(event) => setNewSuppressedEmailsText(event.target.value)}
+                    placeholder="Paste Mailjet blocked emails here"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
+                    onClick={addAnnouncementSuppressedEmails}
+                    disabled={!newSuppressedEmailsText.trim() || announcementSuppressionStatus === "Saving suppressed emails..."}
+                  >
+                    Add Suppressed Emails
+                  </Button>
+                </div>
               </div>
             </div>
             {announcementSuppressionStatus && (

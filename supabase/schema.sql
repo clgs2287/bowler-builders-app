@@ -210,7 +210,7 @@ revoke insert on public.reservations from anon;
 grant select, insert on public.reservations to authenticated;
 grant select on public.admin_profiles to authenticated;
 grant select on public.announcement_unsubscribes to authenticated;
-grant select on public.announcement_suppressed_emails to authenticated;
+grant select, insert, update on public.announcement_suppressed_emails to authenticated;
 grant insert, update, delete on public.app_settings to authenticated;
 grant insert, update, delete on public.schedule_events to authenticated;
 grant insert, update, delete on public.manual_titles to authenticated;
@@ -610,6 +610,19 @@ create policy "Admins read announcement suppressed emails"
 on public.announcement_suppressed_emails for select
 to authenticated
 using (public.is_admin());
+
+drop policy if exists "Admins write announcement suppressed emails" on public.announcement_suppressed_emails;
+create policy "Admins write announcement suppressed emails"
+on public.announcement_suppressed_emails for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "Admins update announcement suppressed emails" on public.announcement_suppressed_emails;
+create policy "Admins update announcement suppressed emails"
+on public.announcement_suppressed_emails for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
 
 drop policy if exists "Admins write app settings" on public.app_settings;
 create policy "Admins write app settings"
