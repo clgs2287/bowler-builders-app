@@ -107,6 +107,12 @@ create table if not exists public.admin_activity_locks (
   active_tab text not null default '',
   tournament_id text not null default '',
   tournament_name text not null default '',
+  request_user_id uuid references auth.users(id) on delete set null,
+  request_email text,
+  request_session_id text not null default '',
+  request_device_label text not null default '',
+  request_active_tab text not null default '',
+  requested_at timestamptz,
   locked_at timestamptz not null default now(),
   heartbeat_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

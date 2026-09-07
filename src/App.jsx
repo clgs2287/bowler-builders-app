@@ -4918,12 +4918,18 @@ function AdminControlCard({
   status = "",
   sessionId = "",
   onTakeControl = () => {},
+  onRequestControl = () => {},
+  onSaveAndRelease = () => {},
   onRefresh = () => {},
   takingControl = false,
+  releasingControl = false,
 }) {
   const active = adminControlLockIsActive(lock);
   const mine = active && adminControlLockIsMine(lock, sessionId);
   const ownerLabel = lock?.email || "another admin";
+  const requestedByOther = mine && lock?.request_session_id && !adminControlLockIsMine({ session_id: lock.request_session_id }, sessionId);
+  const requestIsMine = active && !mine && lock?.request_session_id && adminControlLockIsMine({ session_id: lock.request_session_id }, sessionId);
+  const requestLabel = lock?.request_email || "another admin";
   const statusClass = mine
     ? "border-green-300 bg-green-50"
     : active
@@ -4949,15 +4955,30 @@ function AdminControlCard({
               ? `${lock?.device_label || "Unknown device"}${lock?.active_tab ? ` on ${lock.active_tab}` : ""} - active ${formatAdminControlTime(lock?.heartbeat_at || lock?.locked_at)}`
               : "Take control before tournament-day saves so older admin tabs cannot overwrite changes."}
           </p>
+          {requestedByOther && (
+            <p className="mt-1 text-xs font-black text-amber-800">
+              {requestLabel} is requesting control. Save and release when you are ready to hand it off.
+            </p>
+          )}
+          {requestIsMine && (
+            <p className="mt-1 text-xs font-black text-amber-800">
+              Control requested. Wait for {ownerLabel} to save and release.
+            </p>
+          )}
           {status && <p className="mt-1 text-xs font-bold text-blue-800">{status}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" className="rounded-2xl bg-white text-blue-950 hover:bg-blue-50" onClick={onRefresh}>
             Refresh
           </Button>
+          {requestedByOther && (
+            <Button className="rounded-2xl bg-green-700 hover:bg-green-800" onClick={onSaveAndRelease} disabled={releasingControl}>
+              {releasingControl ? "Saving..." : "Save & Release Control"}
+            </Button>
+          )}
           {!mine && (
-            <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={onTakeControl} disabled={takingControl}>
-              {takingControl ? "Taking Control..." : active ? "Take Control" : "Start Control"}
+            <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={active ? onRequestControl : onTakeControl} disabled={takingControl || requestIsMine}>
+              {takingControl ? "Working..." : active ? requestIsMine ? "Control Requested" : "Request Control" : "Start Control"}
             </Button>
           )}
         </div>
@@ -5573,8 +5594,11 @@ function DashboardTab({
   adminControlSessionId = "",
   adminCanSave = true,
   onTakeAdminControl = () => {},
+  onRequestAdminControl = () => {},
+  onSaveAndReleaseAdminControl = () => {},
   onRefreshAdminControl = () => {},
   takingAdminControl = false,
+  releasingAdminControl = false,
 }) {
   const leader = getRankedBowlers(bowlers, useHandicapScores)[0];
   const announcementFileInputRef = useRef(null);
@@ -5746,8 +5770,11 @@ function DashboardTab({
           status={adminControlStatus}
           sessionId={adminControlSessionId}
           onTakeControl={onTakeAdminControl}
+          onRequestControl={onRequestAdminControl}
+          onSaveAndRelease={onSaveAndReleaseAdminControl}
           onRefresh={onRefreshAdminControl}
           takingControl={takingAdminControl}
+          releasingControl={releasingAdminControl}
         />
       )}
       {supabaseAdminProfile && !isOwnerAdmin && (
@@ -20651,6 +20678,7 @@ const [reservationState, setReservationState] = useState({
 const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
 const [selectedPublicEventKey, setSelectedPublicEventKey] = useState("");
 const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEvent());
+const [releasingAdminControl, setReleasingAdminControl] = useState(false);
 
   const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
@@ -20661,6 +20689,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
   const supabaseLastFullSyncSignatureRef = useRef("");
   const restoredInitialPublicTabRef = useRef(false);
   const adminControlSessionIdRef = useRef("");
+  const adminControlPausedRef = useRef(false);
   const [adminControlLock, setAdminControlLock] = useState(null);
   const [adminControlStatus, setAdminControlStatus] = useState("");
   const [takingAdminControl, setTakingAdminControl] = useState(false);
@@ -20855,7 +20884,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     }
   };
 
-  const writeAdminControlLock = async () => {
+  const writeAdminControlLock = async (currentLock = null) => {
     if (!supabase || !supabaseSession?.access_token || !supabaseAdminProfile) return null;
     const now = new Date().toISOString();
     const lock = {
@@ -20871,6 +20900,12 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
         center: tournamentInfo?.center,
       }) || "active",
       tournament_name: tournamentInfo?.name || "Active tournament",
+      request_user_id: currentLock?.request_user_id || null,
+      request_email: currentLock?.request_email || null,
+      request_session_id: currentLock?.request_session_id || "",
+      request_device_label: currentLock?.request_device_label || "",
+      request_active_tab: currentLock?.request_active_tab || "",
+      requested_at: currentLock?.requested_at || null,
       locked_at: now,
       heartbeat_at: now,
     };
@@ -20890,6 +20925,7 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
   const claimAdminControl = async ({ force = false } = {}) => {
     if (!supabase || !supabaseAdminProfile || !supabaseSession?.access_token) return true;
+    if (force) adminControlPausedRef.current = false;
 
     const currentLock = await loadAdminControlLock();
     const otherHasFreshControl =
@@ -20903,12 +20939,54 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       return false;
     }
 
-    await writeAdminControlLock();
+    await writeAdminControlLock(currentLock && adminControlLockIsMine(currentLock, adminControlSessionIdRef.current) ? currentLock : null);
     setAdminControlStatus(force ? "You took save control." : "You have save control.");
     return true;
   };
 
+  const requestAdminControl = async () => {
+    if (!supabase || !supabaseSession?.access_token || !supabaseAdminProfile) return;
+    setTakingAdminControl(true);
+    try {
+      const currentLock = await loadAdminControlLock();
+      if (!currentLock || !adminControlLockIsActive(currentLock)) {
+        await claimAdminControl({ force: false });
+        return;
+      }
+      if (adminControlLockIsMine(currentLock, adminControlSessionIdRef.current)) {
+        setAdminControlStatus("You already have save control.");
+        return;
+      }
+      const updatedLock = {
+        ...currentLock,
+        request_user_id: supabaseSession.user?.id || supabaseAdminProfile.user_id || null,
+        request_email: supabaseSession.user?.email || supabaseAdminProfile.email || "",
+        request_session_id: adminControlSessionIdRef.current,
+        request_device_label: getAdminDeviceLabel(),
+        request_active_tab: activeTab || "",
+        requested_at: new Date().toISOString(),
+      };
+      await withTimeout(
+        supabaseRestRequest("admin_activity_locks", "?on_conflict=id", {
+          method: "POST",
+          body: updatedLock,
+          accessToken: supabaseSession.access_token,
+          prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+        "Requesting admin control",
+        5000
+      );
+      setAdminControlLock(updatedLock);
+      setAdminControlStatus(`Requested control from ${currentLock.email || "the current admin"}.`);
+    } catch (error) {
+      setAdminControlStatus(`Request issue: ${error.message || "Could not request control."}`);
+    } finally {
+      setTakingAdminControl(false);
+    }
+  };
+
   const takeAdminControl = async () => {
+    adminControlPausedRef.current = false;
     setTakingAdminControl(true);
     try {
       await claimAdminControl({ force: true });
@@ -20984,6 +21062,10 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
     let cancelled = false;
     const refreshControl = async () => {
       try {
+        if (adminControlPausedRef.current) {
+          await loadAdminControlLock();
+          return;
+        }
         const ok = await claimAdminControl({ force: false });
         if (!cancelled && ok) setAdminControlStatus("You have save control.");
       } catch (error) {
@@ -21248,6 +21330,22 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 
   const syncSupabaseCoreData = () => runQueuedSupabaseSave("full");
   const syncSupabaseLiveSnapshot = () => runQueuedSupabaseSave("live");
+
+  const saveAndReleaseAdminControl = async () => {
+    setReleasingAdminControl(true);
+    try {
+      setAdminControlStatus("Saving before releasing control...");
+      await runQueuedSupabaseSave("full");
+      adminControlPausedRef.current = true;
+      await releaseAdminControl();
+      setAdminControlStatus("Saved and released control.");
+    } catch (error) {
+      setAdminControlStatus(`Release issue: ${error.message || "Could not save and release control."}`);
+      setSupabaseSaveStatus(`Save issue: ${error.message || "Could not save before releasing control."}`);
+    } finally {
+      setReleasingAdminControl(false);
+    }
+  };
 
   useEffect(() => {
     window.__currentTournamentFormat = tournamentFormat;
@@ -22502,8 +22600,11 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
       adminControlSessionId={adminControlSessionIdRef.current}
       adminCanSave={adminCanSave}
       onTakeAdminControl={takeAdminControl}
+      onRequestAdminControl={requestAdminControl}
+      onSaveAndReleaseAdminControl={saveAndReleaseAdminControl}
       onRefreshAdminControl={loadAdminControlLock}
       takingAdminControl={takingAdminControl}
+      releasingAdminControl={releasingAdminControl}
 
     />
   </AppErrorBoundary>
