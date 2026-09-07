@@ -2599,7 +2599,7 @@ function laneAssignmentForGame(player = {}, gameIndex = 0, tournamentInfo = {}) 
 
   if (!player?.lane) return "";
 
-  return lanePairForGame(
+  const movedLane = lanePairForGame(
     player.lane,
     gameIndex,
     tournamentInfo?.lanesUsed,
@@ -2610,6 +2610,15 @@ function laneAssignmentForGame(player = {}, gameIndex = 0, tournamentInfo = {}) 
       even: tournamentInfo?.evenCustomRotation || "",
     }
   );
+
+  const laneText = String(movedLane || "").trim();
+  if (!laneText) return "";
+  if (!laneText.includes("-")) return `Lane ${laneText}`;
+
+  const [lowLane, highLane] = laneText.split("-").map(Number);
+  const startingLane = Number(String(player.lane || "").match(/[0-9]+/)?.[0] || 0);
+  const actualLane = startingLane % 2 === 0 ? highLane : lowLane;
+  return Number.isFinite(actualLane) && actualLane > 0 ? `Lane ${actualLane}` : `Lane ${laneText}`;
 }
 
 function bracketSeedOrder(size) {
@@ -20678,7 +20687,7 @@ function SideActionPayoutsTab({
       <span>{row.name}</span>
       {row.game4Lane && (
         <span className="ml-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-800">
-          G4 {row.game4Lane}
+          {row.game4Lane}
         </span>
       )}
     </td>
