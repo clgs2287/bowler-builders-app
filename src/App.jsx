@@ -8005,14 +8005,143 @@ const removeQualifyingAdjustment = (bowlerId) => {
   });
 };
 
+const downloadScoreEntrySheetPdf = async () => {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+  const pageWidth = 8.5;
+  const pageHeight = 11;
+  const margin = 0.35;
+  const title = tournamentInfo.name || "Tournament";
+  const laneKeys = printableScoreEntryLaneKeys.length ? printableScoreEntryLaneKeys : ["Unassigned"];
+  const usableWidth = pageWidth - margin * 2;
+  const gameColumns = Array.from({ length: qualifyingGames }, (_, gi) => gi);
+  const staticWidths = useHandicapScores
+    ? { bowler: 1.75, pos: 0.45, avg: 0.48, hdcp: 0.45, scratch: 0.54, hdcpTotal: 0.54, total: 0.56 }
+    : { bowler: 2.15, pos: 0.5, total: 0.7 };
+  const fixedWidth = Object.values(staticWidths).reduce((sum, width) => sum + width, 0);
+  const gameWidth = Math.max(0.48, (usableWidth - fixedWidth) / Math.max(1, gameColumns.length));
+  const headerHeight = 0.34;
+  const rowHeight = 0.31;
+  const laneTitleHeight = 0.26;
+  let y = margin;
+
+  const addHeader = () => {
+    doc.setTextColor(0, 0, 0);
+    doc.setDrawColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(title, margin, y + 0.1);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text([tournamentInfo.center || "", tournamentInfo.date || ""].filter(Boolean).join(" - "), pageWidth - margin, y + 0.1, { align: "right" });
+    y += 0.3;
+  };
+
+  const maybePage = (neededHeight) => {
+    if (y + neededHeight <= pageHeight - margin) return;
+    doc.addPage();
+    y = margin;
+    addHeader();
+  };
+
+  const cell = (text, x, top, width, height, options = {}) => {
+    doc.rect(x, top, width, height);
+    if (text !== undefined && text !== null && text !== "") {
+      doc.setFont("helvetica", options.bold ? "bold" : "normal");
+      doc.setFontSize(options.size || 7.2);
+      const align = options.align || "left";
+      const textX = align === "right" ? x + width - 0.04 : align === "center" ? x + width / 2 : x + 0.04;
+      doc.text(String(text), textX, top + height * 0.68, { align });
+    }
+  };
+
+  addHeader();
+
+  laneKeys.forEach((laneKey) => {
+    const rows = printableScoreEntryGroups[laneKey] || [];
+    const neededHeight = laneTitleHeight + headerHeight + Math.max(1, rows.length) * rowHeight + 0.12;
+    maybePage(neededHeight);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.text(laneKey === "Unassigned" ? "Unassigned" : `Lane ${laneKey}`, margin, y + 0.15);
+    y += laneTitleHeight;
+
+    let x = margin;
+    const columns = [
+      { key: "bowler", label: "Bowler", width: staticWidths.bowler, align: "left" },
+      { key: "pos", label: "Pos", width: staticWidths.pos, align: "center" },
+      ...(useHandicapScores ? [
+        { key: "avg", label: "Avg", width: staticWidths.avg, align: "center" },
+        { key: "hdcp", label: "Hdcp", width: staticWidths.hdcp, align: "center" },
+      ] : []),
+      ...gameColumns.map((gi) => ({
+        key: `g${gi}`,
+        label: `G${gi + 1}${laneKey !== "Unassigned" ? `\n${lanePairForGame(
+          laneKey,
+          gi,
+          tournamentInfo?.lanesUsed,
+          tournamentInfo?.movePairs || 1,
+          tournamentInfo?.movementMode || "custom",
+          {
+            odd: tournamentInfo?.customRotation || "",
+            even: tournamentInfo?.evenCustomRotation || "",
+          }
+        )}` : ""}`,
+        width: gameWidth,
+        align: "center",
+      })),
+      ...(useHandicapScores ? [
+        { key: "scratch", label: "Scratch", width: staticWidths.scratch, align: "center" },
+        { key: "hdcpTotal", label: "Hdcp", width: staticWidths.hdcpTotal, align: "center" },
+        { key: "total", label: "Total", width: staticWidths.total, align: "center" },
+      ] : [
+        { key: "total", label: "Total", width: staticWidths.total, align: "center" },
+      ]),
+    ];
+
+    columns.forEach((column) => {
+      doc.setFont("helvetica", "bold");
+      const labelLines = String(column.label).split("\n");
+      cell("", x, y, column.width, headerHeight);
+      doc.setFontSize(labelLines.length > 1 ? 5.8 : 7);
+      labelLines.forEach((line, lineIndex) => {
+        doc.text(line, x + column.width / 2, y + 0.13 + lineIndex * 0.1, { align: "center" });
+      });
+      x += column.width;
+    });
+    y += headerHeight;
+
+    (rows.length ? rows : [{ bowler: null, lanePosition: "" }]).forEach(({ bowler: b, lanePosition }) => {
+      x = margin;
+      columns.forEach((column) => {
+        let value = "";
+        if (column.key === "bowler") value = b?.name || "";
+        if (column.key === "pos") value = b?.lane || lanePosition || "";
+        if (column.key === "avg") value = b ? bowlerAverageDisplay(b) : "";
+        if (column.key === "hdcp") value = b ? handicapPerGame(b) : "";
+        if (column.key === "hdcpTotal") value = b ? qualifyingHandicapTotal(b, qualifyingGames) : "";
+        cell(value, x, y, column.width, rowHeight, { align: column.align, bold: column.key === "bowler" || column.key === "pos", size: column.key === "bowler" ? 6.8 : 7 });
+        x += column.width;
+      });
+      y += rowHeight;
+    });
+
+    y += 0.12;
+  });
+
+  const safeName = safeStorageFileName(`${title}-score-entry-sheet`).replace(/\.jpg$/, ".pdf");
+  doc.save(safeName);
+};
+
   return (
     <AppCard className="print:shadow-none">
       <CardContent className="p-3 md:p-5 print:p-0">
         <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between print:hidden">
           <h2 className="text-xl font-semibold text-blue-900">{laneDrawMatchplay ? "Opening Round Score Entry" : "Scoring / Qualifying Results"}</h2>
           <div className="flex flex-wrap gap-2">
-  <Button variant="outline" className="rounded-2xl" onClick={() => window.print()}>
-    Print Score Entry Sheet
+  <Button variant="outline" className="rounded-2xl" onClick={downloadScoreEntrySheetPdf}>
+    Download Score Entry PDF
   </Button>
 
   <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("qualifying-results.csv", exportRows)}>
@@ -11065,6 +11194,163 @@ const printableSheets =
     });
   })];
 
+  const downloadScoresheetsPdf = async () => {
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
+    const pageWidth = 8.5;
+    const pageHeight = 11;
+    const margin = 0.35;
+    const title = tournamentInfo.name || "Tournament";
+    let qrDataUrl = "";
+
+    try {
+      qrDataUrl = await loadImageDataUrl(qrUrl);
+    } catch (error) {
+      console.warn("Could not add leaderboard QR to scoresheets PDF", error);
+    }
+
+    const drawText = (text, x, y, options = {}) => {
+      doc.setFont("helvetica", options.bold ? "bold" : "normal");
+      doc.setFontSize(options.size || 8);
+      doc.text(String(text || ""), x, y, options);
+    };
+
+    const cell = (text, x, y, width, height, options = {}) => {
+      doc.rect(x, y, width, height);
+      if (text !== undefined && text !== null && text !== "") {
+        const align = options.align || "left";
+        const textX = align === "right" ? x + width - 0.04 : align === "center" ? x + width / 2 : x + 0.04;
+        drawText(text, textX, y + height * 0.68, { align, bold: options.bold, size: options.size || 7 });
+      }
+    };
+
+    const drawLaneTable = (lane, laneBowlers, x, y, width) => {
+      drawText(`Lane ${lane}`, x, y, { bold: true, size: 11 });
+      y += 0.12;
+
+      const baseWidths = useHandicapScores
+        ? { pos: 0.42, bowler: 1.45, avg: 0.42, hdcp: 0.42, total: 0.62 }
+        : { pos: 0.45, bowler: 1.75, total: 0.7 };
+      const fixedWidth = Object.values(baseWidths).reduce((sum, value) => sum + value, 0);
+      const gameWidth = Math.max(0.45, (width - fixedWidth) / Math.max(1, scoreHeaders.length));
+      const columns = [
+        { key: "pos", label: "Pos", width: baseWidths.pos, align: "center" },
+        { key: "bowler", label: "Bowler", width: baseWidths.bowler, align: "left" },
+        ...(useHandicapScores ? [
+          { key: "avg", label: "Avg", width: baseWidths.avg, align: "center" },
+          { key: "hdcp", label: "Hdcp", width: baseWidths.hdcp, align: "center" },
+        ] : []),
+        ...scoreHeaders.map((header, gi) => ({ key: `g${gi}`, label: `${header}\n${lanePairForGame(
+          lane,
+          gi,
+          tournamentInfo?.lanesUsed,
+          1,
+          tournamentInfo?.movementMode || "custom",
+          {
+            odd: tournamentInfo?.customRotation || "",
+            even: tournamentInfo?.evenCustomRotation || "",
+          }
+        )}`, width: gameWidth, align: "center" })),
+        { key: "total", label: "Series", width: baseWidths.total, align: "center" },
+      ];
+      const headerHeight = 0.34;
+      const rowHeight = 0.34;
+      let cursor = x;
+
+      columns.forEach((column) => {
+        cell("", cursor, y, column.width, headerHeight);
+        const labelLines = String(column.label).split("\n");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(labelLines.length > 1 ? 5.5 : 6.8);
+        labelLines.forEach((line, lineIndex) => {
+          doc.text(line, cursor + column.width / 2, y + 0.13 + lineIndex * 0.1, { align: "center" });
+        });
+        cursor += column.width;
+      });
+      y += headerHeight;
+
+      const laneTeams = groupLaneBowlers(laneBowlers);
+      let lanePositionIndex = 0;
+      laneTeams.forEach((team) => {
+        team.bowlers.forEach((bowler) => {
+          const position = lane === "Unassigned" || !bowler
+            ? ""
+            : bowler.lanePosition && /[A-Z]$/.test(bowler.lanePosition)
+              ? bowler.lanePosition
+              : `${lane}${getLaneLetter(lane, lanePositionIndex)}`;
+          lanePositionIndex += 1;
+          cursor = x;
+          columns.forEach((column) => {
+            let value = "";
+            if (column.key === "pos") value = position;
+            if (column.key === "bowler") value = bowler?.name || "";
+            if (column.key === "avg") value = bowler?.name ? bowlerAverageDisplay(bowler) : "";
+            if (column.key === "hdcp") value = bowler?.name ? handicapPerGame(bowler) : "";
+            cell(value, cursor, y, column.width, rowHeight, { align: column.align, bold: column.key === "pos" || column.key === "bowler", size: column.key === "bowler" ? 6.8 : 7 });
+            cursor += column.width;
+          });
+          y += rowHeight;
+        });
+
+        if (isTeamEvent) {
+          cursor = x;
+          columns.forEach((column) => {
+            let value = "";
+            if (column.key === "bowler") value = `${team.label} Game Totals`;
+            if (column.key === "hdcp") value = "Team";
+            cell(value, cursor, y, column.width, rowHeight, { align: column.key === "bowler" ? "right" : "center", bold: true, size: 6.6 });
+            cursor += column.width;
+          });
+          y += rowHeight;
+        }
+      });
+
+      return y;
+    };
+
+    const drawSheet = (pair, pageIndex) => {
+      if (pageIndex > 0) doc.addPage();
+      doc.setTextColor(0, 0, 0);
+      doc.setDrawColor(0, 0, 0);
+
+      const isSingleLaneSheet = !String(pair).includes("-") && pair !== "Unassigned";
+      const pairBowlers = isSingleLaneSheet
+        ? Object.values(lanePairs).flat().filter((b) => String(b.laneNumber || b.lane || "") === String(pair)).sort((a, b) => laneAssignmentSortValue(a.lanePosition || a.lane) - laneAssignmentSortValue(b.lanePosition || b.lane))
+        : [...(lanePairs[pair] || [])].sort((a, b) => laneAssignmentSortValue(a.lanePosition || a.lane) - laneAssignmentSortValue(b.lanePosition || b.lane));
+      const lanes = pair === "Unassigned" ? ["Unassigned"] : isSingleLaneSheet ? [pair] : pair.split("-");
+      const byLane = lanes.reduce((groups, lane) => ({
+        ...groups,
+        [lane]: pairBowlers.filter((b) => String(b.laneNumber || b.lane || "") === String(lane)),
+      }), {});
+
+      drawText(title, margin, margin + 0.1, { bold: true, size: title.length > 38 ? 12 : 15 });
+      drawText([tournamentInfo.center || "", tournamentInfo.date || ""].filter(Boolean).join(" - "), margin, margin + 0.35, { size: 8 });
+      drawText(`Lanes ${pair}`, pageWidth / 2, margin + 0.72, { align: "center", bold: true, size: 20 });
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, "PNG", pageWidth - margin - 0.68, margin, 0.62, 0.62);
+        drawText("Public Leaderboard", pageWidth - margin - 0.37, margin + 0.75, { align: "center", bold: true, size: 5.8 });
+      }
+      doc.line(margin, margin + 0.92, pageWidth - margin, margin + 0.92);
+
+      let y = margin + 1.2;
+      lanes.forEach((lane, index) => {
+        if (index > 0) y += 0.18;
+        y = drawLaneTable(lane, byLane[lane] || [], margin, y, pageWidth - margin * 2);
+      });
+    };
+
+    const sheets = printableSheets.length ? printableSheets : sortedPairs;
+    if (!sheets.length) {
+      drawText(title, margin, margin + 0.1, { bold: true, size: 15 });
+      drawText("No lane assignments yet.", margin, margin + 0.55, { size: 11 });
+    } else {
+      sheets.forEach((pair, index) => drawSheet(pair, index));
+    }
+
+    const safeName = safeStorageFileName(`${title}-lane-scoresheets`).replace(/\.jpg$/, ".pdf");
+    doc.save(safeName);
+  };
+
   const PrintableLaneSheet = ({ pair }) => {
 const isSingleLaneSheet = !String(pair).includes("-") && pair !== "Unassigned";
 
@@ -11284,14 +11570,11 @@ Lane {lanePairForGame(
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("lane-pair-scoresheets.csv", csvRows)}>Export Lane Sheets CSV</Button>
-              <Button
+<Button
   className="rounded-2xl bg-blue-800 hover:bg-blue-900"
-  onClick={() => {
-    setPrintMode("scoresheets");
-    setTimeout(() => window.print(), 100);
-  }}
+  onClick={downloadScoresheetsPdf}
 >
-  Print Scoresheets
+  Download Scoresheets PDF
 </Button>
 
 <Button
