@@ -9394,6 +9394,7 @@ function ReservationsTab({
   const [announcementMessage, setAnnouncementMessage] = useState("");
   const [announcementTestEmail, setAnnouncementTestEmail] = useState("");
   const [announcementSending, setAnnouncementSending] = useState("");
+  const [announcementAudience, setAnnouncementAudience] = useState("current");
   const [announcementIncludeFlyer, setAnnouncementIncludeFlyer] = useState(true);
   const [announcementUnsubscribedEmails, setAnnouncementUnsubscribedEmails] = useState([]);
   const [announcementSuppressedEmails, setAnnouncementSuppressedEmails] = useState([]);
@@ -9412,7 +9413,21 @@ function ReservationsTab({
   const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
-  const announcementRecipients = useMemo(() => {
+  const currentTournamentAnnouncementRecipients = useMemo(() => {
+    const byEmail = new Map();
+    (reservationState.reservations || []).forEach((reservation) => {
+      const email = String(reservation.email || "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+      if (!byEmail.has(email)) {
+        byEmail.set(email, {
+          email,
+          name: getReservationDisplayName(reservation) || reservation.name || "",
+        });
+      }
+    });
+    return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email));
+  }, [reservationState.reservations]);
+  const pastAnnouncementRecipients = useMemo(() => {
     const byEmail = new Map();
     allReservationItemsFromState(reservationState).forEach((reservation) => {
       const email = String(reservation.email || "").trim().toLowerCase();
@@ -9426,6 +9441,12 @@ function ReservationsTab({
     });
     return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email));
   }, [reservationState]);
+  const announcementRecipients = announcementAudience === "past"
+    ? pastAnnouncementRecipients
+    : currentTournamentAnnouncementRecipients;
+  const announcementAudienceLabel = announcementAudience === "past"
+    ? "past reservation email"
+    : "current tournament reservation email";
   const defaultAnnouncementSubject = `Entries are open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}`;
   const defaultAnnouncementMessage = [
     `Tournament entries are now open for ${reservationState.tournamentName || tournamentInfo.name || "our next tournament"}.`,
@@ -9933,17 +9954,17 @@ function ReservationsTab({
     }
   };
 
-  const sendAnnouncementToPastBowlers = async () => {
+  const sendAnnouncementToSelectedAudience = async () => {
     if (!canSendAnnouncementEmails) {
       window.alert("Sign in as an approved admin before sending announcement emails.");
       return;
     }
     if (!announcementRecipients.length) {
-      window.alert("No past reservation emails were found.");
+      window.alert(`No ${announcementAudienceLabel}s were found.`);
       return;
     }
     const confirmed = window.confirm(
-      `Send this announcement to ${announcementRecipients.length} past reservation email${announcementRecipients.length === 1 ? "" : "s"}?\n\nSend a test first if you have not already reviewed it.`
+      `Send this announcement to ${announcementRecipients.length} ${announcementAudienceLabel}${announcementRecipients.length === 1 ? "" : "s"}?\n\nSend a test first if you have not already reviewed it.`
     );
     if (!confirmed) return;
 
@@ -10184,9 +10205,9 @@ function ReservationsTab({
           <div className="mt-5 rounded-2xl border border-blue-200 bg-white p-4">
             <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
               <div>
-                <h3 className="text-lg font-black text-blue-950">Email Past Bowlers</h3>
+                <h3 className="text-lg font-black text-blue-950">Email Bowlers</h3>
                 <p className="text-sm font-semibold text-blue-700">
-                  Send a tournament announcement to de-duplicated emails from past reservations. Current list: {announcementRecipients.length} recipient{announcementRecipients.length === 1 ? "" : "s"}.
+                  Send a tournament announcement to de-duplicated reservation emails. Current target: {announcementRecipients.length} recipient{announcementRecipients.length === 1 ? "" : "s"}.
                 </p>
                 <p className="mt-1 text-sm font-bold text-slate-700">
                   Sendable now: {sendableAnnouncementCount}. Skipping {announcementUnsubscribedRecipientCount} unsubscribed and {announcementSuppressedRecipientCount} suppressed.
@@ -10251,6 +10272,22 @@ function ReservationsTab({
             )}
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Send To</Label>
+                <select
+                  className="w-full rounded-2xl border border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  value={announcementAudience}
+                  onChange={(event) => setAnnouncementAudience(event.target.value)}
+                >
+                  <option value="current">
+                    Current tournament reservations ({currentTournamentAnnouncementRecipients.length})
+                  </option>
+                  <option value="past">
+                    Past reservation emails ({pastAnnouncementRecipients.length})
+                  </option>
+                </select>
+              </div>
+
               <div className="space-y-2 md:col-span-2">
                 <Label>Subject</Label>
                 <Input
@@ -10319,9 +10356,9 @@ function ReservationsTab({
                 <Button
                   className="rounded-2xl bg-blue-800 text-white hover:bg-blue-900"
                   disabled={announcementSending === "live" || !announcementRecipients.length}
-                  onClick={sendAnnouncementToPastBowlers}
+                  onClick={sendAnnouncementToSelectedAudience}
                 >
-                  {announcementSending === "live" ? "Sending..." : "Send to Past Bowlers"}
+                  {announcementSending === "live" ? "Sending..." : announcementAudience === "past" ? "Send to Past Bowlers" : "Send to Current Reservations"}
                 </Button>
               </div>
             </div>
