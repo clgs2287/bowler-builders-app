@@ -9479,6 +9479,23 @@ function ReservationsTab({
     0,
     announcementRecipients.length - announcementUnsubscribedRecipientCount - announcementSuppressedRecipientCount
   );
+  const getFreshAnnouncementAccessToken = async () => {
+    if (supabase?.auth?.refreshSession) {
+      const refreshed = await supabase.auth.refreshSession().catch(() => null);
+      if (refreshed?.data?.session?.access_token) {
+        return refreshed.data.session.access_token;
+      }
+    }
+
+    if (supabase?.auth?.getSession) {
+      const current = await supabase.auth.getSession().catch(() => null);
+      if (current?.data?.session?.access_token) {
+        return current.data.session.access_token;
+      }
+    }
+
+    return supabaseSession?.access_token || "";
+  };
 
   useEffect(() => {
     const accessToken = supabaseSession?.access_token || "";
@@ -9938,8 +9955,12 @@ function ReservationsTab({
 
     try {
       setAnnouncementSending("test");
+      const accessToken = await getFreshAnnouncementAccessToken();
+      if (!accessToken) {
+        throw new Error("Admin login could not be verified. Please sign out and back in, then try again.");
+      }
       const result = await sendPastReservationAnnouncementEmail({
-        accessToken: supabaseSession.access_token,
+        accessToken,
         testEmail,
         subject: announcementSubject.trim() || defaultAnnouncementSubject,
         message: announcementMessage.trim() || defaultAnnouncementMessage,
@@ -9973,8 +9994,12 @@ function ReservationsTab({
 
     try {
       setAnnouncementSending("live");
+      const accessToken = await getFreshAnnouncementAccessToken();
+      if (!accessToken) {
+        throw new Error("Admin login could not be verified. Please sign out and back in, then try again.");
+      }
       const result = await sendPastReservationAnnouncementEmail({
-        accessToken: supabaseSession.access_token,
+        accessToken,
         recipients: announcementRecipients,
         subject: announcementSubject.trim() || defaultAnnouncementSubject,
         message: announcementMessage.trim() || defaultAnnouncementMessage,
