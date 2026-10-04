@@ -11355,11 +11355,7 @@ const printableSheets =
       let lanePositionIndex = 0;
       laneTeams.forEach((team) => {
         team.bowlers.forEach((bowler) => {
-          const position = lane === "Unassigned" || !bowler
-            ? ""
-            : bowler.lanePosition && /[A-Z]$/.test(bowler.lanePosition)
-              ? bowler.lanePosition
-              : `${lane}${getLaneLetter(lane, lanePositionIndex)}`;
+          const position = lane === "Unassigned" ? "" : `${lane}${getLaneLetter(lane, lanePositionIndex)}`;
           lanePositionIndex += 1;
           cursor = x;
           columns.forEach((column) => {
@@ -11511,7 +11507,7 @@ Lane {lanePairForGame(
                   <tbody>
                     {laneTeams.flatMap((team, teamIndex) => {
                       const bowlerRows = team.bowlers.map((bowler, index) => {
-                        const position = lane === "Unassigned" || !bowler ? "" : (bowler.lanePosition && /[A-Z]$/.test(bowler.lanePosition) ? bowler.lanePosition : `${lane}${getLaneLetter(lane, lanePositionIndex)}`);
+                        const position = lane === "Unassigned" ? "" : `${lane}${getLaneLetter(lane, lanePositionIndex)}`;
                         lanePositionIndex += 1;
                         return (
                           <tr key={`${pair}-${lane}-${teamIndex}-${index}`}>
