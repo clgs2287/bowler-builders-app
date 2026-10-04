@@ -6940,6 +6940,52 @@ function lanePositionParts(value) {
   return { lane, letter };
 }
 
+function lanePositionIsValid(value, tournamentStyle = "singles") {
+  const { lane, letter } = lanePositionParts(value);
+  if (!lane || !letter) return false;
+  return getLaneLettersForStyle(Number(lane), tournamentStyle).includes(letter);
+}
+
+function normalizeInvalidLaneAssignments(bowlers = [], tournamentStyle = "singles") {
+  const nextBowlers = [...bowlers];
+  const rowsByLane = {};
+
+  nextBowlers.forEach((bowler, index) => {
+    const { lane } = lanePositionParts(bowler?.lane);
+    if (!lane) return;
+    rowsByLane[lane] = [...(rowsByLane[lane] || []), { bowler, index }];
+  });
+
+  let changed = false;
+  Object.entries(rowsByLane).forEach(([lane, rows]) => {
+    const expectedLetters = getLaneLettersForStyle(Number(lane), tournamentStyle);
+    if (!expectedLetters.length) return;
+
+    const seenLetters = new Set();
+    const needsRepair = rows.some(({ bowler }) => {
+      const { letter } = lanePositionParts(bowler?.lane);
+      const invalid = !expectedLetters.includes(letter) || seenLetters.has(letter);
+      if (letter) seenLetters.add(letter);
+      return invalid;
+    });
+    if (!needsRepair) return;
+
+    [...rows]
+      .sort((a, b) => laneAssignmentSortValue(a.bowler?.lane) - laneAssignmentSortValue(b.bowler?.lane) || a.index - b.index)
+      .forEach(({ bowler, index }, rowIndex) => {
+        const letter = expectedLetters[rowIndex];
+        if (!letter) return;
+        const nextLane = `${lane}${letter}`;
+        if (bowler.lane !== nextLane) {
+          nextBowlers[index] = { ...bowler, lane: nextLane };
+          changed = true;
+        }
+      });
+  });
+
+  return changed ? nextBowlers : bowlers;
+}
+
 function shiftLaneAfterDelete(bowlers, removedLane, tournamentStyle = "singles") {
   const { lane, letter } = lanePositionParts(removedLane);
   if (!lane || !letter) return bowlers;
@@ -7008,6 +7054,10 @@ function RegistrationTab({ entries, bowlers, setBowlers, useHandicapScores, setU
       0,
       Math.floor((handicapBase - Number(average || 0)) * (handicapPercent / 100))
     );
+  useEffect(() => {
+    setBowlers((current) => normalizeInvalidLaneAssignments(current, tournamentStyle));
+  }, [setBowlers, tournamentStyle]);
+
   useEffect(() => {
   if (!useHandicapScores) return;
 
@@ -7098,6 +7148,16 @@ return {
 const updateBowler = (index, field, value) => {
   if (field === "lane" && String(value || "").trim()) {
     const normalizedLane = String(value || "").trim().toUpperCase();
+    if (!lanePositionIsValid(normalizedLane, tournamentStyle)) {
+      const { lane } = lanePositionParts(normalizedLane);
+      const allowed = getLaneLettersForStyle(Number(lane), tournamentStyle).map((letter) => `${lane}${letter}`);
+      window.alert(
+        allowed.length
+          ? `${normalizedLane} is not valid for lane ${lane}. Use ${allowed.join(", ")}.`
+          : `${normalizedLane} is not a valid lane spot.`
+      );
+      return;
+    }
     const duplicate = bowlers.find(
       (bowler, bowlerIndex) =>
         bowlerIndex !== index &&
