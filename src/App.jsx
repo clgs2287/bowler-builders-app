@@ -2759,6 +2759,7 @@ function getBracketSpacing(roundIndex) {
 function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {} }) {
   const manualQualifiers = bracketState.manualQualifiers || "";
   const scores = bracketState.scores || {};
+  const advantageBonuses = bracketState.advantageBonuses || {};
   const playerOverrides = bracketState.playerOverrides || {};
   const rolloffWinners = bracketState.rolloffWinners || {};
   const matchScoring = useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total";
@@ -2816,6 +2817,7 @@ function buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState,
         scores,
         matchScoring,
         roundIndex,
+        advantageBonuses,
         rolloffWinners,
         useHandicapScores,
       })
@@ -2870,6 +2872,7 @@ function maskBracketStateForPublishedSnapshot({
   return {
     ...bracketState,
     scores: filterScoreMapBySavedRound(bracketState.scores, isSavedRoundKey),
+    advantageBonuses: filterScoreMapBySavedRound(bracketState.advantageBonuses, isSavedRoundKey),
     scratchScores: filterScoreMapBySavedRound(bracketState.scratchScores, isSavedRoundKey),
     memberScores: filterScoreMapBySavedRound(bracketState.memberScores, isSavedRoundKey),
     rolloffScores: filterScoreMapBySavedRound(bracketState.rolloffScores, isSavedRoundKey),
@@ -2934,12 +2937,22 @@ function rolloffWinnerFromMatch(match, rolloffWinners = {}) {
   return null;
 }
 
-function baseWinnerFromBracketMatch(match, { scores = {}, matchScoring = "total", roundIndex = 0, useHandicapScores = false } = {}) {
+function baseWinnerFromBracketMatch(match, { scores = {}, matchScoring = "total", roundIndex = 0, useHandicapScores = false, advantageBonuses = {} } = {}) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
   if (matchScoring === "bestOf3") return winnerFromBestOfThreeMatch(match.left, match.right, scores, match.id);
-  if (matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores) {
-    return winnerFromAverageAdvantageMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
+  const hasManualAdvantage =
+    manualAdvantageBonus(advantageBonuses, leftKey) !== null ||
+    manualAdvantageBonus(advantageBonuses, rightKey) !== null;
+  if (matchScoring === "avgAdvantage" && !useHandicapScores && (roundIndex === 0 || hasManualAdvantage)) {
+    return winnerFromAverageAdvantageMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "", {
+      advantageBonuses,
+      leftKey,
+      rightKey,
+      matchScoring,
+      roundIndex,
+      useHandicapScores,
+    });
   }
   return winnerFromMatch(match.left, match.right, scores[leftKey] ?? "", scores[rightKey] ?? "");
 }
@@ -3026,23 +3039,40 @@ function qualifyingScratchAverage(player) {
 }
 
 function qualifyingScratchAverageDisplay(player) {
-  return String(Math.round(qualifyingScratchAverage(player)));
+  return String(Math.floor(qualifyingScratchAverage(player)));
 }
 
 function roundOneAverageBonus(player, opponent) {
-  const playerAverage = Math.round(qualifyingScratchAverage(player));
-  const opponentAverage = Math.round(qualifyingScratchAverage(opponent));
+  const playerAverage = Math.floor(qualifyingScratchAverage(player));
+  const opponentAverage = Math.floor(qualifyingScratchAverage(opponent));
   if (playerAverage <= opponentAverage) return 0;
   return Math.max(0, playerAverage - opponentAverage);
 }
 
-function averageAdvantageTotal(player, opponent, scratchScore) {
-  const scratch = Number(scratchScore || 0);
-  if (scratch <= 0) return 0;
-  return scratch + roundOneAverageBonus(player, opponent);
+function manualAdvantageBonus(advantageBonuses = {}, scoreKey = "") {
+  if (!scoreKey || !Object.prototype.hasOwnProperty.call(advantageBonuses || {}, scoreKey)) return null;
+  const value = Number(advantageBonuses?.[scoreKey] || 0);
+  if (!Number.isFinite(value)) return null;
+  return Math.max(0, Math.floor(value));
 }
 
-function winnerFromAverageAdvantageMatch(left, right, leftScore, rightScore, advanceByes = true) {
+function bracketAverageAdvantageBonus(player, opponent, { scoreKey = "", advantageBonuses = {}, matchScoring = "total", roundIndex = 0, useHandicapScores = false } = {}) {
+  const manualBonus = manualAdvantageBonus(advantageBonuses, scoreKey);
+  if (manualBonus !== null) return manualBonus;
+  if (matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores) {
+    return roundOneAverageBonus(player, opponent);
+  }
+  return 0;
+}
+
+function averageAdvantageTotal(player, opponent, scratchScore, options = {}) {
+  const scratch = Number(scratchScore || 0);
+  if (scratch <= 0) return 0;
+  return scratch + bracketAverageAdvantageBonus(player, opponent, options);
+}
+
+function winnerFromAverageAdvantageMatch(left, right, leftScore, rightScore, options = {}) {
+  const { advanceByes = true, advantageBonuses = {}, leftKey = "", rightKey = "", matchScoring = "avgAdvantage", roundIndex = 0, useHandicapScores = false } = options;
   const leftMissing = !left;
   const rightMissing = !right;
   const leftIsBye = !leftMissing && left.name === "BYE";
@@ -3054,8 +3084,8 @@ function winnerFromAverageAdvantageMatch(left, right, leftScore, rightScore, adv
   if (!leftIsBye && rightIsBye) return left;
   if (leftIsBye && !rightIsBye) return right;
 
-  const leftTotal = averageAdvantageTotal(left, right, leftScore);
-  const rightTotal = averageAdvantageTotal(right, left, rightScore);
+  const leftTotal = averageAdvantageTotal(left, right, leftScore, { scoreKey: leftKey, advantageBonuses, matchScoring, roundIndex, useHandicapScores });
+  const rightTotal = averageAdvantageTotal(right, left, rightScore, { scoreKey: rightKey, advantageBonuses, matchScoring, roundIndex, useHandicapScores });
 
   if (leftTotal <= 0 && rightTotal <= 0) return null;
   if (leftTotal <= 0 || rightTotal <= 0) return null;
@@ -11995,6 +12025,7 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
   const [currentPage, setCurrentPage] = useState(0);
   const { scores = {}, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
+  const advantageBonuses = bracketState.advantageBonuses || {};
   const matchLanes = bracketState.matchLanes || {};
   const rolloffWinners = bracketState.rolloffWinners || {};
   const rolloffScores = bracketState.rolloffScores || {};
@@ -12006,6 +12037,7 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
       scores,
       matchScoring,
       roundIndex,
+      advantageBonuses,
       rolloffWinners,
       useHandicapScores,
     });
@@ -12046,13 +12078,19 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
     return () => window.clearInterval(timerId);
   }, [pageCount]);
 
-  const scoreFor = (player, value, scratchValue, opponent, isAverageAdvantage = false) => {
+  const scoreFor = (player, value, scratchValue, opponent, isAverageAdvantage = false, scoreKey = "", roundIndex = 0) => {
     if (!player) return "TBD";
     if (player.name === "BYE") return "BYE";
     if (isAverageAdvantage) {
       const scratch = Number(value || 0);
       if (!scratch) return "-";
-      const bonus = roundOneAverageBonus(player, opponent);
+      const bonus = bracketAverageAdvantageBonus(player, opponent, {
+        scoreKey,
+        advantageBonuses,
+        matchScoring,
+        roundIndex,
+        useHandicapScores,
+      });
       return bonus ? `${scratch} + ${bonus} = ${scratch + bonus}` : String(scratch);
     }
     const handicap = useHandicapScores ? handicapPerGame(player) : 0;
@@ -12077,7 +12115,12 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
     const leftKey = `${match.id}-l`;
     const rightKey = `${match.id}-r`;
     const laneLabel = String(matchLanes[match.id] || "").trim();
-    const usesAverageAdvantage = matchScoring === "avgAdvantage" && selectedRoundIndex === 0 && !useHandicapScores;
+    const usesAverageAdvantage =
+      matchScoring === "avgAdvantage" &&
+      !useHandicapScores &&
+      (selectedRoundIndex === 0 ||
+        manualAdvantageBonus(advantageBonuses, leftKey) !== null ||
+        manualAdvantageBonus(advantageBonuses, rightKey) !== null);
     const winner = matchWinner(match, selectedRoundIndex);
     const rolloffWinner = rolloffWinnerFromMatch(match, rolloffWinners);
     const rolloffText = rolloffScoreText(match.id, rolloffScores);
@@ -12104,7 +12147,7 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
               <BracketPlayerLabel player={match.left}>{playerName(match.left)}</BracketPlayerLabel>
             </div>
             <div className="rounded-xl bg-white px-3 py-2 text-center text-xl font-black text-blue-950 md:text-3xl">
-              {scoreFor(match.left, scores[leftKey], scratchScores[leftKey], match.right, usesAverageAdvantage)}
+              {scoreFor(match.left, scores[leftKey], scratchScores[leftKey], match.right, usesAverageAdvantage, leftKey, selectedRoundIndex)}
             </div>
           </div>
           <div className={rowClass(rightWon)}>
@@ -12112,7 +12155,7 @@ function BracketFinalsDisplayBoard({ entries, bowlers, useHandicapScores, bracke
               <BracketPlayerLabel player={match.right}>{playerName(match.right)}</BracketPlayerLabel>
             </div>
             <div className="rounded-xl bg-white px-3 py-2 text-center text-xl font-black text-blue-950 md:text-3xl">
-              {scoreFor(match.right, scores[rightKey], scratchScores[rightKey], match.left, usesAverageAdvantage)}
+              {scoreFor(match.right, scores[rightKey], scratchScores[rightKey], match.left, usesAverageAdvantage, rightKey, selectedRoundIndex)}
             </div>
           </div>
         </div>
@@ -12627,6 +12670,7 @@ function RegularBracketViewerSheet({
   champion = null,
   scores = {},
   scratchScores = {},
+  advantageBonuses = {},
   matchLanes = {},
   rolloffWinners = {},
   rolloffScores = {},
@@ -12655,11 +12699,18 @@ function RegularBracketViewerSheet({
     const key = `${match.id}-${side}`;
     const value = scores[key] ?? "";
     if (value === "" || value === undefined || value === null) return { primary: "", secondary: "" };
-    if (matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores) {
+    const hasManualAdvantage = manualAdvantageBonus(advantageBonuses, key) !== null;
+    if (matchScoring === "avgAdvantage" && !useHandicapScores && (roundIndex === 0 || hasManualAdvantage)) {
       const opponent = side === "l" ? match.right : match.left;
       const scratch = Number(value || 0);
       if (!scratch) return { primary: "", secondary: "" };
-      const bonus = roundOneAverageBonus(player, opponent);
+      const bonus = bracketAverageAdvantageBonus(player, opponent, {
+        scoreKey: key,
+        advantageBonuses,
+        matchScoring,
+        roundIndex,
+        useHandicapScores,
+      });
       return { primary: String(scratch + bonus), secondary: bonus ? `Scr ${scratch}` : "" };
     }
     const scratchValue = scratchScores[key] ?? "";
@@ -12682,6 +12733,7 @@ function RegularBracketViewerSheet({
           scores,
           matchScoring,
           roundIndex,
+          advantageBonuses,
           rolloffWinners,
           useHandicapScores,
         })
@@ -12797,6 +12849,7 @@ function RegularBracketViewerSheet({
 function PublicBracketView({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo = {}, bigScreen = false }) {
   const { scores, qualifiers, size, bracketRounds, champion } = buildBracketRounds({ entries, bowlers, useHandicapScores, bracketState, tournamentInfo });
   const scratchScores = bracketState.scratchScores || {};
+  const advantageBonuses = bracketState.advantageBonuses || {};
   const matchLanes = bracketState.matchLanes || {};
   const rolloffWinners = bracketState.rolloffWinners || {};
   const rolloffScores = bracketState.rolloffScores || {};
@@ -12814,11 +12867,17 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
   const rightScore = scores[rightKey] ?? "";
   const leftScratchScore = scratchScores[leftKey] ?? "";
   const rightScratchScore = scratchScores[rightKey] ?? "";
-  const usesAverageAdvantage = matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores;
+  const usesAverageAdvantage =
+    matchScoring === "avgAdvantage" &&
+    !useHandicapScores &&
+    (roundIndex === 0 ||
+      manualAdvantageBonus(advantageBonuses, leftKey) !== null ||
+      manualAdvantageBonus(advantageBonuses, rightKey) !== null);
   const winner = winnerFromBracketMatch(match, {
     scores,
     matchScoring,
     roundIndex,
+    advantageBonuses,
     rolloffWinners,
     useHandicapScores,
   });
@@ -12868,11 +12927,17 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
     );
   };
 
-  const renderAverageAdvantageScore = (player, opponent, value) => {
+  const renderAverageAdvantageScore = (player, opponent, value, scoreKey) => {
     if (!player || player.name === "BYE") return " - -";
     const scratch = Number(value || 0);
     if (scratch <= 0) return " - -";
-    const bonus = roundOneAverageBonus(player, opponent);
+    const bonus = bracketAverageAdvantageBonus(player, opponent, {
+      scoreKey,
+      advantageBonuses,
+      matchScoring,
+      roundIndex,
+      useHandicapScores,
+    });
     const total = scratch + bonus;
     if (!bonus) return scratch;
     return (
@@ -12975,20 +13040,20 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
           <BracketPlayerLabel player={match.left}>{renderPlayerName(match.left)}</BracketPlayerLabel>
         </span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
-          {usesAverageAdvantage ? renderAverageAdvantageScore(match.left, match.right, leftScore) : renderScore(match.left, leftScore, leftScratchScore)}
+          {usesAverageAdvantage ? renderAverageAdvantageScore(match.left, match.right, leftScore, leftKey) : renderScore(match.left, leftScore, leftScratchScore)}
         </span>
 
         <span className={playerClass(rightWon)}>
           <BracketPlayerLabel player={match.right}>{renderPlayerName(match.right)}</BracketPlayerLabel>
         </span>
         <span className="min-w-[48px] rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-center font-bold text-blue-950">
-          {usesAverageAdvantage ? renderAverageAdvantageScore(match.right, match.left, rightScore) : renderScore(match.right, rightScore, rightScratchScore)}
+          {usesAverageAdvantage ? renderAverageAdvantageScore(match.right, match.left, rightScore, rightKey) : renderScore(match.right, rightScore, rightScratchScore)}
         </span>
       </div>
       {usesAverageAdvantage && (
         <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-semibold text-blue-800">
           <p>Avg: {match.left?.name || "TBD"} {qualifyingScratchAverageDisplay(match.left)} / {match.right?.name || "TBD"} {qualifyingScratchAverageDisplay(match.right)}</p>
-          <p>R1 bonus: {match.left?.name || "TBD"} +{roundOneAverageBonus(match.left, match.right)} / {match.right?.name || "TBD"} +{roundOneAverageBonus(match.right, match.left)}</p>
+          <p>Pin bonus: {match.left?.name || "TBD"} +{bracketAverageAdvantageBonus(match.left, match.right, { scoreKey: leftKey, advantageBonuses, matchScoring, roundIndex, useHandicapScores })} / {match.right?.name || "TBD"} +{bracketAverageAdvantageBonus(match.right, match.left, { scoreKey: rightKey, advantageBonuses, matchScoring, roundIndex, useHandicapScores })}</p>
         </div>
       )}
       {rolloffWinner && (
@@ -13052,6 +13117,7 @@ const PublicBracketMatch = ({ match, matchNumber, roundIndex = 0 }) => {
               champion={champion}
               scores={scores}
               scratchScores={scratchScores}
+              advantageBonuses={advantageBonuses}
               matchLanes={matchLanes}
               rolloffWinners={rolloffWinners}
               rolloffScores={rolloffScores}
@@ -13701,7 +13767,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
             entries={entryCount}
             bowlers={snapshot.bowlers || []}
             useHandicapScores={Boolean(snapshot.useHandicapScores)}
-            bracketState={snapshot.bracketState || { manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }}
+            bracketState={snapshot.bracketState || { manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }}
             tournamentInfo={snapshot.tournamentInfo || {}}
           />
         );
@@ -15066,7 +15132,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       {publicArchiveSection === "qualifying" && !selectedPublicArchiveSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with full scoring snapshots.</p>}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && <PublicMatchplayBracketView bowlers={selectedPublicArchiveSnapshot.bowlers || []} matchplayState={selectedPublicArchiveSnapshot.matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && selectedPublicArchiveIsEliminatorTournament && <EliminatorTournamentTab bowlers={selectedPublicArchiveSnapshot.bowlers || []} eliminatorTournamentState={selectedPublicArchiveSnapshot.eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} readOnly />}
-      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} bracketState={selectedPublicArchiveSnapshot.bracketState || { manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
+      {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} bracketState={selectedPublicArchiveSnapshot.bracketState || { manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} />}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && isEliminatorFinalsFormat(selectedPublicArchiveSnapshot.tournamentFormat) && <PublicEliminatorView entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} eliminatorState={selectedPublicArchiveSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} tournamentFormat={selectedPublicArchiveSnapshot.tournamentFormat} />}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedPublicArchiveSnapshot.bowlers || [], selectedPublicArchiveSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedPublicArchiveSnapshot.bowlers || []} useHandicapScores={Boolean(selectedPublicArchiveSnapshot.useHandicapScores)} laneEliminatorState={selectedPublicArchiveSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedPublicArchiveSnapshot.tournamentInfo || {}} readOnly />}
       {publicArchiveSection === "finals" && selectedPublicArchiveSnapshot && !isMatchplayTournament(selectedPublicArchiveSnapshot.tournamentFormat, selectedPublicArchiveSnapshot.tournamentInfo || {}) && !selectedPublicArchiveIsEliminatorTournament && selectedPublicArchiveSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format - no finals bracket.</p>}
@@ -15112,6 +15178,7 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
       round.matches.forEach((match) => {
         const winner = winnerFromBracketMatch(match, {
           scores: bracketState.scores || {},
+          advantageBonuses: bracketState.advantageBonuses || {},
           matchScoring: useHandicapScores && bracketState.matchScoring === "avgAdvantage" ? "total" : bracketState.matchScoring || "total",
           roundIndex,
           rolloffWinners: bracketState.rolloffWinners || {},
@@ -15346,6 +15413,8 @@ function BracketMatchEditor({
   rolloffScores = {},
   onRolloffWinnerChange = () => {},
   onRolloffScoreChange = () => {},
+  advantageBonuses = {},
+  onAdvantageBonusChange = () => {},
   scores,
   scratchScores,
   memberScores,
@@ -15358,12 +15427,18 @@ function BracketMatchEditor({
 }) {
   const leftKey = `${match.id}-l`;
   const rightKey = `${match.id}-r`;
-  const usesAverageAdvantage = matchScoring === "avgAdvantage" && roundIndex === 0 && !useHandicapScores;
+  const usesAverageAdvantage =
+    matchScoring === "avgAdvantage" &&
+    !useHandicapScores &&
+    (roundIndex === 0 ||
+      manualAdvantageBonus(advantageBonuses, leftKey) !== null ||
+      manualAdvantageBonus(advantageBonuses, rightKey) !== null);
   const baseWinner = baseWinnerFromBracketMatch(match, {
     scores,
     matchScoring,
     roundIndex,
     useHandicapScores,
+    advantageBonuses,
   });
   const winner = baseWinner || rolloffWinnerFromMatch(match, { [match.id]: rolloffWinner });
   const seriesRecord = getBestOfThreeRecord(scores, match.id);
@@ -15383,6 +15458,45 @@ const renderPlayerName = (player) => {
 
   const playerClass = (won) => won ? "truncate rounded-xl bg-green-100 px-2 py-1 font-bold text-green-900 ring-1 ring-green-300" : "truncate px-2 py-1";
   const canUseRolloff = playerIsRealFinalsPlayer(match.left) && playerIsRealFinalsPlayer(match.right);
+  const renderAdvantageControls = () => {
+    if (matchScoring !== "avgAdvantage" || useHandicapScores) return null;
+    const renderSide = (label, player, opponent, scoreKey) => {
+      const autoBonus = roundIndex === 0 ? roundOneAverageBonus(player, opponent) : 0;
+      const manualBonus = advantageBonuses?.[scoreKey] ?? "";
+      const activeBonus = bracketAverageAdvantageBonus(player, opponent, {
+        scoreKey,
+        advantageBonuses,
+        matchScoring,
+        roundIndex,
+        useHandicapScores,
+      });
+      return (
+        <div className="space-y-1">
+          <Label className="text-[10px] font-black uppercase tracking-wide text-blue-900">{label} Adv</Label>
+          <Input
+            type="number"
+            min={0}
+            max={300}
+            inputMode="numeric"
+            className="h-8 rounded-lg px-2 text-center text-xs font-bold"
+            value={manualBonus}
+            onChange={(event) => onAdvantageBonusChange(scoreKey, clampBowlingScoreInput(event.target.value, 0, 300))}
+            placeholder={autoBonus ? String(autoBonus) : "0"}
+          />
+          <div className="text-center text-[10px] font-bold text-blue-700">
+            {manualBonus !== "" ? `Using +${activeBonus}` : roundIndex === 0 ? `Auto +${autoBonus}` : "Manual if needed"}
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-blue-100 bg-blue-50 p-2">
+        {renderSide("Left", match.left, match.right, leftKey)}
+        {renderSide("Right", match.right, match.left, rightKey)}
+      </div>
+    );
+  };
   const renderRolloffControls = () => {
     if (!canUseRolloff) return null;
     const leftRolloffKey = `${match.id}-l`;
@@ -15600,9 +15714,10 @@ const renderPlayerName = (player) => {
       {usesAverageAdvantage && (
         <div className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-900">
           <p>Avg: {match.left?.name || "TBD"} {qualifyingScratchAverageDisplay(match.left)} / {match.right?.name || "TBD"} {qualifyingScratchAverageDisplay(match.right)}</p>
-          <p>R1 bonus: {match.left?.name || "TBD"} +{roundOneAverageBonus(match.left, match.right)} / {match.right?.name || "TBD"} +{roundOneAverageBonus(match.right, match.left)}</p>
+          <p>Pin bonus: {match.left?.name || "TBD"} +{bracketAverageAdvantageBonus(match.left, match.right, { scoreKey: leftKey, advantageBonuses, matchScoring, roundIndex, useHandicapScores })} / {match.right?.name || "TBD"} +{bracketAverageAdvantageBonus(match.right, match.left, { scoreKey: rightKey, advantageBonuses, matchScoring, roundIndex, useHandicapScores })}</p>
         </div>
       )}
+      {renderAdvantageControls()}
       {renderRolloffControls()}
     </div>
   );
@@ -15630,6 +15745,8 @@ function BracketRoundColumn({
   rolloffScores = {},
   onRolloffWinnerChange = () => {},
   onRolloffScoreChange = () => {},
+  advantageBonuses = {},
+  onAdvantageBonusChange = () => {},
   setSavedFinalsRounds,
 }) {
   const firstRoundMatchHeight = matchScoring === "bestOf3" ? 468 : matchScoring === "avgAdvantage" && !useHandicapScores ? 356 : 306;
@@ -15686,6 +15803,8 @@ function BracketRoundColumn({
   rolloffScores={rolloffScores}
   onRolloffWinnerChange={onRolloffWinnerChange}
   onRolloffScoreChange={onRolloffScoreChange}
+  advantageBonuses={advantageBonuses}
+  onAdvantageBonusChange={onAdvantageBonusChange}
   scores={scores}
   scratchScores={scratchScores}
   memberScores={memberScores}
@@ -15716,6 +15835,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
   const playerOverrides = bracketState.playerOverrides || {};
   const rolloffWinners = bracketState.rolloffWinners || {};
   const rolloffScores = bracketState.rolloffScores || {};
+  const advantageBonuses = bracketState.advantageBonuses || {};
   const playerOptions = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle).filter((entry) => entry?.name && entry.name !== "BYE");
   const handleMatchLaneChange = (matchId, value) =>
     setBracketState((current) => ({
@@ -15754,6 +15874,16 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
       return {
         ...current,
         rolloffScores: nextScores,
+      };
+    });
+  const handleAdvantageBonusChange = (scoreKey, value) =>
+    setBracketState((current) => {
+      const nextBonuses = { ...(current.advantageBonuses || {}) };
+      if (value === "" || value === undefined || value === null) delete nextBonuses[scoreKey];
+      else nextBonuses[scoreKey] = value;
+      return {
+        ...current,
+        advantageBonuses: nextBonuses,
       };
     });
   const handleScoreChange = (
@@ -15801,6 +15931,7 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
       memberScores: {},
       rolloffWinners: {},
       rolloffScores: {},
+      advantageBonuses: {},
     }));
     setSavedFinalsRounds((current) => {
       const next = { ...(current || {}) };
@@ -15883,6 +16014,8 @@ setSavedFinalsRounds, tournamentInfo = {} }) {
           rolloffScores={rolloffScores}
           onRolloffWinnerChange={handleRolloffWinnerChange}
           onRolloffScoreChange={handleRolloffScoreChange}
+          advantageBonuses={advantageBonuses}
+          onAdvantageBonusChange={handleAdvantageBonusChange}
         />
         );
       })}
@@ -18780,7 +18913,7 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
             {archivedDetailSection === "qualifying" && !selectedSnapshot && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Qualifying leaderboard is only available for tournaments archived with restore snapshots.</p>}
             {archivedDetailSection === "finals" && selectedSnapshot && isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && <PublicMatchplayBracketView bowlers={selectedSnapshot.bowlers || []} matchplayState={selectedSnapshot.matchplayState || DEFAULT_MATCHPLAY_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "finals" && selectedSnapshot && selectedArchiveIsEliminatorTournament && <EliminatorTournamentTab bowlers={selectedSnapshot.bowlers || []} eliminatorTournamentState={selectedSnapshot.eliminatorTournamentState || DEFAULT_ELIMINATOR_TOURNAMENT_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
-            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} bracketState={selectedSnapshot.bracketState || { manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
+            {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "bracket" && <PublicBracketView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} bracketState={selectedSnapshot.bracketState || { manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} />}
             {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && isEliminatorFinalsFormat(selectedSnapshot.tournamentFormat) && <PublicEliminatorView entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} eliminatorState={selectedSnapshot.eliminatorState || { game1Scores: {}, game2Scores: {}, stepScores: {} }} tournamentInfo={selectedSnapshot.tournamentInfo || {}} tournamentFormat={selectedSnapshot.tournamentFormat} />}
             {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "laneEliminator" && <LanePairEliminatorTab entries={getTournamentEntryCount(selectedSnapshot.bowlers || [], selectedSnapshot.tournamentInfo?.tournamentStyle || "singles")} bowlers={selectedSnapshot.bowlers || []} useHandicapScores={Boolean(selectedSnapshot.useHandicapScores)} laneEliminatorState={selectedSnapshot.laneEliminatorState || DEFAULT_LANE_ELIMINATOR_STATE} tournamentInfo={selectedSnapshot.tournamentInfo || {}} readOnly />}
             {archivedDetailSection === "finals" && selectedSnapshot && !isMatchplayTournament(selectedSnapshot.tournamentFormat, selectedSnapshot.tournamentInfo || {}) && !selectedArchiveIsEliminatorTournament && selectedSnapshot.tournamentFormat === "sweeper" && <p className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-700">Sweeper format - - no finals bracket.</p>}
@@ -21424,7 +21557,7 @@ export default function BowlingPayoutApp() {
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const entries = getTournamentEntryCount(bowlers, tournamentStyle);
   const [payoutState, setPayoutState] = useState(DEFAULT_PAYOUT_STATE);
-  const [bracketState, setBracketState] = useState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} });
+  const [bracketState, setBracketState] = useState({ manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} });
   const [eliminatorState, setEliminatorState] = useState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
   const [laneEliminatorState, setLaneEliminatorState] = useState(DEFAULT_LANE_ELIMINATOR_STATE);
   const [matchplayState, setMatchplayState] = useState(DEFAULT_MATCHPLAY_STATE);
@@ -22519,7 +22652,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         if (parsed.reservationState) setReservationState({ entriesOpen: false, registrationEmail: "", tournamentName: "", tournamentStartTime: "", reservationLimit: DEFAULT_RESERVATION_LIMIT, reservationNextNumber: 1, reservations: [], reservationsByTournament: {}, openTournamentKeys: [], ...parsed.reservationState });
         if (parsed.multiDayEvent) setMultiDayEvent({ ...createDefaultMultiDayEvent(), ...parsed.multiDayEvent });
         if (parsed.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...parsed.payoutState, overrides: { ...defaultOverrides, ...(parsed.payoutState.overrides || {}) } });
-        if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, ...parsed.bracketState });
+        if (parsed.bracketState) setBracketState({ manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, ...parsed.bracketState });
         if (parsed.laneEliminatorState) setLaneEliminatorState({ ...DEFAULT_LANE_ELIMINATOR_STATE, ...parsed.laneEliminatorState });
         if (parsed.matchplayState) setMatchplayState({ ...DEFAULT_MATCHPLAY_STATE, ...parsed.matchplayState });
         if (parsed.eliminatorTournamentState) setEliminatorTournamentState({ ...DEFAULT_ELIMINATOR_TOURNAMENT_STATE, ...parsed.eliminatorTournamentState });
@@ -22581,7 +22714,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     setQualifyingAdjustments(snapshot.qualifyingAdjustments || {});
     if (snapshot.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...snapshot.payoutState, overrides: { ...defaultOverrides, ...(snapshot.payoutState.overrides || {}) } });
     else setPayoutState(DEFAULT_PAYOUT_STATE);
-    setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, ...(snapshot.bracketState || {}) });
+    setBracketState({ manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, ...(snapshot.bracketState || {}) });
     setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...(snapshot.eliminatorState || {}) });
     setLaneEliminatorState({ ...DEFAULT_LANE_ELIMINATOR_STATE, ...(snapshot.laneEliminatorState || {}) });
     setMatchplayState({ ...DEFAULT_MATCHPLAY_STATE, ...(snapshot.matchplayState || {}) });
@@ -23036,7 +23169,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     setSavedFinalsRounds(snapshot.savedFinalsRounds || {});
     setQualifyingAdjustments(snapshot.qualifyingAdjustments || {});
     if (snapshot.payoutState) setPayoutState({ ...DEFAULT_PAYOUT_STATE, ...snapshot.payoutState, overrides: { ...defaultOverrides, ...(snapshot.payoutState.overrides || {}) } });
-    if (snapshot.bracketState) setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, ...snapshot.bracketState });
+    if (snapshot.bracketState) setBracketState({ manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, ...snapshot.bracketState });
     if (snapshot.eliminatorState) setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {}, ...snapshot.eliminatorState });
     setLaneEliminatorState({ ...DEFAULT_LANE_ELIMINATOR_STATE, ...(snapshot.laneEliminatorState || {}) });
     setMatchplayState({ ...DEFAULT_MATCHPLAY_STATE, ...(snapshot.matchplayState || {}) });
@@ -23065,7 +23198,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     setSavedFinalsRounds({});
     setQualifyingAdjustments({});
     setPayoutState(DEFAULT_PAYOUT_STATE);
-    setBracketState({ manualQualifiers: "", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} });
+    setBracketState({ manualQualifiers: "", scores: {}, advantageBonuses: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {} });
     setEliminatorState({ game1Scores: {}, game2Scores: {}, stepScores: {} });
     setLaneEliminatorState(DEFAULT_LANE_ELIMINATOR_STATE);
     setMatchplayState(DEFAULT_MATCHPLAY_STATE);
