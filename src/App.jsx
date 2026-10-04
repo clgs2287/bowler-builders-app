@@ -4473,9 +4473,16 @@ function TournamentInfoTab({
     : 0;
   const showPublicFieldInfo = Boolean(matchingReservationState && publicReservationLimit);
   const selectedEventSetup = selectedEventScheduleItem?.eventSetup || {};
-  const detailQualifyingGames = selectedEventDraftSnapshot?.qualifyingGames || selectedEventSetup.qualifyingGames || (!selectedEventKey ? qualifyingGames : 4) || 4;
-  const detailTournamentFormat = selectedEventDraftSnapshot?.tournamentFormat || selectedEventSetup.tournamentFormat || (!selectedEventKey ? tournamentFormat : "tbd");
-  const shouldUseSelectedEventActivity = Boolean(!selectedEventKey || selectedEventDraftSnapshot);
+  const selectedEventMatchesActiveTournament = Boolean(
+    selectedEventKey &&
+    (
+      String(tournamentInfo.scheduleEventId || "") === String(selectedEventKey) ||
+      tournamentInfoMatchesReservationKey(tournamentInfo, selectedEventKey)
+    )
+  );
+  const detailQualifyingGames = selectedEventDraftSnapshot?.qualifyingGames || (selectedEventMatchesActiveTournament ? qualifyingGames : selectedEventSetup.qualifyingGames) || (!selectedEventKey ? qualifyingGames : 4) || 4;
+  const detailTournamentFormat = selectedEventDraftSnapshot?.tournamentFormat || (selectedEventMatchesActiveTournament ? tournamentFormat : selectedEventSetup.tournamentFormat) || (!selectedEventKey ? tournamentFormat : "tbd");
+  const shouldUseSelectedEventActivity = Boolean(!selectedEventKey || selectedEventDraftSnapshot || selectedEventMatchesActiveTournament);
   const stageBowlers = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.bowlers || bowlers) : [];
   const stageSavedScoreGames = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.savedScoreGames || savedScoreGames) : {};
   const stageSavedFinalsRounds = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.savedFinalsRounds || savedFinalsRounds) : {};
@@ -4483,6 +4490,7 @@ function TournamentInfoTab({
   const stageBracketState = shouldUseSelectedEventActivity ? bracketState : {};
   const stageLaneEliminatorState = shouldUseSelectedEventActivity ? laneEliminatorState : {};
   const stageMatchplayState = shouldUseSelectedEventActivity ? (selectedEventDraftSnapshot?.matchplayState || matchplayState) : DEFAULT_MATCHPLAY_STATE;
+  const stageTournamentInfo = selectedEventDraftSnapshot?.tournamentInfo || (selectedEventMatchesActiveTournament ? tournamentInfo : displayedTournamentInfo);
   const normalStage = getTournamentStage({
     bowlers: stageBowlers,
     eliminatorState: stageEliminatorState,
@@ -4494,7 +4502,7 @@ function TournamentInfoTab({
     bracketState: stageBracketState,
     laneEliminatorState: stageLaneEliminatorState,
     matchplayState: stageMatchplayState,
-    tournamentInfo: displayedTournamentInfo,
+    tournamentInfo: stageTournamentInfo,
   });
   const tournamentStartDate = displayedTournamentInfo.date || reservationState.tournamentDate || "";
   const tournamentStartTime = displayedTournamentInfo.startTime || reservationState.tournamentStartTime || "";
