@@ -7974,6 +7974,13 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     );
     return groups;
   }, {});
+  const printableScoreEntryPosition = (laneKey, row, displayIndex) => {
+    if (laneKey === "Unassigned") return row?.bowler?.lane || row?.lanePosition || "";
+    const laneNumber = Number(laneKey || 0);
+    if (!laneNumber) return row?.bowler?.lane || row?.lanePosition || "";
+    const expectedLetters = getLaneLettersForStyle(laneNumber, tournamentInfo?.tournamentStyle || "singles");
+    return `${laneKey}${expectedLetters[displayIndex] || lanePositionParts(row?.bowler?.lane || row?.lanePosition).letter || ""}`;
+  };
 
 const saveCurrentGame = () => {
   if (activeScoreGameIndex === null) return;
@@ -8123,12 +8130,13 @@ const downloadScoreEntrySheetPdf = async () => {
     });
     y += headerHeight;
 
-    (rows.length ? rows : [{ bowler: null, lanePosition: "" }]).forEach(({ bowler: b, lanePosition }) => {
+    (rows.length ? rows : [{ bowler: null, lanePosition: "" }]).forEach((row, displayIndex) => {
+      const { bowler: b, lanePosition } = row;
       x = margin;
       columns.forEach((column) => {
         let value = "";
         if (column.key === "bowler") value = b?.name || "";
-        if (column.key === "pos") value = b?.lane || lanePosition || "";
+        if (column.key === "pos") value = printableScoreEntryPosition(laneKey, row, displayIndex);
         if (column.key === "avg") value = b ? bowlerAverageDisplay(b) : "";
         if (column.key === "hdcp") value = b ? handicapPerGame(b) : "";
         if (column.key === "hdcpTotal") value = b ? qualifyingHandicapTotal(b, qualifyingGames) : "";
@@ -8378,7 +8386,7 @@ const downloadScoreEntrySheetPdf = async () => {
       {printableScoreEntryGroups[laneKey].map(({ bowler: b, index, lanePosition }, displayIndex) => (
         <tr key={`print-score-row-${laneKey}-${lanePosition || b?.lane || b?.seed || displayIndex}`}>
           <td className="w-28 border border-black p-1 font-bold">{b?.name || ""}</td>
-          <td className="border border-black p-1 text-center">{b?.lane || lanePosition || ""}</td>
+          <td className="border border-black p-1 text-center">{printableScoreEntryPosition(laneKey, { bowler: b, lanePosition }, displayIndex)}</td>
           {useHandicapScores && (
             <td className="w-10 border border-black p-0.5 text-center font-bold">
               {b ? bowlerAverageDisplay(b) : ""}
