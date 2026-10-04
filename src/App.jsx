@@ -11278,7 +11278,11 @@ const printableSheets =
     };
 
     const cell = (text, x, y, width, height, options = {}) => {
-      doc.rect(x, y, width, height);
+      doc.setDrawColor(0, 0, 0);
+      doc.setFillColor(options.fill || 255, options.fill || 255, options.fill || 255);
+      doc.setTextColor(0, 0, 0);
+      doc.setLineWidth(0.01);
+      doc.rect(x, y, width, height, "FD");
       if (text !== undefined && text !== null && text !== "") {
         const align = options.align || "left";
         const textX = align === "right" ? x + width - 0.04 : align === "center" ? x + width / 2 : x + 0.04;
@@ -11288,7 +11292,7 @@ const printableSheets =
 
     const drawLaneTable = (lane, laneBowlers, x, y, width) => {
       drawText(`Lane ${lane}`, x, y, { bold: true, size: 11 });
-      y += 0.12;
+      y += 0.18;
 
       const baseWidths = useHandicapScores
         ? { pos: 0.42, bowler: 1.45, avg: 0.42, hdcp: 0.42, total: 0.62 }
@@ -11320,8 +11324,9 @@ const printableSheets =
       let cursor = x;
 
       columns.forEach((column) => {
-        cell("", cursor, y, column.width, headerHeight);
+        cell("", cursor, y, column.width, headerHeight, { fill: 235 });
         const labelLines = String(column.label).split("\n");
+        doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(labelLines.length > 1 ? 5.5 : 6.8);
         labelLines.forEach((line, lineIndex) => {
