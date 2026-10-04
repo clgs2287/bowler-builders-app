@@ -7957,15 +7957,20 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     }
 
     const laneNumber = Number(laneKey);
-    const assignedRows = filledPrintableScoreEntryGroups[laneKey] || [];
-    const rowsByLetter = assignedRows.reduce((lookup, row) => {
-      const letter = lanePositionParts(row.bowler.lane).letter;
-      if (letter) lookup[letter] = row;
-      return lookup;
-    }, {});
+    const assignedRows = [...(filledPrintableScoreEntryGroups[laneKey] || [])].sort(
+      (a, b) => laneAssignmentSortValue(a.bowler?.lane) - laneAssignmentSortValue(b.bowler?.lane) || a.index - b.index
+    );
+    const assignedLetters = new Set(
+      assignedRows
+        .map((row) => lanePositionParts(row.bowler?.lane).letter)
+        .filter(Boolean)
+    );
+    const blankRows = getLaneLettersForStyle(laneNumber, tournamentInfo?.tournamentStyle || "singles")
+      .filter((letter) => !assignedLetters.has(letter))
+      .map((letter) => ({ bowler: null, index: null, lanePosition: `${laneKey}${letter}` }));
 
-    groups[laneKey] = getLaneLettersForStyle(laneNumber, tournamentInfo?.tournamentStyle || "singles").map((letter) =>
-      rowsByLetter[letter] || { bowler: null, index: null, lanePosition: `${laneKey}${letter}` }
+    groups[laneKey] = [...assignedRows, ...blankRows].sort(
+      (a, b) => laneAssignmentSortValue(a.bowler?.lane || a.lanePosition) - laneAssignmentSortValue(b.bowler?.lane || b.lanePosition)
     );
     return groups;
   }, {});
