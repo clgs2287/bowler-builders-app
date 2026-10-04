@@ -8045,8 +8045,13 @@ const downloadScoreEntrySheetPdf = async () => {
   };
 
   const cell = (text, x, top, width, height, options = {}) => {
-    doc.rect(x, top, width, height);
+    doc.setDrawColor(0, 0, 0);
+    doc.setFillColor(options.fill || 255, options.fill || 255, options.fill || 255);
+    doc.setTextColor(0, 0, 0);
+    doc.setLineWidth(0.01);
+    doc.rect(x, top, width, height, "FD");
     if (text !== undefined && text !== null && text !== "") {
+      doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", options.bold ? "bold" : "normal");
       doc.setFontSize(options.size || 7.2);
       const align = options.align || "left";
@@ -8103,7 +8108,8 @@ const downloadScoreEntrySheetPdf = async () => {
     columns.forEach((column) => {
       doc.setFont("helvetica", "bold");
       const labelLines = String(column.label).split("\n");
-      cell("", x, y, column.width, headerHeight);
+      cell("", x, y, column.width, headerHeight, { fill: 235 });
+      doc.setTextColor(0, 0, 0);
       doc.setFontSize(labelLines.length > 1 ? 5.8 : 7);
       labelLines.forEach((line, lineIndex) => {
         doc.text(line, x + column.width / 2, y + 0.13 + lineIndex * 0.1, { align: "center" });
@@ -11397,6 +11403,8 @@ const printableSheets =
         doc.addImage(qrDataUrl, "PNG", pageWidth - margin - 0.68, margin, 0.62, 0.62);
         drawText("Public Leaderboard", pageWidth - margin - 0.37, margin + 0.75, { align: "center", bold: true, size: 5.8 });
       }
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.01);
       doc.line(margin, margin + 0.92, pageWidth - margin, margin + 0.92);
 
       let y = margin + 1.2;
