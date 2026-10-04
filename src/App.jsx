@@ -7960,13 +7960,9 @@ function BowlersTable({ bowlers, setBowlers, useHandicapScores, qualifyingGames,
     const assignedRows = [...(filledPrintableScoreEntryGroups[laneKey] || [])].sort(
       (a, b) => laneAssignmentSortValue(a.bowler?.lane) - laneAssignmentSortValue(b.bowler?.lane) || a.index - b.index
     );
-    const assignedLetters = new Set(
-      assignedRows
-        .map((row) => lanePositionParts(row.bowler?.lane).letter)
-        .filter(Boolean)
-    );
-    const blankRows = getLaneLettersForStyle(laneNumber, tournamentInfo?.tournamentStyle || "singles")
-      .filter((letter) => !assignedLetters.has(letter))
+    const expectedLetters = getLaneLettersForStyle(laneNumber, tournamentInfo?.tournamentStyle || "singles");
+    const blankRows = expectedLetters
+      .slice(Math.min(assignedRows.length, expectedLetters.length))
       .map((letter) => ({ bowler: null, index: null, lanePosition: `${laneKey}${letter}` }));
 
     groups[laneKey] = [...assignedRows, ...blankRows].sort(
