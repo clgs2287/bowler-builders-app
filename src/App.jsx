@@ -21834,6 +21834,7 @@ export default function BowlingPayoutApp() {
   const initialPublicTabRequestRef = useRef(getInitialPublicTabRequest());
   const [activeTab, setActiveTab] = useState(() => {
     try {
+      if (["/kwt-boy-points", "/kwt-boy-points.html"].includes(window.location.pathname)) return "publickwtboy";
       const params = new URLSearchParams(window.location.search);
       const requestedTab = params.get("tab");
       if (params.get("view") === "public" && ["tournamentInfo", "public", "publicfinals", "publicsideaction", "publicstats", "publickwtboy", "publicschedule", "publicreservations"].includes(requestedTab)) return requestedTab;
@@ -23606,6 +23607,11 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
   useEffect(() => {
     if (!PUBLIC_TAB_IDS.has(activeTab)) return;
     const url = new URL(window.location.href);
+    if (activeTab === "publickwtboy") {
+      url.pathname = "/kwt-boy-points";
+    } else if (["/kwt-boy-points", "/kwt-boy-points.html"].includes(url.pathname)) {
+      url.pathname = "/";
+    }
     url.searchParams.set("view", "public");
     url.searchParams.set("tab", activeTab);
     if (url.href !== window.location.href) {

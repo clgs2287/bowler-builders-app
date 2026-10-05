@@ -1,11 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/",
-      "has": [
-        { "type": "query", "key": "view", "value": "public" },
-        { "type": "query", "key": "tab", "value": "publickwtboy" }
-      ],
+      "source": "/kwt-boy-points",
       "destination": "/kwt-boy-points.html"
     }
   ],
