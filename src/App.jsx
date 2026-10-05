@@ -23603,6 +23603,16 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     }
   }, [activeTab, isAdminMode, publicResultsUnlocked, publicRoutingDataReady, requestedPublicResultsTab, tournamentFormat, tournamentInfo]);
 
+  useEffect(() => {
+    if (!PUBLIC_TAB_IDS.has(activeTab)) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "public");
+    url.searchParams.set("tab", activeTab);
+    if (url.href !== window.location.href) {
+      window.history.replaceState(window.history.state, "", url.href);
+    }
+  }, [activeTab]);
+
   const isDisplayMode = ["displayLeaderboard", "displayFinals"].includes(activeTab);
 
   useEffect(() => {
