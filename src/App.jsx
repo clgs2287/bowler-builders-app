@@ -14222,7 +14222,7 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
     );
 
   return (
-    <Card className="rounded-2xl border border-blue-200 bg-white shadow-sm">
+    <Card className="bb-kwt-points rounded-2xl border border-blue-200 bg-white shadow-sm">
       <CardContent className="space-y-4 p-3 md:p-5">
         <div className="overflow-hidden rounded-2xl border border-amber-300 bg-[#f7e2b5] shadow-sm">
           <img

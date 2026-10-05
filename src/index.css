@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+@media (max-width: 640px) {
+  .bb-kwt-points table {
+    min-width: 0 !important;
+    width: 100%;
+    table-layout: fixed;
+    font-size: 10px !important;
+    line-height: 1.25;
+  }
+
+  .bb-kwt-points th,
+  .bb-kwt-points td {
+    padding: 6px 3px !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-kwt-points table > thead > tr > th:nth-child(1) { width: 10%; }
+  .bb-kwt-points table > thead > tr > th:nth-child(2) { width: 30%; }
+  .bb-kwt-points table > thead > tr > th:nth-child(3) { width: 13%; }
+  .bb-kwt-points table > thead > tr > th:nth-child(4) { width: 12%; }
+  .bb-kwt-points table > thead > tr > th:nth-child(5) { width: 14%; }
+  .bb-kwt-points table > thead > tr > th:nth-child(6) { width: 21%; }
+
+  .bb-kwt-points td button {
+    max-width: 100%;
+    font-size: 11px !important;
+    text-align: left;
+  }
+
+  .bb-kwt-points td.text-lg { font-size: 14px !important; }
+
+  .bb-kwt-points td[colspan] > div > table > thead > tr > th:nth-child(1) { width: 37%; }
+  .bb-kwt-points td[colspan] > div > table > thead > tr > th:nth-child(2) { width: 24%; }
+  .bb-kwt-points td[colspan] > div > table > thead > tr > th:nth-child(n + 3) { width: 13%; }
+}
