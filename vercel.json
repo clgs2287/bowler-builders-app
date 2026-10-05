@@ -1,4 +1,14 @@
 {
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [
+        { "type": "query", "key": "view", "value": "public" },
+        { "type": "query", "key": "tab", "value": "publickwtboy" }
+      ],
+      "destination": "/kwt-boy-points.html"
+    }
+  ],
   "headers": [
     {
       "source": "/",
