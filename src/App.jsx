@@ -3919,24 +3919,27 @@ function getDisplayTabLabel(tab, tournamentInfo = {}) {
 }
 
 function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, publicResultsUnlocked = true }) {
-  const activeSection = getSectionForTab(activeTab, isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo);
+  const selectId = React.useId();
   const visibleSections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo);
 
   return (
     <div className="md:hidden rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
-      <Label className="mb-2 block text-blue-100">Go to section</Label>
-      <select
+      <Label htmlFor={selectId} className="mb-2 block !text-base !font-bold !text-white">Go To Page</Label>
+      <div className="relative">
+        <select
+        id={selectId}
         value={activeTab}
         onChange={(e) => setActiveTab(e.target.value)}
-        className="w-full rounded-xl border border-blue-200 bg-white px-3 py-3 text-base font-semibold text-blue-950 outline-none"
+        className="min-h-12 w-full appearance-none rounded-xl border-2 border-blue-400 bg-white py-3 pl-3 pr-12 text-base font-semibold text-blue-950 shadow-md outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
       >
         {visibleSections.map((section) => (
           <optgroup key={section.id} label={section.label}>
             {section.tabs.map((tab) => <option key={tab.id} value={tab.id}>{getDisplayTabLabel(tab, tournamentInfo)}</option>)}
           </optgroup>
         ))}
-      </select>
-      <p className="mt-2 text-xs font-semibold text-blue-100">Current: {activeSection.label}</p>
+        </select>
+        <span aria-hidden="true" className="pointer-events-none absolute right-5 top-1/2 -mt-2 h-3 w-3 rotate-45 border-b-[3px] border-r-[3px] border-blue-800" />
+      </div>
     </div>
   );
 }
