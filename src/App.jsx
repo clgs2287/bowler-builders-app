@@ -21847,7 +21847,7 @@ export default function BowlingPayoutApp() {
   const [supabaseLoadReady, setSupabaseLoadReady] = useState(false);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState("Sign in as admin to save to Supabase");
   const shouldLoadSupabaseArchiveData =
-    Boolean(supabaseAdminProfile) || ["stats", "archives", "titles", "publicstats", "publicschedule"].includes(activeTab);
+    Boolean(supabaseAdminProfile) || ["stats", "archives", "titles", "publicstats", "publickwtboy", "publicschedule"].includes(activeTab);
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
