@@ -14147,6 +14147,7 @@ function ArchivedTournamentRecapEditor({ tournamentRecap = {}, onChange = () => 
 function PublicStats({ tournamentHistory, manualTitles = [], bowlerIdentities = [] }) {
   const [search, setSearch] = useState("");
   const [publicStatsTab, setPublicStatsTab] = useState("bowlers");
+  const [expandedKwtBowler, setExpandedKwtBowler] = useState(null);
   const [seasonFilter, setSeasonFilter] = useState("All");
   const [statsMode, setStatsMode] = useState("scratch");
   const [statsSort, setStatsSort] = useState({ key: "default", direction: "desc" });
@@ -14314,6 +14315,76 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       String(a.displayName || a.bowler || "").localeCompare(String(b.displayName || b.bowler || ""))
     );
   });
+
+  const isKwtArchive = (tournament = {}) => {
+    const seriesText = normalizeMatchText(tournament.series || tournament.activeSnapshot?.tournamentInfo?.series || "");
+    const nameText = normalizeMatchText(tournament.name || tournament.activeSnapshot?.tournamentInfo?.name || "");
+    return (
+      seriesText === "kwt" ||
+      seriesText.includes("karl's world tour") ||
+      seriesText.includes("karls world tour") ||
+      nameText.includes("karl's world tour") ||
+      nameText.includes("karls world tour")
+    );
+  };
+
+  const kwtArchives = (publicArchiveHistory || [])
+    .filter(isKwtArchive)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+
+  const kwtPointRows = Object.values(
+    kwtArchives.reduce((map, tournament) => {
+      const results = [...(tournament.results || [])]
+        .filter((result) => String(result.name || "").trim() && Number(result.place || 0) > 0)
+        .sort((a, b) => Number(a.place || 9999) - Number(b.place || 9999));
+      const fieldSize = results.length || Number(tournament.entries || 0);
+
+      results.forEach((result) => {
+        const place = Number(result.place || 0);
+        if (!place || !fieldSize) return;
+        const resultName = String(result.name || result.bowlerId || "").trim();
+        const key = getCanonicalBowlerGroupKey(resultName, bowlerIdentities);
+        const displayName = getCanonicalBowlerName(resultName, bowlerIdentities) || resultName;
+        const points = Math.max(1, fieldSize - place + 1);
+        const current = map[key] || {
+          key,
+          name: displayName,
+          events: 0,
+          points: 0,
+          bestFinish: null,
+          latestDate: "",
+          details: [],
+        };
+
+        current.events += 1;
+        current.points += points;
+        current.bestFinish = current.bestFinish === null ? place : Math.min(current.bestFinish, place);
+        if (!current.latestDate || String(tournament.date || "") > String(current.latestDate || "")) current.latestDate = tournament.date || "";
+        current.details.push({
+          id: `${tournament.id || tournament.name}-${result.bowlerId || result.name}`,
+          tournament: tournament.name || "KWT Event",
+          date: tournament.date || "",
+          center: tournament.center || tournament.location || "",
+          place,
+          fieldSize,
+          points,
+        });
+        map[key] = current;
+      });
+
+      return map;
+    }, {})
+  )
+    .map((row) => ({
+      ...row,
+      details: [...row.details].sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
+    }))
+    .filter((row) => row.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) =>
+      Number(b.points || 0) - Number(a.points || 0) ||
+      Number(a.bestFinish || 9999) - Number(b.bestFinish || 9999) ||
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
 
   const playerStats = filteredPublicHistory
     .flatMap((tournament) => (tournament.results || []).map((result) => ({
@@ -14507,6 +14578,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 <div className="mb-4 flex flex-wrap gap-2">
   {[
     { id: "bowlers", label: "Bowler Stats" },
+    { id: "kwtBoy", label: "KWT BOY Points" },
     { id: "archives", label: "Archived Tournaments" },
     { id: "titles", label: "Title History" },
     { id: "hof", label: "Hall of Fame" },
@@ -14525,6 +14597,117 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
     </button>
   ))}
 </div>
+
+{publicStatsTab === "kwtBoy" && (
+  <div className="space-y-4">
+    <div className="overflow-hidden rounded-2xl border border-amber-300 bg-[#f7e2b5] shadow-sm">
+      <img
+        src="/kwt-boy-points-banner.png"
+        alt="Karl's World Tour Bowler of the Year Points List"
+        className="h-auto w-full object-cover"
+        loading="lazy"
+      />
+    </div>
+
+    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <StatCard label="KWT Events Counted" value={kwtArchives.length} />
+      <StatCard label="Tracked Bowlers" value={kwtPointRows.length} />
+      <StatCard label="Leader" value={kwtPointRows[0]?.name || "TBD"} />
+      <StatCard label="Leader Points" value={kwtPointRows[0]?.points || 0} />
+    </div>
+
+    <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-blue-50 p-4 shadow-sm">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h3 className="text-xl font-black text-blue-950">Karl's World Tour BOY Points</h3>
+          <p className="mt-1 text-sm font-semibold text-blue-800">
+            Points are calculated from archived KWT events only: 1 point for entering plus 1 point for each bowler beaten.
+          </p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-800">
+          Formula: field - place + 1
+        </div>
+      </div>
+    </div>
+
+    <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+      <table className="w-full min-w-[760px] text-xs md:text-sm">
+        <thead className="bg-blue-950 text-white">
+          <tr>
+            <th className="p-2 text-left md:p-3">Rank</th>
+            <th className="p-2 text-left md:p-3">Bowler</th>
+            <th className="p-2 text-right md:p-3">Points</th>
+            <th className="p-2 text-right md:p-3">Events</th>
+            <th className="p-2 text-right md:p-3">Best Finish</th>
+            <th className="p-2 text-right md:p-3">Latest Event</th>
+          </tr>
+        </thead>
+        <tbody>
+          {kwtPointRows.map((row, index) => {
+            const expanded = expandedKwtBowler === row.key;
+            return (
+              <React.Fragment key={row.key}>
+                <tr className={index < 3 ? "border-t bg-amber-50" : "border-t"}>
+                  <td className="p-2 font-black text-blue-950 md:p-3">#{index + 1}</td>
+                  <td className="p-2 font-black text-blue-950 md:p-3">
+                    <button
+                      type="button"
+                      className="text-left underline-offset-2 hover:underline"
+                      onClick={() => setExpandedKwtBowler(expanded ? null : row.key)}
+                    >
+                      {expanded ? "- " : "+ "}{row.name}
+                    </button>
+                  </td>
+                  <td className="p-2 text-right text-lg font-black text-green-700 md:p-3">{row.points}</td>
+                  <td className="p-2 text-right font-bold md:p-3">{row.events}</td>
+                  <td className="p-2 text-right font-bold md:p-3">#{row.bestFinish || "-"}</td>
+                  <td className="p-2 text-right font-semibold md:p-3">{row.latestDate || "-"}</td>
+                </tr>
+                {expanded && (
+                  <tr className="border-t bg-blue-50">
+                    <td className="p-3" colSpan={6}>
+                      <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
+                        <table className="w-full min-w-[620px] text-xs">
+                          <thead className="bg-blue-100 text-blue-950">
+                            <tr>
+                              <th className="p-2 text-left">Event</th>
+                              <th className="p-2 text-left">Date</th>
+                              <th className="p-2 text-right">Field</th>
+                              <th className="p-2 text-right">Place</th>
+                              <th className="p-2 text-right">Points</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {row.details.map((detail) => (
+                              <tr key={detail.id} className="border-t">
+                                <td className="p-2 font-semibold">{detail.tournament}</td>
+                                <td className="p-2">{detail.date || "-"}</td>
+                                <td className="p-2 text-right">{detail.fieldSize}</td>
+                                <td className="p-2 text-right">#{detail.place}</td>
+                                <td className="p-2 text-right font-black text-green-700">{detail.points}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            );
+          })}
+          {kwtPointRows.length === 0 && (
+            <tr>
+              <td className="p-4 text-blue-700" colSpan={6}>
+                No archived KWT events match the current filters yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
 
 {publicStatsTab === "bowlers" && (
   <div>
