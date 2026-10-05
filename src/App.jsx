@@ -14289,13 +14289,13 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
                         <td className="p-3" colSpan={6}>
                           <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                             <table className="w-full min-w-[620px] text-xs">
-                              <thead className="bg-blue-100 text-blue-950">
+                              <thead className="bg-blue-950 text-white">
                                 <tr>
-                                  <th className="p-2 text-left">Event</th>
-                                  <th className="p-2 text-left">Date</th>
-                                  <th className="p-2 text-right">Field</th>
-                                  <th className="p-2 text-right">Place</th>
-                                  <th className="p-2 text-right">Points</th>
+                                  <th className="p-2 text-left text-white">Event</th>
+                                  <th className="p-2 text-left text-white">Date</th>
+                                  <th className="p-2 text-right text-white">Field</th>
+                                  <th className="p-2 text-right text-white">Place</th>
+                                  <th className="p-2 text-right text-white">Points</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -14784,13 +14784,13 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                     <td className="p-3" colSpan={6}>
                       <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                         <table className="w-full min-w-[620px] text-xs">
-                          <thead className="bg-blue-100 text-blue-950">
+                          <thead className="bg-blue-950 text-white">
                             <tr>
-                              <th className="p-2 text-left">Event</th>
-                              <th className="p-2 text-left">Date</th>
-                              <th className="p-2 text-right">Field</th>
-                              <th className="p-2 text-right">Place</th>
-                              <th className="p-2 text-right">Points</th>
+                              <th className="p-2 text-left text-white">Event</th>
+                              <th className="p-2 text-left text-white">Date</th>
+                              <th className="p-2 text-right text-white">Field</th>
+                              <th className="p-2 text-right text-white">Place</th>
+                              <th className="p-2 text-right text-white">Points</th>
                             </tr>
                           </thead>
                           <tbody>
