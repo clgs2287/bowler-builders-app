@@ -14241,15 +14241,12 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
         </div>
 
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-blue-50 p-4 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
             <div>
               <h3 className="text-xl font-black text-blue-950">Karl's World Tour BOY Points</h3>
               <p className="mt-1 text-sm font-semibold text-blue-800">
                 Points are calculated from archived KWT events only: 1 point for entering plus 1 point for each bowler beaten.
               </p>
-            </div>
-            <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-800">
-              Formula: field - place + 1
             </div>
           </div>
         </div>
