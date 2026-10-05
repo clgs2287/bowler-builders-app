@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
@@ -21918,7 +21918,6 @@ const [multiDayEvent, setMultiDayEvent] = useState(() => createDefaultMultiDayEv
 const [releasingAdminControl, setReleasingAdminControl] = useState(false);
 const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(false);
 
-  const appTopRef = useRef(null);
   const activeTournamentSnapshotRef = useRef(null);
   const supabasePublicDataLoadedRef = useRef(false);
   const supabaseSaveSkipRef = useRef(true);
@@ -21934,33 +21933,6 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
   if (!adminControlSessionIdRef.current) {
     adminControlSessionIdRef.current = getAdminControlSessionId();
   }
-
-  const scrollAppToTop = () => {
-    if (typeof window === "undefined") return;
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-    if (appTopRef.current) {
-      appTopRef.current.scrollIntoView({ block: "start" });
-      return;
-    }
-    window.scrollTo({ top: 0, left: 0 });
-  };
-
-  useLayoutEffect(() => {
-    scrollAppToTop();
-    const timerIds = [0, 75, 200, 500, 1000].map((delay) =>
-      window.setTimeout(scrollAppToTop, delay)
-    );
-    return () => timerIds.forEach((timerId) => window.clearTimeout(timerId));
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedHistory || !hasLoadedSavedData) return;
-    if (supabase && !supabaseLoadReady) return;
-    const timerId = window.setTimeout(scrollAppToTop, 0);
-    return () => window.clearTimeout(timerId);
-  }, [hasLoadedHistory, hasLoadedSavedData, supabaseLoadReady]);
 
   const loadSupabaseAdminProfile = async (session) => {
     if (!supabase || !session?.user) {
@@ -23671,7 +23643,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
   }
 
   return (
-    <div ref={appTopRef} className={`bb-stage min-h-screen ${isDisplayMode ? "p-0" : "p-2 md:p-8"}`}>
+    <div className={`bb-stage min-h-screen ${isDisplayMode ? "p-0" : "p-2 md:p-8"}`}>
       <style>{numberInputStyles}</style>
       <div className={`bb-app-shell mx-auto ${isDisplayMode ? "max-w-none space-y-0" : "max-w-7xl space-y-3 md:space-y-6"}`}>
         {isDisplayMode && (
