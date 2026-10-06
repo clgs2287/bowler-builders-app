@@ -14344,7 +14344,7 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
                     {index === 31 && kwtPointRows.length > 32 && (
                       <tr>
                         <td colSpan={6} className="border-y-2 border-dashed border-red-600 bg-red-50 p-2 text-center text-xs font-bold text-red-800">
-                          Top 32 Cut Line
+                          Bowler of the Year Cut Line
                         </td>
                       </tr>
                     )}
