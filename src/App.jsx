@@ -14224,6 +14224,10 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
       String(a.name || "").localeCompare(String(b.name || ""))
     );
 
+  const automaticQualifiers = kwtPointRows
+    .map((row) => ({ ...row, wins: row.details.filter((detail) => detail.place === 1) }))
+    .filter((row) => row.wins.length > 0);
+
   return (
     <Card className="bb-kwt-points rounded-2xl border border-blue-200 bg-white shadow-sm">
       <CardContent className="space-y-4 p-3 md:p-5">
@@ -14253,6 +14257,26 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
             </div>
           </div>
         </div>
+
+        <section aria-labelledby="kwt-automatic-qualifiers" className="border-y border-green-300 bg-green-50 px-3 py-4 md:px-4">
+          <h3 id="kwt-automatic-qualifiers" className="text-base font-bold text-green-900 md:text-lg">
+            Automatically Qualified for Bowler of the Year
+          </h3>
+          {automaticQualifiers.length > 0 ? (
+            <ul className="mt-2 divide-y divide-green-200">
+              {automaticQualifiers.map((row) => (
+                <li key={row.key} className="grid gap-1 py-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:gap-4">
+                  <span className="break-words font-bold text-green-900">{row.name}</span>
+                  <span className="text-sm font-semibold text-green-800">
+                    {row.wins.map((win) => win.tournament).join(" / ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-green-800">No archived KWT tournament winners yet.</p>
+          )}
+        </section>
 
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
           <table className="w-full min-w-[760px] text-xs md:text-sm">
@@ -14314,6 +14338,13 @@ function KwtBoyPointsPage({ tournamentHistory = [], bowlerIdentities = [], searc
                               </tbody>
                             </table>
                           </div>
+                        </td>
+                      </tr>
+                    )}
+                    {index === 31 && kwtPointRows.length > 32 && (
+                      <tr>
+                        <td colSpan={6} className="border-y-2 border-dashed border-red-600 bg-red-50 p-2 text-center text-xs font-bold text-red-800">
+                          Top 32 Cut Line
                         </td>
                       </tr>
                     )}
