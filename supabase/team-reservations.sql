@@ -12,6 +12,7 @@ declare
   members jsonb := payload->'members';
   member jsonb;
   member_name text;
+  member_nickname text;
   member_index integer := 0;
   team_size integer;
   settings jsonb;
@@ -64,10 +65,12 @@ begin
   ) then raise exception 'Each bowler can only appear once in this entry.'; end if;
   for member in select value from jsonb_array_elements(members) loop
     member_name := trim(coalesce(member->>'name', ''));
+    member_nickname := trim(coalesce(member->>'nickname', ''));
     if coalesce(member->>'tbd', 'false') <> 'true' then
       if lower(member_name) in ('', 'tbd') then raise exception 'Enter a bowler name or select TBD.'; end if;
       if exists (select 1 from public.reservations r where r.tournament_id = tournament_key
-        and lower(member_name) in (lower(trim(r.name)), lower(trim(r.data->>'name')), lower(trim(r.data->>'nickname')))) then
+        and (lower(member_name) in (lower(trim(r.name)), lower(trim(r.data->>'name')), lower(trim(r.data->>'nickname')))
+          or (member_nickname <> '' and lower(member_nickname) in (lower(trim(r.name)), lower(trim(r.data->>'name')), lower(trim(r.data->>'nickname')))))) then
         raise exception '% is already on the reservation list.', member_name;
       end if;
     end if;
@@ -81,14 +84,15 @@ begin
     then 'Waitlisted' else 'Registered' end;
   for member in select value from jsonb_array_elements(members) loop
     member_name := case when member->>'tbd' = 'true' then 'TBD' else trim(member->>'name') end;
+    member_nickname := case when member->>'tbd' = 'true' then '' else trim(coalesce(member->>'nickname', '')) end;
     row_data := (payload - 'reservationRows') || jsonb_build_object(
-      'id', group_id || '-' || (member_index + 1)::text, 'name', member_name, 'nickname', '',
+      'id', group_id || '-' || (member_index + 1)::text, 'name', member_name, 'nickname', member_nickname,
       'tournamentKey', tournament_key, 'reservationGroupId', group_id,
       'reservationGroupSize', team_size, 'reservationMemberIndex', member_index,
       'submittedBy', trim(members->0->>'name'), 'status', next_status,
       'registrationNumber', first_number + member_index, 'confirmationNumber', first_number);
     insert into public.reservations(id, data, tournament_id, name, email, phone, added_to_roster)
-    values(row_data->>'id', row_data, tournament_key, member_name, payload->>'email',
+    values(row_data->>'id', row_data, tournament_key, coalesce(nullif(member_nickname, ''), member_name), payload->>'email',
       coalesce(payload->>'phone', ''), false);
     saved_rows := saved_rows || jsonb_build_array(row_data);
     member_index := member_index + 1;

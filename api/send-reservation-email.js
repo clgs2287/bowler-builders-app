@@ -80,7 +80,7 @@ const reservationHtml = ({ reservation = {}, tournament = {} }) => {
                       ${infoRow("Center", center || "TBD")}
                       ${infoRow("Address", address || "TBD")}
                       ${reservation.members?.length > 1
-                        ? reservation.members.map((member, index) => infoRow(`Bowler ${index + 1}`, member.tbd ? "TBD" : member.name)).join("")
+                        ? reservation.members.map((member, index) => infoRow(`Bowler ${index + 1}`, member.tbd ? "TBD" : `${member.name}${member.nickname ? ` (${member.nickname})` : ""}`)).join("")
                         : infoRow("Name", reservation.name || "") + infoRow("Nickname", reservation.nickname || "")}
                       ${infoRow("Phone", reservation.phone || "")}
                       ${infoRow("Email", reservation.email || "")}

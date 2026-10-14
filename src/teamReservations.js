@@ -5,6 +5,8 @@ export function buildTeamReservationRows(reservation, firstNumber = 1) {
   const names = members.filter((member) => !member.tbd).map((member) => String(member.name || "").trim().toLowerCase());
   if (names.some((name) => !name)) throw new Error("Enter each partner's name or select TBD.");
   if (new Set(names).size !== names.length) throw new Error("Each bowler can only appear once in this entry.");
+  const nicknames = members.filter((member) => !member.tbd).map((member) => String(member.nickname || "").trim().toLowerCase()).filter(Boolean);
+  if (new Set(nicknames).size !== nicknames.length) throw new Error("Each nickname can only appear once in this entry.");
   const { reservationRows: _rows, ...entry } = reservation;
   return members.map((member, index) => ({
     ...entry,
@@ -13,7 +15,7 @@ export function buildTeamReservationRows(reservation, firstNumber = 1) {
     reservationMemberIndex: index,
     reservationGroupSize: members.length,
     name: member.tbd ? "TBD" : member.name.trim(),
-    nickname: "",
+    nickname: member.tbd ? "" : String(member.nickname || "").trim(),
     registrationNumber: firstNumber + index,
     confirmationNumber: firstNumber,
     submittedBy: members[0].name.trim(),

@@ -9818,6 +9818,7 @@ function ReservationsTab({
     if (group.length) {
       const members = [...group].sort((a, b) => a.reservationMemberIndex - b.reservationMemberIndex)
         .map((item) => ({ name: String(item.id) === String(editingReservationId) ? editingReservation.name : item.name,
+          nickname: String(item.id) === String(editingReservationId) ? editingReservation.nickname : item.nickname,
           tbd: (String(item.id) === String(editingReservationId) ? editingReservation.name : item.name).trim().toLowerCase() === "tbd" }));
       group.forEach((item) => updateReservationRows(item.id, (current) => ({ ...current, members,
         status: editingReservation.status || current.status,
@@ -10807,7 +10808,7 @@ function PublicReservations({
     phone: "",
     email: "",
     note: "",
-    partners: [{ name: "", tbd: false }, { name: "", tbd: false }],
+    partners: [{ name: "", nickname: "", tbd: false }, { name: "", nickname: "", tbd: false }],
   });
 
   const updateField = (field, value) => {
@@ -10918,56 +10919,49 @@ const registrationStatus =
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className={`grid gap-3 ${isTeamReservation ? "grid-cols-2" : "md:grid-cols-2"}`}>
           <Input
+            className="min-w-0 w-full"
             value={form.name}
             onChange={(e) =>
               updateField("name", e.target.value)
             }
-            placeholder={isTeamReservation ? "Bowler 1 / Your Full Name *" : "Full Name *"}
+            placeholder={isTeamReservation ? "Bowler 1 Name *" : "Full Name *"}
             aria-label={isTeamReservation ? "Bowler 1 / Your Full Name" : "Full Name"}
           />
 
-          {!isTeamReservation && (
           <Input
+            className="min-w-0 w-full"
             value={form.nickname}
             onChange={(e) =>
               updateField("nickname", e.target.value)
             }
             placeholder="Nickname"
-          />
-          )}
-
-          <Input
-            value={form.phone}
-            onChange={(e) =>
-              updateField("phone", formatPhoneNumber(e.target.value))
-            }
-            placeholder="Phone Number"
-          />
-
-          <Input
-            value={form.email}
-            onChange={(e) =>
-              updateField("email", e.target.value)
-            }
-            placeholder="Email Address *"
+            aria-label={isTeamReservation ? "Bowler 1 Nickname" : "Nickname"}
           />
         </div>
 
         {isTeamReservation && (
           <div className="mt-4 space-y-3">
             {form.partners.slice(0, reservationTeamSize - 1).map((partner, index) => (
-              <div key={index} className="flex items-center gap-3">
+              <div key={index} className="grid grid-cols-2 items-center gap-x-3 gap-y-1">
                 <Input
-                  className="min-w-0 flex-1"
+                  className="min-w-0 w-full"
                   aria-label={`Bowler ${index + 2} Full Name`}
-                  placeholder={`Bowler ${index + 2} Full Name *`}
+                  placeholder={`Bowler ${index + 2} Name *`}
                   value={partner.tbd ? "TBD" : partner.name}
                   disabled={partner.tbd}
                   onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, name: event.target.value } : item) }))}
                 />
-                <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-blue-950">
+                <Input
+                  className="min-w-0 w-full"
+                  aria-label={`Bowler ${index + 2} Nickname`}
+                  placeholder="Nickname"
+                  value={partner.tbd ? "" : partner.nickname}
+                  disabled={partner.tbd}
+                  onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, nickname: event.target.value } : item) }))}
+                />
+                <label className="col-span-2 flex min-h-9 items-center justify-end gap-2 text-sm font-bold text-blue-950">
                   <input type="checkbox" checked={partner.tbd} onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, tbd: event.target.checked } : item) }))} />
                   TBD
                 </label>
@@ -10975,6 +10969,11 @@ const registrationStatus =
             ))}
           </div>
         )}
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <Input value={form.phone} onChange={(e) => updateField("phone", formatPhoneNumber(e.target.value))} placeholder="Phone Number" />
+          <Input value={form.email} onChange={(e) => updateField("email", e.target.value)} placeholder="Email Address *" />
+        </div>
 
         <textarea
           className="mt-4 min-h-[140px] w-full rounded-2xl border border-blue-200 p-4"
@@ -11006,7 +11005,7 @@ const registrationStatus =
       note: form.note,
       ...(isTeamReservation ? {
         tournamentStyle: activeTournamentInfo.tournamentStyle,
-        members: [{ name: form.name.trim(), tbd: false }, ...form.partners.slice(0, reservationTeamSize - 1).map((partner) => ({ ...partner, tbd: partner.tbd || partner.name.trim().toLowerCase() === "tbd" }))],
+        members: [{ name: form.name.trim(), nickname: form.nickname.trim(), tbd: false }, ...form.partners.slice(0, reservationTeamSize - 1).map((partner) => ({ ...partner, tbd: partner.tbd || partner.name.trim().toLowerCase() === "tbd" }))],
       } : {}),
     };
     let pendingMembers;
@@ -11131,7 +11130,7 @@ const registrationStatus =
       phone: "",
       email: "",
       note: "",
-      partners: [{ name: "", tbd: false }, { name: "", tbd: false }],
+      partners: [{ name: "", nickname: "", tbd: false }, { name: "", nickname: "", tbd: false }],
     });
   }}
 >

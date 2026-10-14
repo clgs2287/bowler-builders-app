@@ -23,6 +23,12 @@ test("a whole entry needs enough remaining capacity", () => {
   assert.equal(teamReservationFits(10, 12, 2), true);
 });
 
+test("nicknames stay attached to the correct bowler and TBD clears its nickname", () => {
+  const rows = buildTeamReservationRows(entry([{ name: "Cory", nickname: " Captain " }, { name: "Mallory", nickname: "Partner" }, { tbd: true, nickname: "Old Nickname" }]));
+  assert.deepEqual(rows.map((row) => row.nickname), ["Captain", "Partner", ""]);
+  assert.throws(() => buildTeamReservationRows(entry([{ name: "Cory", nickname: "Captain" }, { name: "Mallory", nickname: "captain" }])));
+});
+
 test("roster placement preserves existing teams and does not split the new entry", () => {
   const members = buildTeamReservationRows(entry([{ name: "Cory" }, { name: "Mallory" }, { tbd: true }]));
   assert.equal(findTeamRosterSlot([{ name: "Existing" }, { name: "" }], members, 3, 12).index, 3);
