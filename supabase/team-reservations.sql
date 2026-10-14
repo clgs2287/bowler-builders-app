@@ -80,7 +80,8 @@ begin
     end if;
   end loop;
 
-  if event_style = 'trios' and event_info->>'maxPreviousChampions' = '2' then
+  if ((event_style = 'trios' and event_info->>'maxPreviousChampions' = '2')
+      or (event_style = 'doubles' and event_info->>'maxPreviousChampions' = '1')) then
     select count(*) into previous_champion_count
     from jsonb_array_elements(members) as submitted(member)
     where coalesce(member->>'tbd', 'false') <> 'true' and exists (
@@ -110,8 +111,8 @@ begin
       )
       select 1 from winners w join (select name from submitted_names union select name from identity_names) n on n.name = w.name
     );
-    if previous_champion_count > 2 then
-      raise exception 'This tournament allows at most two previous champions per trio. At least one bowler must not have won a tournament.';
+    if previous_champion_count > (case when event_style = 'doubles' then 1 else 2 end) then
+      raise exception 'This tournament requires at least one non-champion on every team.';
     end if;
   end if;
 

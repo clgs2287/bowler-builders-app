@@ -6453,10 +6453,10 @@ function DashboardTab({
                     ))}
                   </select>
                 </div>
-                {tournamentInfo.tournamentStyle === "trios" && (
+                {["doubles", "trios"].includes(tournamentInfo.tournamentStyle) && (
                   <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                    <Label className="text-left text-sm font-bold text-blue-900">Max 2 Previous Champions</Label>
-                    <Switch compact checked={Number(tournamentInfo.maxPreviousChampions) === 2} onCheckedChange={(checked) => update("maxPreviousChampions", checked ? 2 : null)} />
+                    <Label className="text-left text-sm font-bold text-blue-900">{tournamentInfo.tournamentStyle === "doubles" ? "Max 1 Previous Champion" : "Max 2 Previous Champions"}</Label>
+                    <Switch compact checked={Number(tournamentInfo.maxPreviousChampions) === (tournamentInfo.tournamentStyle === "doubles" ? 1 : 2)} onCheckedChange={(checked) => update("maxPreviousChampions", checked ? (tournamentInfo.tournamentStyle === "doubles" ? 1 : 2) : null)} />
                   </div>
                 )}
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
@@ -10871,7 +10871,7 @@ function PublicReservations({
   }, [activePublicReservationKey, publicReservationOptions, selectedPublicReservationKey, selectedReservationKey]);
 
   const formValid =
-  (!(activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2) || eligibilityDataReady) &&
+  (!(["trios", "doubles"].includes(activeTournamentInfo.tournamentStyle) && Number(activeTournamentInfo.maxPreviousChampions) === (activeTournamentInfo.tournamentStyle === "doubles" ? 1 : 2)) || eligibilityDataReady) &&
   form.name.trim() &&
   form.email.trim() &&
   (!isTeamReservation || hasCompleteTeamNames([form, ...form.partners.slice(0, reservationTeamSize - 1)])) &&
@@ -10953,9 +10953,9 @@ const registrationStatus =
               Eligibility: {getReservationEligibilityLabel(reservationEligibility)}.
             </p>
           )}
-          {activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2 && (
+          {["trios", "doubles"].includes(activeTournamentInfo.tournamentStyle) && Number(activeTournamentInfo.maxPreviousChampions) === (activeTournamentInfo.tournamentStyle === "doubles" ? 1 : 2) && (
             <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
-              Maximum two previous champions per trio. At least one bowler must not have won a tournament.
+              {activeTournamentInfo.tournamentStyle === "doubles" ? "Maximum one previous champion per pair. At least one bowler must not have won a tournament." : "Maximum two previous champions per trio. At least one bowler must not have won a tournament."}
             </p>
           )}
         </div>

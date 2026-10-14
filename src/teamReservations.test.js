@@ -56,3 +56,10 @@ test("two champions and a nonchampion qualify; an incomplete lineup cannot enter
   const pending = [...members.slice(0, 2), { name: "TBD", tbd: true }];
   assert.equal(check(pending, true).ok, false);
 });
+
+test("an enabled doubles rule permits one past champion but rejects a pair of champions", () => {
+  const tournamentInfo = { tournamentStyle: "doubles", maxPreviousChampions: 1 };
+  const isChampion = (member) => member.name.startsWith("Champion");
+  assert.equal(validateTeamChampionLimit({ tournamentInfo, members: [{ name: "Champion One" }, { name: "New Bowler" }], isChampion, requireComplete: true }).ok, true);
+  assert.equal(validateTeamChampionLimit({ tournamentInfo, members: [{ name: "Champion One" }, { name: "Champion Two" }], isChampion, requireComplete: true }).ok, false);
+});

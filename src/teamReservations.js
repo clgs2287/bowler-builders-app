@@ -49,10 +49,14 @@ export function findTeamRosterSlot(bowlers, members, teamSize, limit) {
 }
 
 export function validateTeamChampionLimit({ tournamentInfo, members, isChampion, requireComplete = false }) {
-  if (tournamentInfo.tournamentStyle !== "trios" || Number(tournamentInfo.maxPreviousChampions) !== 2) return { ok: true };
+  const tournamentStyle = tournamentInfo.tournamentStyle;
+  const maxChampions = Number(tournamentInfo.maxPreviousChampions);
+  const teamSize = tournamentStyle === "doubles" ? 2 : tournamentStyle === "trios" ? 3 : 0;
+  if (!teamSize || maxChampions !== teamSize - 1) return { ok: true };
   const namedMembers = members.filter((member) => !member.tbd && String(member.name || "").trim() && String(member.name || "").trim().toLowerCase() !== "tbd");
   const champions = namedMembers.filter(isChampion);
-  if (champions.length > 2) return { ok: false, message: "This tournament allows at most two previous champions per trio. At least one bowler must not have won a tournament." };
-  if (requireComplete && namedMembers.length !== 3) return { ok: false, message: "Enter all three bowler names before adding this trio to Registration." };
-  return { ok: true, pending: namedMembers.length !== 3, championCount: champions.length };
+  const entryLabel = tournamentStyle === "doubles" ? "pair" : "trio";
+  if (champions.length > maxChampions) return { ok: false, message: `This tournament allows at most ${maxChampions} previous champion per ${entryLabel}. At least one bowler must not have won a tournament.` };
+  if (requireComplete && namedMembers.length !== teamSize) return { ok: false, message: `Enter all ${teamSize} bowler names before adding this ${entryLabel} to Registration.` };
+  return { ok: true, pending: namedMembers.length !== teamSize, championCount: champions.length };
 }
