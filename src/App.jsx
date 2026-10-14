@@ -16595,12 +16595,22 @@ function StepMatch({ title, match, winner, stepScores, updateStep, useHandicapSc
 
 function EliminatorTab({ entries, bowlers, useHandicapScores, eliminatorState, setEliminatorState,savedFinalsRounds,
 setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
+  const [game1DraftScores, setGame1DraftScores] = useState({});
+  const [game2DraftScores, setGame2DraftScores] = useState({});
+  const [game1DraftMemberScores, setGame1DraftMemberScores] = useState({});
+  const [game2DraftMemberScores, setGame2DraftMemberScores] = useState({});
   const game1Scores = eliminatorState.game1Scores || {};
   const game2Scores = eliminatorState.game2Scores || {};
   const stepScores = eliminatorState.stepScores || {};
   const game1MemberScores = eliminatorState.game1MemberScores || {};
   const game2MemberScores = eliminatorState.game2MemberScores || {};
   const stepMemberScores = eliminatorState.stepMemberScores || {};
+  const displayedGame1Scores = { ...game1Scores, ...game1DraftScores };
+  const displayedGame2Scores = { ...game2Scores, ...game2DraftScores };
+  const displayedGame1MemberScores = { ...game1MemberScores, ...game1DraftMemberScores };
+  const displayedGame2MemberScores = { ...game2MemberScores, ...game2DraftMemberScores };
+  const hasGame1Draft = Object.keys(game1DraftScores).length > 0 || Object.keys(game1DraftMemberScores).length > 0;
+  const hasGame2Draft = Object.keys(game2DraftScores).length > 0 || Object.keys(game2DraftMemberScores).length > 0;
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const finalsScoreMode = getFinalsScoreMode(tournamentInfo);
   const finalsMaxScore = getFinalsScratchMax(tournamentStyle, finalsScoreMode);
@@ -16624,12 +16634,12 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   const cutBowlers = getRankedTournamentEntries(bowlers, useHandicapScores, tournamentStyle).slice(0, cutCount);
   const baseRows = cutBowlers.map((b) => {
     const average = completedGamesCount(b) > 0 ? (useHandicapScores ? b.handicap : b.scratch) / completedGamesCount(b) : 0;
-    const g1 = Number(game1Scores[b.seed] || 0);
+    const g1 = Number(displayedGame1Scores[b.seed] || 0);
     const game1Score = finalsGameScore(b, g1, useHandicapScores);
     const game1Total = game1Score > 0 ? average + game1Score : 0;
     return { ...b, average, elimGame1: g1, elimGame1Score: game1Score, game1Total };
   });
-  const game1Ranked = baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
+  const game1Ranked = !hasGame1Draft && baseRows.some((row) => Number(row.elimGame1 || 0) > 0)
     ? rankRows(baseRows, "game1Total")
     : [...baseRows]
         .sort((a, b) => Number(b.average || 0) - Number(a.average || 0) || a.name.localeCompare(b.name))
@@ -16639,20 +16649,50 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   const game1AdvancersCount = skipEliminator ? cutBowlers.length : directToStepladder ? 4 : Math.max(4, Math.ceil(cutBowlers.length / 2));
   const game1Advancers = skipEliminator ? [] : game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
   const game2Rows = game1Advancers.map((b) => {
-    const g2 = Number(game2Scores[b.seed] || 0);
+    const g2 = Number(displayedGame2Scores[b.seed] || 0);
     const game2Score = finalsGameScore(b, g2, useHandicapScores);
     const game2Total = game2Score > 0 ? b.game1Total + game2Score : b.game1Total;
     return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
   });
-  const game2Ranked = skipEliminator || directToStepladder ? [] : rankRows(game2Rows, "game2Total");
+  const game2Ranked = skipEliminator || directToStepladder
+    ? []
+    : !hasGame2Draft && game2Rows.some((row) => Number(row.elimGame2 || 0) > 0)
+      ? rankRows(game2Rows, "game2Total")
+      : [...game2Rows].map((row, index) => ({ ...row, rank: index + 1 }));
   const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
-  const updateGame1 = (seed, value) => setEliminatorState((current) => ({ ...current, game1Scores: { ...(current.game1Scores || {}), [seed]: value } }));
-  const updateGame2 = (seed, value) => setEliminatorState((current) => ({ ...current, game2Scores: { ...(current.game2Scores || {}), [seed]: value } }));
+  const updateGame1 = (seed, value) => setGame1DraftScores((current) => ({ ...current, [seed]: value }));
+  const updateGame2 = (seed, value) => setGame2DraftScores((current) => ({ ...current, [seed]: value }));
   const updateStep = (key, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value } }));
-  const updateGame1Members = (seed, nextMemberScores, value) => setEliminatorState((current) => ({ ...current, game1Scores: { ...(current.game1Scores || {}), [seed]: value }, game1MemberScores: { ...(current.game1MemberScores || {}), [seed]: nextMemberScores } }));
-  const updateGame2Members = (seed, nextMemberScores, value) => setEliminatorState((current) => ({ ...current, game2Scores: { ...(current.game2Scores || {}), [seed]: value }, game2MemberScores: { ...(current.game2MemberScores || {}), [seed]: nextMemberScores } }));
+  const updateGame1Members = (seed, nextMemberScores, value) => {
+    setGame1DraftScores((current) => ({ ...current, [seed]: value }));
+    setGame1DraftMemberScores((current) => ({ ...current, [seed]: nextMemberScores }));
+  };
+  const updateGame2Members = (seed, nextMemberScores, value) => {
+    setGame2DraftScores((current) => ({ ...current, [seed]: value }));
+    setGame2DraftMemberScores((current) => ({ ...current, [seed]: nextMemberScores }));
+  };
   const updateStepMembers = (key, nextMemberScores, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value }, stepMemberScores: { ...(current.stepMemberScores || {}), [key]: nextMemberScores } }));
+  const saveEliminatorGame1 = () => {
+    setEliminatorState((current) => ({
+      ...current,
+      game1Scores: { ...(current.game1Scores || {}), ...game1DraftScores },
+      game1MemberScores: { ...(current.game1MemberScores || {}), ...game1DraftMemberScores },
+    }));
+    setGame1DraftScores({});
+    setGame1DraftMemberScores({});
+    setSavedFinalsRounds((current) => ({ ...current, eliminatorGame1: true }));
+  };
+  const saveEliminatorGame2 = () => {
+    setEliminatorState((current) => ({
+      ...current,
+      game2Scores: { ...(current.game2Scores || {}), ...game2DraftScores },
+      game2MemberScores: { ...(current.game2MemberScores || {}), ...game2DraftMemberScores },
+    }));
+    setGame2DraftScores({});
+    setGame2DraftMemberScores({});
+    setSavedFinalsRounds((current) => ({ ...current, eliminatorGame2: true }));
+  };
   const clearEliminatorScores = () => {
     const confirmed = window.confirm("Clear all eliminator finals scores? Registration and qualifying scores will stay as-is.");
     if (!confirmed) return;
@@ -16666,6 +16706,10 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
       game2MemberScores: {},
       stepMemberScores: {},
     }));
+    setGame1DraftScores({});
+    setGame2DraftScores({});
+    setGame1DraftMemberScores({});
+    setGame2DraftMemberScores({});
     setSavedFinalsRounds((current) => {
       const next = { ...(current || {}) };
       delete next.eliminatorGame1;
@@ -16687,14 +16731,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
 </p>
 
 <div className="mb-4">
-  <Button
-    onClick={() =>
-      setSavedFinalsRounds((current) => ({
-        ...current,
-        eliminatorGame1: true,
-      }))
-    }
-  >
+  <Button onClick={saveEliminatorGame1}>
     Save Eliminator Game 1
   </Button>
 </div>
@@ -16702,12 +16739,12 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
 <div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><TeamFinalsScoreInput
   player={row}
   scoreKey={row.seed}
-  value={game1Scores[row.seed] ?? ""}
-  scratchValue={game1Scores[row.seed] ?? ""}
+  value={displayedGame1Scores[row.seed] ?? ""}
+  scratchValue={displayedGame1Scores[row.seed] ?? ""}
   onScoreChange={updateGame1}
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
-  memberScores={game1MemberScores}
+  memberScores={displayedGame1MemberScores}
   onMemberScoreChange={updateGame1Members}
 /></td><td className="p-3 text-right font-semibold">{row.game1Total ? row.game1Total.toFixed(2) : " - -"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= game1AdvancersCount ? (directToStepladder ? "STEPLADDER" : "ADVANCE") : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard>{!directToStepladder && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">
 </h2>
@@ -16717,14 +16754,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
 </p>
 
 <div className="mb-4">
-  <Button
-    onClick={() =>
-      setSavedFinalsRounds((current) => ({
-        ...current,
-        eliminatorGame2: true,
-      }))
-    }
-  >
+  <Button onClick={saveEliminatorGame2}>
     Save Eliminator Game 2
   </Button>
 </div>
@@ -16732,12 +16762,12 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
 <div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : " - -"}</td><td className="p-2 text-center"><TeamFinalsScoreInput
   player={row}
   scoreKey={row.seed}
-  value={game2Scores[row.seed] ?? ""}
-  scratchValue={game2Scores[row.seed] ?? ""}
+  value={displayedGame2Scores[row.seed] ?? ""}
+  scratchValue={displayedGame2Scores[row.seed] ?? ""}
   onScoreChange={updateGame2}
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
-  memberScores={game2MemberScores}
+  memberScores={displayedGame2MemberScores}
   onMemberScoreChange={updateGame2Members}
 /></td><td className="p-3 text-right font-semibold">{row.game2Total ? row.game2Total.toFixed(2) : " - -"}</td><td className="p-3 text-right">{row.rank}</td><td className="p-3 text-right font-semibold">{row.rank <= 4 ? "STEPLADDER" : "OUT"}</td></tr>)}</tbody></table></div></CardContent></AppCard>}</>}<AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2><p className="mb-4 text-sm text-blue-700">
 </p>
