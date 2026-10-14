@@ -67,6 +67,9 @@ begin
   for member in select value from jsonb_array_elements(members) loop
     member_name := trim(coalesce(member->>'name', ''));
     member_nickname := trim(coalesce(member->>'nickname', ''));
+    if coalesce(member->>'tbd', 'false') = 'true' or lower(member_name) in ('', 'tbd', 'unknown', 'pending', 'n/a', '-') then
+      raise exception 'A full team is required. Enter every bowler name before submitting.';
+    end if;
     if coalesce(member->>'tbd', 'false') <> 'true' then
       if lower(member_name) in ('', 'tbd') then raise exception 'Enter a bowler name or select TBD.'; end if;
       if exists (select 1 from public.reservations r where r.tournament_id = tournament_key

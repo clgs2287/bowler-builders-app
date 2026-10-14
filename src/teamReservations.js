@@ -1,6 +1,12 @@
+export function hasCompleteTeamNames(members) {
+  return members.every((member) => !member.tbd &&
+    !["", "tbd", "unknown", "pending", "n/a", "-"].includes(String(member.name || "").trim().toLowerCase()));
+}
+
 export function buildTeamReservationRows(reservation, firstNumber = 1) {
   const members = reservation.members || [];
   if (![2, 3].includes(members.length)) throw new Error("Doubles needs two bowlers; trios needs three.");
+  if (!hasCompleteTeamNames(members)) throw new Error("A full team is required. Enter every bowler's name before submitting.");
   if (!String(members[0]?.name || "").trim() || members[0]?.tbd || String(members[0]?.name).trim().toLowerCase() === "tbd") throw new Error("The submitting bowler's name is required.");
   const names = members.filter((member) => !member.tbd).map((member) => String(member.name || "").trim().toLowerCase());
   if (names.some((name) => !name)) throw new Error("Enter each partner's name or select TBD.");
@@ -14,8 +20,8 @@ export function buildTeamReservationRows(reservation, firstNumber = 1) {
     reservationGroupId: String(reservation.id),
     reservationMemberIndex: index,
     reservationGroupSize: members.length,
-    name: member.tbd ? "TBD" : member.name.trim(),
-    nickname: member.tbd ? "" : String(member.nickname || "").trim(),
+    name: member.name.trim(),
+    nickname: String(member.nickname || "").trim(),
     registrationNumber: firstNumber + index,
     confirmationNumber: firstNumber,
     submittedBy: members[0].name.trim(),
@@ -47,6 +53,6 @@ export function validateTeamChampionLimit({ tournamentInfo, members, isChampion,
   const namedMembers = members.filter((member) => !member.tbd && String(member.name || "").trim() && String(member.name || "").trim().toLowerCase() !== "tbd");
   const champions = namedMembers.filter(isChampion);
   if (champions.length > 2) return { ok: false, message: "This tournament allows at most two previous champions per trio. At least one bowler must not have won a tournament." };
-  if (requireComplete && namedMembers.length !== 3) return { ok: false, message: "Fill in the TBD bowler names before adding this trio to Registration so its champion eligibility can be confirmed." };
+  if (requireComplete && namedMembers.length !== 3) return { ok: false, message: "Enter all three bowler names before adding this trio to Registration." };
   return { ok: true, pending: namedMembers.length !== 3, championCount: champions.length };
 }

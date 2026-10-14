@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
-import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit } from "./teamReservations";
+import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit, hasCompleteTeamNames } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
@@ -9817,6 +9817,7 @@ function ReservationsTab({
       : [];
     if (group.length) {
       const members = group.map((member) => String(member.id) === String(editingReservationId) ? { ...member, ...editingReservation } : member);
+      if (!hasCompleteTeamNames(members)) { setRosterNotice("A full team is required. Enter every bowler's name."); return; }
       const eligibility = validateTrioChampionEligibility(members, reservationState.publicTournamentInfo || tournamentInfo, tournamentHistory, manualTitles, bowlerIdentities);
       if (!eligibility.ok) { setRosterNotice(eligibility.message); return; }
     }
@@ -10831,7 +10832,7 @@ function PublicReservations({
     phone: "",
     email: "",
     note: "",
-    partners: [{ name: "", nickname: "", tbd: false }, { name: "", nickname: "", tbd: false }],
+    partners: [{ name: "", nickname: "" }, { name: "", nickname: "" }],
   });
 
   const updateField = (field, value) => {
@@ -10863,7 +10864,7 @@ function PublicReservations({
   (!(activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2) || eligibilityDataReady) &&
   form.name.trim() &&
   form.email.trim() &&
-  (!isTeamReservation || form.partners.slice(0, reservationTeamSize - 1).every((partner) => partner.tbd || partner.name.trim())) &&
+  (!isTeamReservation || hasCompleteTeamNames([form, ...form.partners.slice(0, reservationTeamSize - 1)])) &&
   activePublicReservationKey;
   const currentReservations =
   activeReservationState.reservations || [];
@@ -10873,7 +10874,7 @@ function PublicReservations({
   const currentRegisteredReservationCount = currentReservations.length
     ? currentReservations.filter((reservation) => String(reservation.status || "Registered") === "Registered").length
     : currentReservationCount;
-  const formForcedToWaitlist = [form, ...(isTeamReservation ? form.partners.slice(0, reservationTeamSize - 1).filter((partner) => !partner.tbd) : [])]
+  const formForcedToWaitlist = [form, ...(isTeamReservation ? form.partners.slice(0, reservationTeamSize - 1) : [])]
     .some((member) => isReservationWaitlistOnly(member, activeReservationState));
 
 const registrationStatus =
@@ -10935,6 +10936,7 @@ const registrationStatus =
         <div className="mb-5 space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
           <p>After submitting, please check your inbox and spam folder for your confirmation email.</p>
           <p>If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.</p>
+          {isTeamReservation && <p>All bowler names are required. For player substitutions after submitting, email bowlerbuildersproshop@yahoo.com.</p>}
           <p>Withdrawals should be made at least 48 hours before the tournament. Anyone withdrawing within 48 hours may be moved to the waitlist for future reservations.</p>
           {reservationEligibility !== "open" && (
             <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
@@ -10943,7 +10945,7 @@ const registrationStatus =
           )}
           {activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2 && (
             <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
-              Maximum two previous champions per trio. At least one bowler must not have won a tournament. TBD partners require eligibility confirmation before Registration.
+              Maximum two previous champions per trio. At least one bowler must not have won a tournament.
             </p>
           )}
         </div>
@@ -10978,22 +10980,16 @@ const registrationStatus =
                   className="min-w-0 w-full"
                   aria-label={`Bowler ${index + 2} Full Name`}
                   placeholder={`Bowler ${index + 2} Name *`}
-                  value={partner.tbd ? "TBD" : partner.name}
-                  disabled={partner.tbd}
+                  value={partner.name}
                   onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, name: event.target.value } : item) }))}
                 />
                 <Input
                   className="min-w-0 w-full"
                   aria-label={`Bowler ${index + 2} Nickname`}
                   placeholder="Nickname"
-                  value={partner.tbd ? "" : partner.nickname}
-                  disabled={partner.tbd}
+                  value={partner.nickname}
                   onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, nickname: event.target.value } : item) }))}
                 />
-                <label className="col-span-2 flex min-h-9 items-center justify-end gap-2 text-sm font-bold text-blue-950">
-                  <input type="checkbox" checked={partner.tbd} onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, tbd: event.target.checked } : item) }))} />
-                  TBD
-                </label>
               </div>
             ))}
           </div>
@@ -11034,7 +11030,7 @@ const registrationStatus =
       note: form.note,
       ...(isTeamReservation ? {
         tournamentStyle: activeTournamentInfo.tournamentStyle,
-        members: [{ name: form.name.trim(), nickname: form.nickname.trim(), tbd: false }, ...form.partners.slice(0, reservationTeamSize - 1).map((partner) => ({ ...partner, tbd: partner.tbd || partner.name.trim().toLowerCase() === "tbd" }))],
+        members: [{ name: form.name.trim(), nickname: form.nickname.trim() }, ...form.partners.slice(0, reservationTeamSize - 1)],
       } : {}),
     };
     let pendingMembers;
@@ -11161,7 +11157,7 @@ const registrationStatus =
       phone: "",
       email: "",
       note: "",
-      partners: [{ name: "", nickname: "", tbd: false }, { name: "", nickname: "", tbd: false }],
+      partners: [{ name: "", nickname: "" }, { name: "", nickname: "" }],
     });
   }}
 >
@@ -23402,6 +23398,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         .filter((item) => item.reservationGroupId === reservation.reservationGroupId)
         .sort((a, b) => Number(a.reservationMemberIndex) - Number(b.reservationMemberIndex));
       const size = getTournamentTeamSize(tournamentInfo.tournamentStyle || "singles");
+      if (!hasCompleteTeamNames(members)) return { error: "A full team is required. Enter every bowler's name before adding the entry to Registration." };
       const eligibility = validateTrioChampionEligibility(members, tournamentInfo, tournamentHistory, manualTitles, bowlerIdentities, true);
       if (!eligibility.ok) return { error: eligibility.message };
       if (members.length !== size || size !== Number(reservation.reservationGroupSize)) {
