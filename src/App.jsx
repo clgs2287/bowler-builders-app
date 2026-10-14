@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
 import { getBracketFillSuggestions } from "./bracketFillSuggestions";
 import { getBracketPayout } from "./bracketPayouts";
+import { createTriosScoresheetPdf } from "./triosScoresheetPdf";
 import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit, hasCompleteTeamNames } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
@@ -8137,6 +8138,12 @@ const removeQualifyingAdjustment = (bowlerId) => {
 };
 
 const downloadScoreEntrySheetPdf = async () => {
+  if (tournamentInfo.tournamentStyle === "trios") {
+    const laneForGame = (lane, gameIndex) => lanePairForGame(lane, gameIndex, tournamentInfo?.lanesUsed, tournamentInfo?.movePairs || 1, tournamentInfo?.movementMode || "custom", { odd: tournamentInfo?.customRotation || "", even: tournamentInfo?.evenCustomRotation || "" });
+    const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin: true, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, laneForGame });
+    doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-score-entry`).replace(/\.jpg$/, ".pdf"));
+    return;
+  }
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
   const pageWidth = 8.5;
@@ -11491,6 +11498,18 @@ const printableSheets =
   })];
 
   const downloadScoresheetsPdf = async () => {
+    if (tournamentStyle === "trios") {
+      let qrDataUrl = "";
+      try {
+        qrDataUrl = await loadImageDataUrl(qrUrl);
+      } catch (error) {
+        console.warn("Could not add leaderboard QR to team scoresheets PDF", error);
+      }
+      const laneForGame = (lane, gameIndex) => lanePairForGame(lane, gameIndex, tournamentInfo?.lanesUsed, tournamentInfo?.movePairs || 1, tournamentInfo?.movementMode || "custom", { odd: tournamentInfo?.customRotation || "", even: tournamentInfo?.evenCustomRotation || "" });
+      const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames: gamesCount, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, qrDataUrl, laneForGame });
+      doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-team-scoresheets`).replace(/\.jpg$/, ".pdf"));
+      return;
+    }
     const { jsPDF } = await import("jspdf");
     const doc = new jsPDF({ orientation: "portrait", unit: "in", format: "letter" });
     const pageWidth = 8.5;
