@@ -7222,18 +7222,21 @@ const updateBowler = (index, field, value) => {
       );
       return;
     }
-    const duplicate = bowlers.find(
-      (bowler, bowlerIndex) =>
-        bowlerIndex !== index &&
-        String(bowler.lane || "").trim().toUpperCase() === normalizedLane
-    );
-
-    if (duplicate) {
-      window.alert(
-        `${normalizedLane} is already assigned to ${duplicate.name || "another bowler"}. Choose a different lane spot.`
+    setBowlers((current) => {
+      const swapIndex = current.findIndex(
+        (bowler, bowlerIndex) =>
+          bowlerIndex !== index &&
+          String(bowler.lane || "").trim().toUpperCase() === normalizedLane
       );
-      return;
-    }
+      const previousLane = current[index]?.lane || "";
+
+      return current.map((bowler, bowlerIndex) => {
+        if (bowlerIndex === index) return { ...bowler, lane: normalizedLane };
+        if (bowlerIndex === swapIndex) return { ...bowler, lane: previousLane };
+        return bowler;
+      });
+    });
+    return;
   }
 
   setBowlers((current) =>
