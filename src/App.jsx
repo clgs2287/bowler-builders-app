@@ -6771,22 +6771,46 @@ function buildLanePositionOptions(lanesUsed, tournamentStyle = "singles") {
 }
 
 function LaneSelector({ value, onChange, lanesUsed = "", tournamentStyle = "singles", inputProps = {} }) {
+  const [draft, setDraft] = useState(value || "");
   const laneMatch = String(value || "").match(/[0-9]+/);
   const laneNumber = laneMatch ? laneMatch[0] : "";
   const options = buildLanePositionOptions(lanesUsed, tournamentStyle);
   const fallbackOptions = getLaneLetterOptions(value, tournamentStyle).map((letter) => String(laneNumber) + letter);
   const laneOptions = options.length ? options : fallbackOptions;
   const listId = useMemo(() => `lane-options-${Math.random().toString(36).slice(2)}`, []);
+  const { onKeyDown: inputKeyDown, onBlur: inputBlur, ...fieldProps } = inputProps;
+
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+
+  const commitLane = () => {
+    const nextLane = String(draft || "").trim().toUpperCase();
+    if (nextLane !== String(value || "").trim().toUpperCase()) onChange(nextLane);
+  };
 
   return (
     <>
       <Input
         className="w-16 text-center uppercase md:w-20"
-        value={value || ""}
+        value={draft}
         list={listId}
-        onChange={(event) => onChange(event.target.value.toUpperCase())}
+        onChange={(event) => setDraft(event.target.value.toUpperCase())}
+        onBlur={(event) => {
+          commitLane();
+          inputBlur?.(event);
+        }}
+        onKeyDown={(event) => {
+          inputKeyDown?.(event);
+          if (event.defaultPrevented) return;
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commitLane();
+          }
+          if (event.key === "Escape") setDraft(value || "");
+        }}
         placeholder="Lane"
-        {...inputProps}
+        {...fieldProps}
       />
       {laneOptions.length > 0 && (
         <datalist id={listId}>
