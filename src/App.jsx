@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
+import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
@@ -1546,6 +1547,7 @@ function normalizeReservationIdentity(value = "") {
 }
 
 function isDuplicateReservation(existing = {}, next = {}) {
+  if (isTbdReservation(existing) || isTbdReservation(next)) return false;
   const existingName = normalizeReservationIdentity(existing.name);
   const nextName = normalizeReservationIdentity(next.name);
   const existingNickname = normalizeReservationIdentity(existing.nickname);
@@ -1691,6 +1693,7 @@ function openReservationOptions(reservationState = {}, scheduleItems = []) {
 }
 
 async function sendReservationConfirmationEmail({ reservation, reservationState = {}, tournamentInfo = {} }) {
+  if (import.meta.env.VITE_LOCAL_RESERVATION_TEST === "1") return { skipped: true };
   const response = await fetch("/api/send-reservation-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -9772,18 +9775,19 @@ function ReservationsTab({
           ? updater(reservation)
           : reservation
       );
+      const registeredCount = nextReservations.filter((item) => item.status === "Registered").length;
       const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
       if (currentKey) {
         reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
           ...reservationBucketFromState(current),
           reservations: nextReservations,
-          reservationCount: nextReservations.length,
+          reservationCount: registeredCount,
         });
       }
       return {
         ...current,
         reservations: nextReservations,
-        reservationCount: nextReservations.length,
+        reservationCount: registeredCount,
         reservationsByTournament,
       };
     });
@@ -9791,6 +9795,16 @@ function ReservationsTab({
 
   const saveEditReservation = () => {
     if (!editingReservationId || !editingReservation) return;
+    const group = editingReservation.reservationGroupId
+      ? (reservationState.reservations || []).filter((item) => item.reservationGroupId === editingReservation.reservationGroupId)
+      : [];
+    if (group.length && editingReservation.status === "Registered") {
+      const otherRegistered = (reservationState.reservations || []).filter((item) => item.reservationGroupId !== editingReservation.reservationGroupId && item.status === "Registered").length;
+      if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, group.length)) {
+        setRosterNotice("There are not enough open spots for this full entry. It must remain waitlisted.");
+        return;
+      }
+    }
     updateReservationRows(editingReservationId, (reservation) => ({
       ...reservation,
       name: editingReservation.name,
@@ -9801,17 +9815,35 @@ function ReservationsTab({
       status: editingReservation.status || reservation.status || "Registered",
       updatedAt: new Date().toISOString(),
     }));
+    if (group.length) {
+      const members = [...group].sort((a, b) => a.reservationMemberIndex - b.reservationMemberIndex)
+        .map((item) => ({ name: String(item.id) === String(editingReservationId) ? editingReservation.name : item.name,
+          tbd: (String(item.id) === String(editingReservationId) ? editingReservation.name : item.name).trim().toLowerCase() === "tbd" }));
+      group.forEach((item) => updateReservationRows(item.id, (current) => ({ ...current, members,
+        status: editingReservation.status || current.status,
+        email: editingReservation.email, phone: formatPhoneNumber(editingReservation.phone || "") })));
+    }
     setRosterNotice(`${editingReservation.name || "Reservation"} was updated.`);
     cancelEditReservation();
   };
 
   const toggleReservationStatus = (reservation) => {
     const nextStatus = reservation.status === "Registered" ? "Waitlisted" : "Registered";
-    updateReservationRows(reservation.id, (item) => ({
+    const group = reservation.reservationGroupId
+      ? (reservationState.reservations || []).filter((item) => item.reservationGroupId === reservation.reservationGroupId)
+      : [reservation];
+    if (reservation.reservationGroupId && nextStatus === "Registered") {
+      const otherRegistered = (reservationState.reservations || []).filter((item) => item.reservationGroupId !== reservation.reservationGroupId && item.status === "Registered").length;
+      if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, group.length)) {
+        setRosterNotice("There are not enough open spots for this full entry. It must remain waitlisted.");
+        return;
+      }
+    }
+    group.forEach((member) => updateReservationRows(member.id, (item) => ({
       ...item,
       status: nextStatus,
       updatedAt: new Date().toISOString(),
-    }));
+    })));
     setRosterNotice(`${getReservationDisplayName(reservation) || reservation.name || "Reservation"} marked ${nextStatus}.`);
   };
 
@@ -9930,16 +9962,20 @@ function ReservationsTab({
 
   const addReservationToRoster = (reservation) => {
     const result = onAddReservationToRegistration(reservation);
+    if (result?.error) {
+      setRosterNotice(result.error);
+      return;
+    }
     const name = result?.name || getReservationDisplayName(reservation) || "Reservation";
     if (result?.rosterFull) {
       setRosterNotice(`${name} could not be added. Registration is full at ${result.limit} entries. Delete someone from Registration first.`);
       return;
     }
-    updateReservationRows(reservation.id, (item) => ({
+    (result?.reservationIds || [reservation.id]).forEach((id) => updateReservationRows(id, (item) => ({
       ...item,
       rosterAdded: true,
       rosterAddedAt: new Date().toISOString(),
-    }));
+    })));
     setRosterNotice(result?.alreadyExists ? `${name} is already on the registration roster. The existing row was updated.` : `${name} was sent to Registration.`);
   };
 
@@ -10574,6 +10610,11 @@ function ReservationsTab({
                   placeholder="Full Name"
                 />
               ) : reservation.name}
+              {reservation.reservationGroupId && (
+                <div className="mt-1 text-[10px] font-normal text-blue-700">
+                  Entry #{reservation.confirmationNumber} / Bowler {Number(reservation.reservationMemberIndex) + 1}
+                </div>
+              )}
             </td>
 
             <td className="p-2 md:p-3">
@@ -10758,12 +10799,15 @@ function PublicReservations({
       })
     : tournamentInfo || {};
   const reservationEligibility = activeTournamentInfo.reservationEligibility || "open";
+  const reservationTeamSize = getTournamentTeamSize(activeTournamentInfo.tournamentStyle || "singles");
+  const isTeamReservation = reservationTeamSize > 1;
   const [form, setForm] = useState({
     name: "",
     nickname: "",
     phone: "",
     email: "",
     note: "",
+    partners: [{ name: "", tbd: false }, { name: "", tbd: false }],
   });
 
   const updateField = (field, value) => {
@@ -10794,6 +10838,7 @@ function PublicReservations({
   const formValid =
   form.name.trim() &&
   form.email.trim() &&
+  (!isTeamReservation || form.partners.slice(0, reservationTeamSize - 1).every((partner) => partner.tbd || partner.name.trim())) &&
   activePublicReservationKey;
   const currentReservations =
   activeReservationState.reservations || [];
@@ -10803,13 +10848,14 @@ function PublicReservations({
   const currentRegisteredReservationCount = currentReservations.length
     ? currentReservations.filter((reservation) => String(reservation.status || "Registered") === "Registered").length
     : currentReservationCount;
-  const formForcedToWaitlist = isReservationWaitlistOnly(form, activeReservationState);
+  const formForcedToWaitlist = [form, ...(isTeamReservation ? form.partners.slice(0, reservationTeamSize - 1).filter((partner) => !partner.tbd) : [])]
+    .some((member) => isReservationWaitlistOnly(member, activeReservationState));
 
 const registrationStatus =
   formForcedToWaitlist
     ? "Waitlisted"
-    : currentRegisteredReservationCount <
-  Number(activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT)
+    : teamReservationFits(currentRegisteredReservationCount,
+      activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, reservationTeamSize)
     ? "Registered"
     : "Waitlisted";
 
@@ -10878,9 +10924,11 @@ const registrationStatus =
             onChange={(e) =>
               updateField("name", e.target.value)
             }
-            placeholder="Full Name *"
+            placeholder={isTeamReservation ? "Bowler 1 / Your Full Name *" : "Full Name *"}
+            aria-label={isTeamReservation ? "Bowler 1 / Your Full Name" : "Full Name"}
           />
 
+          {!isTeamReservation && (
           <Input
             value={form.nickname}
             onChange={(e) =>
@@ -10888,6 +10936,7 @@ const registrationStatus =
             }
             placeholder="Nickname"
           />
+          )}
 
           <Input
             value={form.phone}
@@ -10905,6 +10954,27 @@ const registrationStatus =
             placeholder="Email Address *"
           />
         </div>
+
+        {isTeamReservation && (
+          <div className="mt-4 space-y-3">
+            {form.partners.slice(0, reservationTeamSize - 1).map((partner, index) => (
+              <div key={index} className="flex items-center gap-3">
+                <Input
+                  className="min-w-0 flex-1"
+                  aria-label={`Bowler ${index + 2} Full Name`}
+                  placeholder={`Bowler ${index + 2} Full Name *`}
+                  value={partner.tbd ? "TBD" : partner.name}
+                  disabled={partner.tbd}
+                  onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, name: event.target.value } : item) }))}
+                />
+                <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-blue-950">
+                  <input type="checkbox" checked={partner.tbd} onChange={(event) => setForm((current) => ({ ...current, partners: current.partners.map((item, i) => i === index ? { ...item, tbd: event.target.checked } : item) }))} />
+                  TBD
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
 
         <textarea
           className="mt-4 min-h-[140px] w-full rounded-2xl border border-blue-200 p-4"
@@ -10934,9 +11004,21 @@ const registrationStatus =
       phone: formatPhoneNumber(form.phone),
       email: form.email,
       note: form.note,
+      ...(isTeamReservation ? {
+        tournamentStyle: activeTournamentInfo.tournamentStyle,
+        members: [{ name: form.name.trim(), tbd: false }, ...form.partners.slice(0, reservationTeamSize - 1).map((partner) => ({ ...partner, tbd: partner.tbd || partner.name.trim().toLowerCase() === "tbd" }))],
+      } : {}),
     };
+    let pendingMembers;
+    try {
+      pendingMembers = isTeamReservation ? buildTeamReservationRows({ ...pendingReservation, id: "pending" }) : [pendingReservation];
+    } catch (error) {
+      alert(error.message);
+      return;
+    }
+    for (const member of pendingMembers.filter((member) => !isTbdReservation(member))) {
     const eligibilityResult = validateReservationEligibility({
-      reservation: pendingReservation,
+      reservation: member,
       tournamentInfo: activeTournamentInfo,
       tournamentHistory,
       manualTitles,
@@ -10946,9 +11028,10 @@ const registrationStatus =
       alert(eligibilityResult.message);
       return;
     }
+    }
     if (!supabase) {
       const duplicateReservation = currentReservations.find((reservation) =>
-        isDuplicateReservation(reservation, pendingReservation)
+        pendingMembers.some((member) => isDuplicateReservation(reservation, member))
       );
       if (duplicateReservation) {
         alert(`${getReservationDisplayName(duplicateReservation) || form.name} is already on the reservation list for this tournament.`);
@@ -10959,7 +11042,7 @@ const registrationStatus =
     const selectedReservationState = reservationStateForKey(reservationState, selectedReservationKey, scheduleItems);
     const registrationNumber = getNextReservationNumber(selectedReservationState);
     const newReservation = {
-      id: Date.now(),
+      id: isTeamReservation ? crypto.randomUUID() : Date.now(),
       ...pendingReservation,
       status: registrationStatus,
       reservationLimit: Number(activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT),
@@ -10971,6 +11054,9 @@ const registrationStatus =
     let savedReservation = newReservation;
     try {
       setSubmittingReservation(true);
+      if (isTeamReservation && !supabase) {
+        newReservation.reservationRows = buildTeamReservationRows(newReservation, registrationNumber);
+      }
       savedReservation = {
         ...newReservation,
         ...(await Promise.resolve(onReservationSubmit(newReservation))),
@@ -10988,14 +11074,14 @@ const registrationStatus =
       const currentReservations = selectedState.reservations || [];
       const nextReservations = [
         ...currentReservations,
-        savedReservation,
+        ...(savedReservation.reservationRows || [savedReservation]),
       ];
       const currentCount = Number(selectedState.reservationCount ?? currentReservations.length);
       const nextBucket = {
         ...reservationBucketFromState(selectedState),
         entriesOpen: true,
-        reservationNextNumber: Math.max(Number(selectedState.reservationNextNumber || 1), Number(savedReservation.registrationNumber || registrationNumber) + 1),
-        reservationCount: Math.max(currentCount + 1, nextReservations.length),
+        reservationNextNumber: Math.max(Number(selectedState.reservationNextNumber || 1), Number(savedReservation.registrationNumber || registrationNumber) + reservationTeamSize),
+        reservationCount: savedReservation.status === "Registered" ? currentCount + reservationTeamSize : currentCount,
         reservations: nextReservations,
       };
       const reservationsByTournament = {
@@ -11045,6 +11131,7 @@ const registrationStatus =
       phone: "",
       email: "",
       note: "",
+      partners: [{ name: "", tbd: false }, { name: "", tbd: false }],
     });
   }}
 >
@@ -21876,7 +21963,11 @@ export default function BowlingPayoutApp() {
     }
   });
   const [supabaseSession, setSupabaseSession] = useState(null);
-  const [supabaseAdminProfile, setSupabaseAdminProfile] = useState(null);
+  const [supabaseAdminProfile, setSupabaseAdminProfile] = useState(() =>
+    import.meta.env.DEV && import.meta.env.VITE_LOCAL_RESERVATION_TEST === "1" && !hasSupabaseConfig
+      ? { id: "local-test-admin", role: "owner" }
+      : null
+  );
   const [supabaseAuthLoading, setSupabaseAuthLoading] = useState(hasSupabaseConfig);
   const [supabaseLoadStatus, setSupabaseLoadStatus] = useState("Not loaded");
   const [supabaseLoadReady, setSupabaseLoadReady] = useState(false);
@@ -23275,6 +23366,39 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     setSavedTournamentDrafts((current) => current.filter((item) => item.id !== draftId));
   };
   const addReservationToRegistration = (reservation) => {
+    if (reservation.reservationGroupId) {
+      const members = allReservationItemsFromState(reservationState)
+        .filter((item) => item.reservationGroupId === reservation.reservationGroupId)
+        .sort((a, b) => Number(a.reservationMemberIndex) - Number(b.reservationMemberIndex));
+      const size = getTournamentTeamSize(tournamentInfo.tournamentStyle || "singles");
+      if (members.length !== size || size !== Number(reservation.reservationGroupSize)) {
+        return { error: "Select the matching doubles/trios tournament before adding this entry." };
+      }
+      if (members.some((member) => member.status !== "Registered")) {
+        return { error: "All members of this entry must be Registered before adding them to the roster." };
+      }
+      const limit = Number(reservationState.reservationLimit || 0);
+      const slot = findTeamRosterSlot(bowlers, members, size, limit);
+      if (slot.error || slot.rosterFull || slot.alreadyExists) return { ...slot, limit, name: members.map(getReservationDisplayName).join(" / ") };
+      const next = [...bowlers];
+      let seed = Math.max(0, ...next.map((bowler) => Number(bowler.seed || 0)));
+      while (next.length < slot.index) next.push(makeBowler(++seed, qualifyingGames));
+      members.forEach((member, memberIndex) => {
+        const index = slot.index + memberIndex;
+        const target = next[index] || makeBowler(++seed, qualifyingGames);
+        const name = isTbdReservation(member) ? "TBD" : getCanonicalBowlerName(getReservationDisplayName(member), bowlerIdentities);
+        const averageData = isTbdReservation(member) ? null : getArchivedAverageForName(tournamentHistory, name, bowlerIdentities);
+        const handicap = useHandicapScores && averageData?.eligible
+          ? Math.max(0, Math.floor((Number(sidePotState.handicapBase ?? 200) - Number(averageData.average)) * Number(sidePotState.handicapPercent ?? 90) / 100))
+          : 0;
+        next[index] = { ...target, name, email: member.email || "", phone: member.phone || "", reservationId: member.id,
+          reservationGroupId: member.reservationGroupId, reservationTournamentKey: member.tournamentKey,
+          registrationNumber: member.registrationNumber, average: averageData?.eligible ? averageData.average : "",
+          handicap, handicapPerGame: handicap };
+      });
+      setBowlers(next);
+      return { name: members.map(getReservationDisplayName).join(" / "), reservationIds: members.map((member) => member.id) };
+    }
     const reservationDisplayName = getReservationDisplayName(reservation);
     const displayName = getCanonicalBowlerName(reservationDisplayName, bowlerIdentities) || reservationDisplayName;
     if (!displayName) return { name: "", alreadyExists: false };
@@ -23372,6 +23496,11 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 
   const submitReservationToSupabase = async (reservation) => {
     if (!supabase) return reservation;
+    if (reservation.members?.length > 1) {
+      const { data, error } = await supabase.rpc("create_public_team_reservation", { payload: reservation });
+      if (error) throw error;
+      return data;
+    }
     const tournamentKey = reservation.tournamentKey || reservationKeyFromState(reservationState);
     const duplicate = allReservationItemsFromState(reservationState).find((existing) =>
       String(existing.id) !== String(reservation.id) &&

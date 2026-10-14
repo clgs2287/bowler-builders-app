@@ -79,8 +79,9 @@ const reservationHtml = ({ reservation = {}, tournament = {} }) => {
                       ${infoRow("Start Time", startTime || "TBD")}
                       ${infoRow("Center", center || "TBD")}
                       ${infoRow("Address", address || "TBD")}
-                      ${infoRow("Name", reservation.name || "")}
-                      ${infoRow("Nickname", reservation.nickname || "")}
+                      ${reservation.members?.length > 1
+                        ? reservation.members.map((member, index) => infoRow(`Bowler ${index + 1}`, member.tbd ? "TBD" : member.name)).join("")
+                        : infoRow("Name", reservation.name || "") + infoRow("Nickname", reservation.nickname || "")}
                       ${infoRow("Phone", reservation.phone || "")}
                       ${infoRow("Email", reservation.email || "")}
                       ${reservation.note ? infoRow("Note", reservation.note) : ""}
