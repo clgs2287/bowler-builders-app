@@ -8154,23 +8154,23 @@ const downloadScoreEntrySheetPdf = async () => {
   const usableWidth = pageWidth - margin * 2;
   const gameColumns = Array.from({ length: qualifyingGames }, (_, gi) => gi);
   const staticWidths = useHandicapScores
-    ? { bowler: 1.95, pos: 0.5, avg: 0.48, hdcp: 0.45, scratch: 0.54, hdcpTotal: 0.54, total: 0.56 }
-    : { bowler: 2.35, pos: 0.55, total: 0.72 };
+    ? { bowler: 1.75, pos: 0.45, avg: 0.48, hdcp: 0.45, scratch: 0.54, hdcpTotal: 0.54, total: 0.56 }
+    : { bowler: 2.15, pos: 0.5, total: 0.7 };
   const fixedWidth = Object.values(staticWidths).reduce((sum, width) => sum + width, 0);
   const gameWidth = Math.max(0.48, (usableWidth - fixedWidth) / Math.max(1, gameColumns.length));
-  const headerHeight = 0.4;
-  const rowHeight = 0.43;
-  const laneTitleHeight = 0.3;
+  const headerHeight = 0.34;
+  const rowHeight = 0.31;
+  const laneTitleHeight = 0.26;
   let y = margin;
 
   const addHeader = () => {
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.text(title, margin, y + 0.1);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.text([tournamentInfo.center || "", tournamentInfo.date || ""].filter(Boolean).join(" - "), pageWidth - margin, y + 0.1, { align: "right" });
     y += 0.3;
   };
@@ -8191,7 +8191,7 @@ const downloadScoreEntrySheetPdf = async () => {
     if (text !== undefined && text !== null && text !== "") {
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", options.bold ? "bold" : "normal");
-      doc.setFontSize(options.size || 8.5);
+      doc.setFontSize(options.size || 7.2);
       const align = options.align || "left";
       const textX = align === "right" ? x + width - 0.04 : align === "center" ? x + width / 2 : x + 0.04;
       doc.text(String(text), textX, top + height * 0.68, { align });
@@ -8206,7 +8206,7 @@ const downloadScoreEntrySheetPdf = async () => {
     maybePage(neededHeight);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11.5);
+    doc.setFontSize(9.5);
     doc.text(laneKey === "Unassigned" ? "Unassigned" : `Lane ${laneKey}`, margin, y + 0.15);
     y += laneTitleHeight;
 
@@ -8248,9 +8248,9 @@ const downloadScoreEntrySheetPdf = async () => {
       const labelLines = String(column.label).split("\n");
       cell("", x, y, column.width, headerHeight, { fill: 235 });
       doc.setTextColor(0, 0, 0);
-      doc.setFontSize(labelLines.length > 1 ? 7 : 8.2);
+      doc.setFontSize(labelLines.length > 1 ? 5.8 : 7);
       labelLines.forEach((line, lineIndex) => {
-        doc.text(line, x + column.width / 2, y + 0.15 + lineIndex * 0.12, { align: "center" });
+        doc.text(line, x + column.width / 2, y + 0.13 + lineIndex * 0.1, { align: "center" });
       });
       x += column.width;
     });
@@ -8266,7 +8266,7 @@ const downloadScoreEntrySheetPdf = async () => {
         if (column.key === "avg") value = b ? bowlerAverageDisplay(b) : "";
         if (column.key === "hdcp") value = b ? handicapPerGame(b) : "";
         if (column.key === "hdcpTotal") value = b ? qualifyingHandicapTotal(b, qualifyingGames) : "";
-        cell(value, x, y, column.width, rowHeight, { align: column.align, bold: column.key === "bowler" || column.key === "pos", size: column.key === "bowler" ? 9.5 : 8.5 });
+        cell(value, x, y, column.width, rowHeight, { align: column.align, bold: column.key === "bowler" || column.key === "pos", size: column.key === "bowler" ? 6.8 : 7 });
         x += column.width;
       });
       y += rowHeight;
