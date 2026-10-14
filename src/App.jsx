@@ -8154,23 +8154,23 @@ const downloadScoreEntrySheetPdf = async () => {
   const usableWidth = pageWidth - margin * 2;
   const gameColumns = Array.from({ length: qualifyingGames }, (_, gi) => gi);
   const staticWidths = useHandicapScores
-    ? { bowler: 1.75, pos: 0.45, avg: 0.48, hdcp: 0.45, scratch: 0.54, hdcpTotal: 0.54, total: 0.56 }
-    : { bowler: 2.15, pos: 0.5, total: 0.7 };
+    ? { bowler: 1.95, pos: 0.5, avg: 0.48, hdcp: 0.45, scratch: 0.54, hdcpTotal: 0.54, total: 0.56 }
+    : { bowler: 2.35, pos: 0.55, total: 0.72 };
   const fixedWidth = Object.values(staticWidths).reduce((sum, width) => sum + width, 0);
   const gameWidth = Math.max(0.48, (usableWidth - fixedWidth) / Math.max(1, gameColumns.length));
-  const headerHeight = 0.34;
-  const rowHeight = 0.31;
-  const laneTitleHeight = 0.26;
+  const headerHeight = 0.4;
+  const rowHeight = 0.43;
+  const laneTitleHeight = 0.3;
   let y = margin;
 
   const addHeader = () => {
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
+    doc.setFontSize(14);
     doc.text(title, margin, y + 0.1);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.text([tournamentInfo.center || "", tournamentInfo.date || ""].filter(Boolean).join(" - "), pageWidth - margin, y + 0.1, { align: "right" });
     y += 0.3;
   };
@@ -8191,7 +8191,7 @@ const downloadScoreEntrySheetPdf = async () => {
     if (text !== undefined && text !== null && text !== "") {
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", options.bold ? "bold" : "normal");
-      doc.setFontSize(options.size || 7.2);
+      doc.setFontSize(options.size || 8.5);
       const align = options.align || "left";
       const textX = align === "right" ? x + width - 0.04 : align === "center" ? x + width / 2 : x + 0.04;
       doc.text(String(text), textX, top + height * 0.68, { align });
@@ -8206,7 +8206,7 @@ const downloadScoreEntrySheetPdf = async () => {
     maybePage(neededHeight);
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
+    doc.setFontSize(11.5);
     doc.text(laneKey === "Unassigned" ? "Unassigned" : `Lane ${laneKey}`, margin, y + 0.15);
     y += laneTitleHeight;
 
@@ -8248,9 +8248,9 @@ const downloadScoreEntrySheetPdf = async () => {
       const labelLines = String(column.label).split("\n");
       cell("", x, y, column.width, headerHeight, { fill: 235 });
       doc.setTextColor(0, 0, 0);
-      doc.setFontSize(labelLines.length > 1 ? 5.8 : 7);
+      doc.setFontSize(labelLines.length > 1 ? 7 : 8.2);
       labelLines.forEach((line, lineIndex) => {
-        doc.text(line, x + column.width / 2, y + 0.13 + lineIndex * 0.1, { align: "center" });
+        doc.text(line, x + column.width / 2, y + 0.15 + lineIndex * 0.12, { align: "center" });
       });
       x += column.width;
     });
@@ -8266,7 +8266,7 @@ const downloadScoreEntrySheetPdf = async () => {
         if (column.key === "avg") value = b ? bowlerAverageDisplay(b) : "";
         if (column.key === "hdcp") value = b ? handicapPerGame(b) : "";
         if (column.key === "hdcpTotal") value = b ? qualifyingHandicapTotal(b, qualifyingGames) : "";
-        cell(value, x, y, column.width, rowHeight, { align: column.align, bold: column.key === "bowler" || column.key === "pos", size: column.key === "bowler" ? 6.8 : 7 });
+        cell(value, x, y, column.width, rowHeight, { align: column.align, bold: column.key === "bowler" || column.key === "pos", size: column.key === "bowler" ? 9.5 : 8.5 });
         x += column.width;
       });
       y += rowHeight;
@@ -11544,12 +11544,12 @@ const printableSheets =
     };
 
     const drawLaneTable = (lane, laneBowlers, x, y, width) => {
-      drawText(`Lane ${lane}`, x, y, { bold: true, size: 11 });
-      y += 0.18;
+      drawText(`Lane ${lane}`, x, y, { bold: true, size: 13 });
+      y += 0.22;
 
       const baseWidths = useHandicapScores
-        ? { pos: 0.42, bowler: 1.45, avg: 0.42, hdcp: 0.42, total: 0.62 }
-        : { pos: 0.45, bowler: 1.75, total: 0.7 };
+        ? { pos: 0.46, bowler: 1.7, avg: 0.46, hdcp: 0.46, total: 0.65 }
+        : { pos: 0.5, bowler: 2.0, total: 0.75 };
       const fixedWidth = Object.values(baseWidths).reduce((sum, value) => sum + value, 0);
       const gameWidth = Math.max(0.45, (width - fixedWidth) / Math.max(1, scoreHeaders.length));
       const columns = [
@@ -11572,8 +11572,8 @@ const printableSheets =
         )}`, width: gameWidth, align: "center" })),
         { key: "total", label: "Series", width: baseWidths.total, align: "center" },
       ];
-      const headerHeight = 0.34;
-      const rowHeight = 0.34;
+      const headerHeight = 0.42;
+      const rowHeight = 0.52;
       let cursor = x;
 
       columns.forEach((column) => {
@@ -11581,9 +11581,9 @@ const printableSheets =
         const labelLines = String(column.label).split("\n");
         doc.setTextColor(0, 0, 0);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(labelLines.length > 1 ? 5.5 : 6.8);
+        doc.setFontSize(labelLines.length > 1 ? 7 : 8.2);
         labelLines.forEach((line, lineIndex) => {
-          doc.text(line, cursor + column.width / 2, y + 0.13 + lineIndex * 0.1, { align: "center" });
+          doc.text(line, cursor + column.width / 2, y + 0.16 + lineIndex * 0.13, { align: "center" });
         });
         cursor += column.width;
       });
@@ -11602,7 +11602,7 @@ const printableSheets =
             if (column.key === "bowler") value = bowler?.name || "";
             if (column.key === "avg") value = bowler?.name ? bowlerAverageDisplay(bowler) : "";
             if (column.key === "hdcp") value = bowler?.name ? handicapPerGame(bowler) : "";
-            cell(value, cursor, y, column.width, rowHeight, { align: column.align, bold: column.key === "pos" || column.key === "bowler", size: column.key === "bowler" ? 6.8 : 7 });
+            cell(value, cursor, y, column.width, rowHeight, { align: column.align, bold: column.key === "pos" || column.key === "bowler", size: column.key === "bowler" ? 10 : 8.6 });
             cursor += column.width;
           });
           y += rowHeight;
@@ -11614,7 +11614,7 @@ const printableSheets =
             let value = "";
             if (column.key === "bowler") value = `${team.label} Game Totals`;
             if (column.key === "hdcp") value = "Team";
-            cell(value, cursor, y, column.width, rowHeight, { align: column.key === "bowler" ? "right" : "center", bold: true, size: 6.6 });
+            cell(value, cursor, y, column.width, rowHeight, { align: column.key === "bowler" ? "right" : "center", bold: true, size: 8.6 });
             cursor += column.width;
           });
           y += rowHeight;
@@ -11639,20 +11639,20 @@ const printableSheets =
         [lane]: pairBowlers.filter((b) => String(b.laneNumber || b.lane || "") === String(lane)),
       }), {});
 
-      drawText(title, margin, margin + 0.1, { bold: true, size: title.length > 38 ? 12 : 15 });
-      drawText([tournamentInfo.center || "", tournamentInfo.date || ""].filter(Boolean).join(" - "), margin, margin + 0.35, { size: 8 });
-      drawText(`Lanes ${pair}`, pageWidth / 2, margin + 0.72, { align: "center", bold: true, size: 20 });
+      drawText(title, margin, margin + 0.12, { bold: true, size: title.length > 38 ? 14 : 17 });
+      drawText([tournamentInfo.center || "", tournamentInfo.date || ""].filter(Boolean).join(" - "), margin, margin + 0.39, { size: 9 });
+      drawText(`Lanes ${pair}`, pageWidth / 2, margin + 0.78, { align: "center", bold: true, size: 22 });
       if (qrDataUrl) {
         doc.addImage(qrDataUrl, "PNG", pageWidth - margin - 0.68, margin, 0.62, 0.62);
-        drawText("Public Leaderboard", pageWidth - margin - 0.37, margin + 0.75, { align: "center", bold: true, size: 5.8 });
+        drawText("Public Leaderboard", pageWidth - margin - 0.37, margin + 0.75, { align: "center", bold: true, size: 6.5 });
       }
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.01);
-      doc.line(margin, margin + 0.92, pageWidth - margin, margin + 0.92);
+      doc.line(margin, margin + 0.98, pageWidth - margin, margin + 0.98);
 
-      let y = margin + 1.2;
+      let y = margin + 1.28;
       lanes.forEach((lane, index) => {
-        if (index > 0) y += 0.18;
+        if (index > 0) y += 0.28;
         y = drawLaneTable(lane, byLane[lane] || [], margin, y, pageWidth - margin * 2);
       });
     };
