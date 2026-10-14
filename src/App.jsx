@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
+import { getBracketFillSuggestions } from "./bracketFillSuggestions";
 import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit, hasCompleteTeamNames } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
@@ -20370,6 +20371,7 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
     ? Number(sidePotState.teamBracketPrice || sidePotState.bracketPrice || DEFAULT_BRACKET_PRICE)
     : Number(sidePotState.bracketPrice || DEFAULT_BRACKET_PRICE);
   const [expandedSidePotSeed, setExpandedSidePotSeed] = useState(null);
+  const [fillSearch, setFillSearch] = useState("");
 
   const bracketPlayers = isTeamBracketSet ? teamEntries : bowlers;
   const bowlerBySeed = Object.fromEntries([...bowlers, ...teamEntries].map((bowler) => [String(bowler.seed), bowler]));
@@ -20625,6 +20627,8 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
   })();
 
   const selectedPlan = bracketPlans.find((plan) => plan.id === selectedPlanId) || bracketPlans[0];
+  const fillSuggestions = getBracketFillSuggestions(bracketPlayers, bracketEntries, selectedPlan, isTeamBracketSet)
+    .filter((player) => player.name.toLowerCase().includes(fillSearch.trim().toLowerCase()));
   const hasGeneratedBrackets = brackets.length > 0;
   const planCanGenerate = (plan) => Boolean(plan?.feasible && !plan?.targetOnly);
   const selectedPlanCanGenerate = planCanGenerate(selectedPlan);
@@ -20903,6 +20907,43 @@ row.matches.push({
   })();
 
   return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-400" onClick={generateBrackets} disabled={hasGeneratedBrackets || !selectedPlanCanGenerate}>{hasGeneratedBrackets ? "Brackets Locked" : selectedPlanCanGenerate ? "Generate Brackets" : "Select Valid Plan"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Total Refunds" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div>{selectedPlan && !selectedPlanCanGenerate && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">{planNote(selectedPlan)}</div>}<div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? planCanGenerate(plan) ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : plan.targetOnly ? "rounded-2xl border-2 border-amber-500 bg-amber-50 p-4 text-left shadow-md" : "rounded-2xl border-2 border-red-500 bg-red-50 p-4 text-left shadow-md" : planCanGenerate(plan) ? "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50" : plan.targetOnly ? "rounded-2xl border border-amber-200 bg-white p-4 text-left shadow-sm hover:bg-amber-50" : "rounded-2xl border border-red-200 bg-white p-4 text-left shadow-sm hover:bg-red-50"}><div className="flex items-start justify-between gap-2"><h3 className="font-bold text-blue-950">{plan.label}</h3><div className="flex flex-col items-end gap-1">{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}<span className={planStatusClass(plan)}>{planStatusLabel(plan)}</span></div></div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Requested:</strong> {plan.requestedEntries}</p><p><strong>Usable:</strong> {plan.cappedUsableEntries}</p><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Total refunds:</strong> {plan.leftoverEntries}</p><p><strong>Forced refunds:</strong> {plan.forcedRefundEntries}</p><p><strong>Regular leftover:</strong> {plan.regularLeftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p></div>{planNote(plan) && <p className={plan.targetOnly ? "mt-3 rounded-xl bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800" : planCanGenerate(plan) ? "mt-3 rounded-xl bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800" : "mt-3 rounded-xl bg-red-100 px-3 py-2 text-xs font-bold text-red-800"}>{planNote(plan)}</p>}<p className="mt-2 text-xs text-blue-600">Full: {currency(25)} / {currency(10)} - With bye: {currency(20)} / {currency(10)}</p></button>)}</div></CardContent></AppCard>}
+      {!hasGeneratedBrackets && selectedPlan?.shortage > 0 && (
+        <AppCard>
+          <CardContent className="space-y-3 p-3 md:p-5">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-blue-900">Available Additions</h2>
+                <p className="text-sm font-semibold text-blue-800">{selectedPlan.label} / {selectedPlan.shortage} more {selectedPlan.shortage === 1 ? "entry" : "entries"} needed</p>
+              </div>
+              <Input aria-label="Search available bracket additions" placeholder={isTeamBracketSet ? "Search team members..." : "Search bowler..."} value={fillSearch} onChange={(event) => setFillSearch(event.target.value)} />
+            </div>
+            <p className="text-xs text-blue-700">Additional entry room, capped at this option's shortage. Each bowler can appear once per bracket; first-round opponent pairings are not guaranteed by this list.</p>
+            <div className="max-h-80 overflow-auto rounded-lg border border-blue-200">
+              <table className="w-full table-fixed text-xs md:text-sm">
+                <thead className="sticky top-0 bg-blue-950 text-white">
+                  <tr>
+                    <th className="w-[55%] p-2 text-left">{isTeamBracketSet ? "Team" : "Bowler"}</th>
+                    <th className="p-2 text-right">Current</th>
+                    <th className="p-2 text-right">Can Add</th>
+                    <th className="p-2 text-right">After</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fillSuggestions.map((player) => (
+                    <tr key={player.seed} className="border-t">
+                      <td className="break-words p-2 font-semibold text-blue-950">{player.name}</td>
+                      <td className="p-2 text-right">{player.current}</td>
+                      <td className="p-2 text-right font-bold text-green-700">+{player.canAdd}</td>
+                      <td className="p-2 text-right">{player.current + player.canAdd}</td>
+                    </tr>
+                  ))}
+                  {!fillSuggestions.length && <tr><td colSpan={4} className="p-3 text-blue-700">{fillSearch.trim() ? "No matching bowlers with available entry room." : "No existing bowlers have room to add entries to this option."}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </AppCard>
+      )}
       {!hasGeneratedBrackets && selectedPlan && (
         <AppCard>
           <CardContent className="p-3 md:p-5">
