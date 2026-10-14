@@ -21981,6 +21981,7 @@ export default function BowlingPayoutApp() {
       if (["/kwt-boy-points", "/kwt-boy-points.html"].includes(window.location.pathname)) return "publickwtboy";
       const params = new URLSearchParams(window.location.search);
       const requestedTab = params.get("tab");
+      if (import.meta.env.DEV && import.meta.env.VITE_LOCAL_RESERVATION_TEST === "1" && !hasSupabaseConfig && requestedTab === "registration") return "registration";
       if (params.get("view") === "public" && ["tournamentInfo", "public", "publicfinals", "publicsideaction", "publicstats", "publickwtboy", "publicschedule", "publicreservations"].includes(requestedTab)) return requestedTab;
       if (params.get("view") === "public") return "tournamentInfo";
       return "tournamentInfo";
