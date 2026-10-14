@@ -7242,7 +7242,9 @@ const updateBowler = (index, field, value) => {
 
       const updatedBowler = {
         ...b,
-        [field]: field === "name" ? getCanonicalBowlerName(value, bowlerIdentities) || value : value,
+        // Preserve spaces while a new name is being typed. Existing bowlers are
+        // still normalized when selected from the autocomplete list.
+        [field]: value,
       };
 
       if (field === "average") {
