@@ -25,4 +25,18 @@ function openSixteen(withScores) { seedTriosTournament(withScores); location.hre
 document.getElementById('sixteen').onclick=()=>openSixteen(true);
 document.getElementById('sixteen-blank').onclick=()=>openSixteen(false);
 if (new URLSearchParams(location.search).get('sample') === '16-trios') openSixteen(true);
+if (new URLSearchParams(location.search).get('finals') === 'stepladder') {
+  const key='bowler-builders-tournament-app-v1';
+  const saved=JSON.parse(localStorage.getItem(key) || 'null');
+  const state=saved?.tournamentInfo?.tournamentStyle==='trios' ? saved : seedTriosTournament(true);
+  if(state.tournamentFormat!=='stepladder') {
+    state.savedFinalsRounds={...state.savedFinalsRounds};
+    delete state.savedFinalsRounds.stepladderFinal;
+  }
+  state.tournamentFormat='stepladder';
+  state.tournamentInfo.finalsTeamScoring='baker';
+  state.eliminatorState={...state.eliminatorState, manualQualifiers:4, stepMatchScoring:state.eliminatorState?.stepMatchScoring || 'single'};
+  localStorage.setItem(key,JSON.stringify(state));
+  location.href='/?view=admin&tab=registration';
+}
 </script></body></html>

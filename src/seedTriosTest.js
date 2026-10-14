@@ -36,7 +36,8 @@ export function seedTriosTournament(withScores = true) {
   }
   const reservationState = { tournamentKey: eventKey, tournamentName: info.name, tournamentDate: info.date, tournamentStartTime: info.startTime, tournamentCenter: info.center,
     reservationLimit: 48, entriesOpen: false, reservations, reservationCount: 48, reservationNextNumber: 49, publicTournamentInfo: info, openTournamentKeys: [], reservationsByTournament: {} };
-  const state = { tournamentInfo: info, tournamentFormat: "bracket", qualifyingGames: 4, useHandicapScores: false, bowlers, reservationState,
+  const state = { tournamentInfo: info, tournamentFormat: "stepladder", qualifyingGames: 4, useHandicapScores: false, bowlers, reservationState,
+    eliminatorState: { manualQualifiers: 4, stepMatchScoring: "single", game1Scores: {}, game2Scores: {}, stepScores: {} },
     savedScoreGames: withScores ? { 0: true, 1: true, 2: true, 3: true } : {}, savedFinalsRounds: {}, qualifyingAdjustments: {},
     bracketState: { manualQualifiers: 4, matchScoring: "bestOf3", scores: {}, matchLanes: {}, playerOverrides: {}, rolloffWinners: {}, rolloffScores: {}, advantageBonuses: {} },
     payoutState: { entryFee: 210, lineagePerGame: 4.5, qualifyingGames: 4 }, paidPayouts: {}, paidSideActionPayouts: {},

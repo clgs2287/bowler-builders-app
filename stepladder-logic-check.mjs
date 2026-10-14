@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('src/App.jsx','utf8');
+const names=['isEliminatorFinalsFormat','isDirectEliminatorFinalsFormat','getEliminatorCutCount','isMatchplayTournament','isEliminatorTournamentStyle','winnerFromMatch','finalsGameScore','winnerFromBestOfThreeMatch','winnerFromStepladderMatch','getFinalPlacementRows','getAutoFinalsLineageGames'];
+const snippets=names.map(name=>{
+  const start=source.indexOf(`function ${name}(`);
+  const end=source.indexOf('\nfunction ',start+1);
+  return source.slice(start,end);
+}).join('\n');
+const ranked=Array.from({length:16},(_,index)=>({seed:`team-${index+1}`,name:`Team ${index+1}`,rank:index+1,scratch:2800-index*30,games:[700,700,700,700]}));
+const create=new Function('getRankedTournamentEntries','rankRows','completedGamesCount','handicapPerGame',`const DEFAULT_MATCHPLAY_STATE={};const DEFAULT_ELIMINATOR_TOURNAMENT_STATE={};const isLaneDrawMatchplayStyle=()=>false;${snippets};return {getFinalPlacementRows,getAutoFinalsLineageGames,getEliminatorCutCount};`);
+const helpers=create(()=>ranked,rows=>rows.map((row,index)=>({...row,rank:index+1})),()=>4,()=>0);
+const scores={'step-1-g1-l':220,'step-1-g1-r':190,'step-1-g2-l':230,'step-1-g2-r':180,'step-2-g1-l':230,'step-2-g1-r':180,'step-2-g2-l':220,'step-2-g2-r':200,'step-3-g1-l':250,'step-3-g1-r':190,'step-3-g2-l':230,'step-3-g2-r':210};
+const rows=helpers.getFinalPlacementRows({entries:16,bowlers:[],useHandicapScores:false,tournamentFormat:'stepladder',bracketState:{},eliminatorState:{stepMatchScoring:'bestOf3',stepScores:scores},tournamentInfo:{tournamentStyle:'trios'}});
+assert.deepEqual(rows.slice(0,4).map(row=>row.seed),['team-4','team-1','team-2','team-3']);
+assert.equal(helpers.getEliminatorCutCount(32,{manualQualifiers:8},'stepladder'),4);
+assert.equal(helpers.getEliminatorCutCount(64,{},'eliminator'),16);
+assert.equal(helpers.getAutoFinalsLineageGames({entries:16,tournamentFormat:'stepladder'}),6);
+assert.equal(helpers.getAutoFinalsLineageGames({entries:16,tournamentFormat:'stepladder',stepMatchScoring:'bestOf3'}),18);
+console.log('Verified final places 1-4, fixed top-four cut, existing eliminator cut unchanged, and single/best-of-three lineage estimates.');
