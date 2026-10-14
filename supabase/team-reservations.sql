@@ -20,6 +20,7 @@ declare
   schedule_data jsonb;
   event_info jsonb;
   event_style text;
+  previous_champion_count integer := 0;
   capacity integer;
   registered_count integer;
   first_number integer;
@@ -75,6 +76,41 @@ begin
       end if;
     end if;
   end loop;
+
+  if event_style = 'trios' and event_info->>'maxPreviousChampions' = '2' then
+    select count(*) into previous_champion_count
+    from jsonb_array_elements(members) as submitted(member)
+    where coalesce(member->>'tbd', 'false') <> 'true' and exists (
+      with submitted_names as (
+        select lower(trim(value)) as name
+        from jsonb_array_elements_text(jsonb_build_array(member->>'name', member->>'nickname'))
+        where trim(coalesce(value, '')) <> ''
+      ), identity_names as (
+        select aliases.name
+        from public.bowler_identities i
+        cross join lateral (
+          select lower(trim(value)) as name from jsonb_array_elements_text(
+            jsonb_build_array(i.data->>'realName', i.data->>'real_name', i.data->>'nickname') || coalesce(i.data->'aliases', '[]'::jsonb))
+        ) aliases
+        where exists (
+          select 1 from jsonb_array_elements_text(
+            jsonb_build_array(i.data->>'realName', i.data->>'real_name', i.data->>'nickname') || coalesce(i.data->'aliases', '[]'::jsonb)) known
+          join submitted_names n on n.name = lower(trim(known.value))
+        )
+      ), winners as (
+        select lower(trim(coalesce(t.data->>'bowler', t.data->>'name'))) as name
+        from public.manual_titles t where coalesce(t.data->>'hof', 'false') <> 'true'
+        union
+        select lower(trim(result->>'name')) from public.archived_tournaments a
+        cross join lateral jsonb_array_elements(coalesce(a.data->'results', '[]'::jsonb)) as results(result)
+        where result->>'tournamentWinner' = 'true' or result->>'place' = '1'
+      )
+      select 1 from winners w join (select name from submitted_names union select name from identity_names) n on n.name = w.name
+    );
+    if previous_champion_count > 2 then
+      raise exception 'This tournament allows at most two previous champions per trio. At least one bowler must not have won a tournament.';
+    end if;
+  end if;
 
   select count(*) filter (where coalesce(nullif(data->>'status', ''), 'Registered') = 'Registered'),
     coalesce(max(case when coalesce(data->>'registrationNumber', '') ~ '^[0-9]+$'

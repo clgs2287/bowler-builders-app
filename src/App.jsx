@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
-import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot } from "./teamReservations";
+import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
@@ -5935,6 +5935,7 @@ function DashboardTab({
       major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : Boolean(savedInfo.major),
       series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
       reservationEligibility: savedInfo.reservationEligibility || "open",
+      maxPreviousChampions: savedInfo.maxPreviousChampions ?? null,
       tournamentStyle: savedInfo.tournamentStyle || "singles",
       announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
       lanePatternImages: Array.isArray(savedInfo.lanePatternImages) ? savedInfo.lanePatternImages : [],
@@ -6449,6 +6450,12 @@ function DashboardTab({
                     ))}
                   </select>
                 </div>
+                {tournamentInfo.tournamentStyle === "trios" && (
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+                    <Label className="text-left text-sm font-bold text-blue-900">Max 2 Previous Champions</Label>
+                    <Switch compact checked={Number(tournamentInfo.maxPreviousChampions) === 2} onCheckedChange={(checked) => update("maxPreviousChampions", checked ? 2 : null)} />
+                  </div>
+                )}
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
   <Label className="text-left text-sm font-bold text-blue-900">
     Major
@@ -6976,6 +6983,14 @@ function validateReservationEligibility({ reservation, tournamentInfo = {}, tour
     };
   }
   return { ok: true, championMatch };
+}
+
+function validateTrioChampionEligibility(members, tournamentInfo, tournamentHistory, manualTitles, bowlerIdentities, requireComplete = false) {
+  return validateTeamChampionLimit({ tournamentInfo, members, requireComplete,
+    isChampion: (member) => Boolean(findChampionTitleForReservation(member, tournamentHistory, manualTitles, bowlerIdentities)) ||
+      (tournamentHistory || []).some((tournament) => (tournament.results || []).some((result) =>
+        Number(result.place) === 1 && [member.name, member.nickname].filter(Boolean).some((name) => namesMatchWithIdentities(name, result.name, bowlerIdentities))))
+  });
 }
 
 function lanePositionParts(value) {
@@ -9498,6 +9513,8 @@ function ReservationsTab({
   setScheduleItems = () => {},
   savedTournamentDrafts = [],
   bowlerIdentities = [],
+  tournamentHistory = [],
+  manualTitles = [],
   setBowlerIdentities = () => {},
   isOwnerAdmin = false,
   supabaseSession = null,
@@ -9798,6 +9815,11 @@ function ReservationsTab({
     const group = editingReservation.reservationGroupId
       ? (reservationState.reservations || []).filter((item) => item.reservationGroupId === editingReservation.reservationGroupId)
       : [];
+    if (group.length) {
+      const members = group.map((member) => String(member.id) === String(editingReservationId) ? { ...member, ...editingReservation } : member);
+      const eligibility = validateTrioChampionEligibility(members, reservationState.publicTournamentInfo || tournamentInfo, tournamentHistory, manualTitles, bowlerIdentities);
+      if (!eligibility.ok) { setRosterNotice(eligibility.message); return; }
+    }
     if (group.length && editingReservation.status === "Registered") {
       const otherRegistered = (reservationState.reservations || []).filter((item) => item.reservationGroupId !== editingReservation.reservationGroupId && item.status === "Registered").length;
       if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, group.length)) {
@@ -10779,6 +10801,7 @@ function PublicReservations({
   selectedReservationKey = "",
   onSelectedReservationKeyChange = () => {},
   onReservationSubmit = () => Promise.resolve(),
+  eligibilityDataReady = true,
 }) {
   const [submittingReservation, setSubmittingReservation] = useState(false);
   const [submitNotice, setSubmitNotice] = useState("");
@@ -10837,6 +10860,7 @@ function PublicReservations({
   }, [activePublicReservationKey, publicReservationOptions, selectedPublicReservationKey, selectedReservationKey]);
 
   const formValid =
+  (!(activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2) || eligibilityDataReady) &&
   form.name.trim() &&
   form.email.trim() &&
   (!isTeamReservation || form.partners.slice(0, reservationTeamSize - 1).every((partner) => partner.tbd || partner.name.trim())) &&
@@ -10915,6 +10939,11 @@ const registrationStatus =
           {reservationEligibility !== "open" && (
             <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
               Eligibility: {getReservationEligibilityLabel(reservationEligibility)}.
+            </p>
+          )}
+          {activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2 && (
+            <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
+              Maximum two previous champions per trio. At least one bowler must not have won a tournament. TBD partners require eligibility confirmation before Registration.
             </p>
           )}
         </div>
@@ -11015,6 +11044,8 @@ const registrationStatus =
       alert(error.message);
       return;
     }
+    const teamEligibility = validateTrioChampionEligibility(pendingMembers, activeTournamentInfo, tournamentHistory, manualTitles, bowlerIdentities);
+    if (!teamEligibility.ok) { alert(teamEligibility.message); return; }
     for (const member of pendingMembers.filter((member) => !isTbdReservation(member))) {
     const eligibilityResult = validateReservationEligibility({
       reservation: member,
@@ -21972,7 +22003,7 @@ export default function BowlingPayoutApp() {
   const [supabaseLoadReady, setSupabaseLoadReady] = useState(false);
   const [supabaseSaveStatus, setSupabaseSaveStatus] = useState("Sign in as admin to save to Supabase");
   const shouldLoadSupabaseArchiveData =
-    Boolean(supabaseAdminProfile) || ["stats", "archives", "titles", "publicstats", "publickwtboy", "publicschedule"].includes(activeTab);
+    Boolean(supabaseAdminProfile) || ["stats", "archives", "titles", "publicstats", "publickwtboy", "publicschedule", "publicreservations"].includes(activeTab);
   const [qualifyingGames, setQualifyingGames] = useState(4);
   const [bowlers, setBowlers] = useState(() => buildInitialBowlers(0, 4));
   const [useHandicapScores, setUseHandicapScores] = useState(false);
@@ -23162,6 +23193,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
       major: typeof scheduledItem.major === "boolean" ? scheduledItem.major : Boolean(savedInfo.major),
       series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
       reservationEligibility: savedInfo.reservationEligibility || "open",
+      maxPreviousChampions: savedInfo.maxPreviousChampions ?? null,
       tournamentStyle: savedInfo.tournamentStyle || "singles",
       announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
       lanePatternImages: Array.isArray(savedInfo.lanePatternImages) ? savedInfo.lanePatternImages : [],
@@ -23370,6 +23402,8 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         .filter((item) => item.reservationGroupId === reservation.reservationGroupId)
         .sort((a, b) => Number(a.reservationMemberIndex) - Number(b.reservationMemberIndex));
       const size = getTournamentTeamSize(tournamentInfo.tournamentStyle || "singles");
+      const eligibility = validateTrioChampionEligibility(members, tournamentInfo, tournamentHistory, manualTitles, bowlerIdentities, true);
+      if (!eligibility.ok) return { error: eligibility.message };
       if (members.length !== size || size !== Number(reservation.reservationGroupSize)) {
         return { error: "Select the matching doubles/trios tournament before adding this entry." };
       }
@@ -24054,6 +24088,8 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
   isOwnerAdmin={isOwnerAdmin}
   supabaseSession={supabaseSession}
   onAddReservationToRegistration={addReservationToRegistration}
+  tournamentHistory={tournamentHistory}
+  manualTitles={manualTitles}
   onDeleteReservation={deleteReservationFromSupabase}
   onRemoveReservationFromRegistration={clearRegistrationSlotForReservation}
   onRemoveHiddenReservation={removeHiddenReservationFromSupabase}
@@ -24265,6 +24301,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
   selectedReservationKey={selectedPublicReservationKey}
   onSelectedReservationKeyChange={setSelectedPublicReservationKey}
   onReservationSubmit={submitReservationToSupabase}
+  eligibilityDataReady={publicRoutingDataReady && (!supabase || !/Load issue:|Issues:/.test(supabaseLoadStatus))}
 />
   </AppErrorBoundary>
 )}

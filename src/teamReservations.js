@@ -41,3 +41,12 @@ export function findTeamRosterSlot(bowlers, members, teamSize, limit) {
   }
   return { index: Math.ceil(bowlers.length / teamSize) * teamSize };
 }
+
+export function validateTeamChampionLimit({ tournamentInfo, members, isChampion, requireComplete = false }) {
+  if (tournamentInfo.tournamentStyle !== "trios" || Number(tournamentInfo.maxPreviousChampions) !== 2) return { ok: true };
+  const namedMembers = members.filter((member) => !member.tbd && String(member.name || "").trim() && String(member.name || "").trim().toLowerCase() !== "tbd");
+  const champions = namedMembers.filter(isChampion);
+  if (champions.length > 2) return { ok: false, message: "This tournament allows at most two previous champions per trio. At least one bowler must not have won a tournament." };
+  if (requireComplete && namedMembers.length !== 3) return { ok: false, message: "Fill in the TBD bowler names before adding this trio to Registration so its champion eligibility can be confirmed." };
+  return { ok: true, pending: namedMembers.length !== 3, championCount: champions.length };
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTeamReservationRows, teamReservationFits, findTeamRosterSlot } from "./teamReservations.js";
+import { buildTeamReservationRows, teamReservationFits, findTeamRosterSlot, validateTeamChampionLimit } from "./teamReservations.js";
 
 const entry = (members) => ({ id: "group-a", email: "submitter@example.test", members });
 
@@ -35,4 +35,24 @@ test("roster placement preserves existing teams and does not split the new entry
   assert.equal(findTeamRosterSlot([{ name: "" }, { name: "" }, { name: "" }], members, 3, 12).index, 0);
   assert.equal(findTeamRosterSlot(Array.from({ length: 10 }, () => ({ name: "Existing" })), members, 3, 12).rosterFull, true);
   assert.ok(findTeamRosterSlot([{ reservationId: members[0].id, name: "Cory" }], members, 3, 12).error);
+});
+
+test("champion limit only applies when explicitly enabled for trios", () => {
+  const members = [{ name: "Champion 1" }, { name: "Champion 2" }, { name: "Champion 3" }];
+  const check = (tournamentInfo) => validateTeamChampionLimit({ tournamentInfo, members, isChampion: () => true });
+  assert.equal(check({ tournamentStyle: "trios", maxPreviousChampions: 2 }).ok, false);
+  assert.equal(check({ tournamentStyle: "trios" }).ok, true);
+  assert.equal(check({ tournamentStyle: "singles", maxPreviousChampions: 2 }).ok, true);
+  assert.equal(check({ tournamentStyle: "doubles", maxPreviousChampions: 2 }).ok, true);
+});
+
+test("two champions and a nonchampion qualify; TBD requires review before Registration", () => {
+  const check = (members, requireComplete = false) => validateTeamChampionLimit({ tournamentInfo: { tournamentStyle: "trios", maxPreviousChampions: 2 }, members,
+    isChampion: (member) => member.name.startsWith("Champion"), requireComplete });
+  const members = [{ name: "Champion 1" }, { name: "Champion 2" }, { name: "New Bowler" }];
+  assert.equal(check(members).ok, true);
+  const pending = [...members.slice(0, 2), { name: "TBD", tbd: true }];
+  assert.equal(check(pending).ok, true);
+  assert.equal(check(pending).pending, true);
+  assert.equal(check(pending, true).ok, false);
 });
