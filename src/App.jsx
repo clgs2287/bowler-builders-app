@@ -16196,6 +16196,7 @@ function BracketRoundColumn({
   setSavedFinalsRounds,
 }) {
   const firstRoundMatchHeight = matchScoring === "bestOf3" ? 468 : matchScoring === "avgAdvantage" && !useHandicapScores ? 356 : 306;
+  const teamBestOfThree = matchScoring === "bestOf3" && playerOptions.some((player) => player.isTeam);
   const matchHeight = roundIndex === 0
     ? firstRoundMatchHeight
     : matchScoring === "bestOf3" ? 380 : matchScoring === "avgAdvantage" && !useHandicapScores ? 266 : 220;
@@ -16232,11 +16233,11 @@ function BracketRoundColumn({
   </Button>
 </div>
       <div
-  className="relative pb-8"
-  style={{ height: columnHeight + 32 }}
+  className={teamBestOfThree ? "bb-team-finals-matches relative flex flex-col gap-16 pb-8" : "relative pb-8"}
+  style={teamBestOfThree ? { minHeight: columnHeight + 32, paddingTop: roundIndex > 0 ? getTop(0) : 0 } : { height: columnHeight + 32 }}
 >
         {matches.map((match, matchIndex) => (
-          <div key={match.id} className="absolute left-0 right-0" style={{ top: getTop(matchIndex) }}>
+          <div key={match.id} className={teamBestOfThree ? "relative" : "absolute left-0 right-0"} style={teamBestOfThree ? undefined : { top: getTop(matchIndex) }}>
             <BracketMatchEditor
   match={match}
   matchNumber={matchNumberOffset + matchIndex + 1}
