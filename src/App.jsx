@@ -16599,6 +16599,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   const [game2DraftScores, setGame2DraftScores] = useState({});
   const [game1DraftMemberScores, setGame1DraftMemberScores] = useState({});
   const [game2DraftMemberScores, setGame2DraftMemberScores] = useState({});
+  const [game1EntryOrder, setGame1EntryOrder] = useState([]);
+  const [game2EntryOrder, setGame2EntryOrder] = useState([]);
   const game1Scores = eliminatorState.game1Scores || {};
   const game2Scores = eliminatorState.game2Scores || {};
   const stepScores = eliminatorState.stepScores || {};
@@ -16644,10 +16646,14 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     : [...baseRows]
         .sort((a, b) => Number(b.average || 0) - Number(a.average || 0) || a.name.localeCompare(b.name))
         .map((row, index) => ({ ...row, rank: index + 1 }));
+  const game1RowsBySeed = Object.fromEntries(baseRows.map((row) => [row.seed, row]));
+  const displayedGame1Ranked = hasGame1Draft && game1EntryOrder.length
+    ? game1EntryOrder.map(({ seed, rank }) => ({ ...game1RowsBySeed[seed], rank })).filter((row) => row.seed !== undefined)
+    : game1Ranked;
   const skipEliminator = cutBowlers.length <= 4;
   const directToStepladder = isDirectEliminatorFinalsFormat(tournamentFormat);
   const game1AdvancersCount = skipEliminator ? cutBowlers.length : directToStepladder ? 4 : Math.max(4, Math.ceil(cutBowlers.length / 2));
-  const game1Advancers = skipEliminator ? [] : game1Ranked.filter((row) => row.rank <= game1AdvancersCount);
+  const game1Advancers = skipEliminator ? [] : displayedGame1Ranked.filter((row) => row.rank <= game1AdvancersCount);
   const game2Rows = game1Advancers.map((b) => {
     const g2 = Number(displayedGame2Scores[b.seed] || 0);
     const game2Score = finalsGameScore(b, g2, useHandicapScores);
@@ -16659,16 +16665,30 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     : !hasGame2Draft && game2Rows.some((row) => Number(row.elimGame2 || 0) > 0)
       ? rankRows(game2Rows, "game2Total")
       : [...game2Rows].map((row, index) => ({ ...row, rank: index + 1 }));
-  const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+  const game2RowsBySeed = Object.fromEntries(game2Rows.map((row) => [row.seed, row]));
+  const displayedGame2Ranked = hasGame2Draft && game2EntryOrder.length
+    ? game2EntryOrder.map(({ seed, rank }) => ({ ...game2RowsBySeed[seed], rank })).filter((row) => row.seed !== undefined)
+    : game2Ranked;
+  const finalists = (skipEliminator ? cutBowlers : directToStepladder ? displayedGame1Ranked : displayedGame2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
   const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
-  const updateGame1 = (seed, value) => setGame1DraftScores((current) => ({ ...current, [seed]: value }));
-  const updateGame2 = (seed, value) => setGame2DraftScores((current) => ({ ...current, [seed]: value }));
+  const lockGame1EntryOrder = () => setGame1EntryOrder((current) => current.length ? current : game1Ranked.map((row) => ({ seed: row.seed, rank: row.rank })));
+  const lockGame2EntryOrder = () => setGame2EntryOrder((current) => current.length ? current : game2Ranked.map((row) => ({ seed: row.seed, rank: row.rank })));
+  const updateGame1 = (seed, value) => {
+    lockGame1EntryOrder();
+    setGame1DraftScores((current) => ({ ...current, [seed]: value }));
+  };
+  const updateGame2 = (seed, value) => {
+    lockGame2EntryOrder();
+    setGame2DraftScores((current) => ({ ...current, [seed]: value }));
+  };
   const updateStep = (key, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value } }));
   const updateGame1Members = (seed, nextMemberScores, value) => {
+    lockGame1EntryOrder();
     setGame1DraftScores((current) => ({ ...current, [seed]: value }));
     setGame1DraftMemberScores((current) => ({ ...current, [seed]: nextMemberScores }));
   };
   const updateGame2Members = (seed, nextMemberScores, value) => {
+    lockGame2EntryOrder();
     setGame2DraftScores((current) => ({ ...current, [seed]: value }));
     setGame2DraftMemberScores((current) => ({ ...current, [seed]: nextMemberScores }));
   };
@@ -16681,6 +16701,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     }));
     setGame1DraftScores({});
     setGame1DraftMemberScores({});
+    setGame1EntryOrder([]);
     setSavedFinalsRounds((current) => ({ ...current, eliminatorGame1: true }));
   };
   const saveEliminatorGame2 = () => {
@@ -16691,6 +16712,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     }));
     setGame2DraftScores({});
     setGame2DraftMemberScores({});
+    setGame2EntryOrder([]);
     setSavedFinalsRounds((current) => ({ ...current, eliminatorGame2: true }));
   };
   const clearEliminatorScores = () => {
@@ -16710,6 +16732,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     setGame2DraftScores({});
     setGame1DraftMemberScores({});
     setGame2DraftMemberScores({});
+    setGame1EntryOrder([]);
+    setGame2EntryOrder([]);
     setSavedFinalsRounds((current) => {
       const next = { ...(current || {}) };
       delete next.eliminatorGame1;
@@ -16736,7 +16760,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><TeamFinalsScoreInput
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[700px] text-xs md:min-w-[820px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">4-Game Avg</th><th className="p-2 text-center md:p-2.5">Game 1</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{displayedGame1Ranked.map((row) => <tr key={`elim-g1-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.average.toFixed(2)}</td><td className="p-2 text-center"><TeamFinalsScoreInput
   player={row}
   scoreKey={row.seed}
   value={displayedGame1Scores[row.seed] ?? ""}
@@ -16759,7 +16783,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   </Button>
 </div>
 
-<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{game2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : " - -"}</td><td className="p-2 text-center"><TeamFinalsScoreInput
+<div className="overflow-auto rounded-2xl border border-blue-200 bg-white"><table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm"><thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-2.5">Seed</th><th className="p-2 text-left md:p-2.5">Bowler</th><th className="p-2 text-right md:p-2.5">Carry From G1</th><th className="p-2 text-center md:p-2.5">Game 2</th><th className="p-2 text-right md:p-2.5">Total</th><th className="p-2 text-right md:p-2.5">Rank</th><th className="p-2 text-right md:p-2.5">Result</th></tr></thead><tbody>{displayedGame2Ranked.map((row) => <tr key={`elim-g2-${row.seed}`} className="border-t"><td className="p-3 font-semibold">{row.rank}</td><td className="p-3">{useHandicapScores ? `${row.name} (+${handicapPerGame(row)})` : row.name}</td><td className="p-3 text-right">{row.game1Total ? row.game1Total.toFixed(2) : " - -"}</td><td className="p-2 text-center"><TeamFinalsScoreInput
   player={row}
   scoreKey={row.seed}
   value={displayedGame2Scores[row.seed] ?? ""}
