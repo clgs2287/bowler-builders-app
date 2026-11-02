@@ -57,6 +57,17 @@ test("two champions and a nonchampion qualify; an incomplete lineup cannot enter
   assert.equal(check(pending, true).ok, false);
 });
 
+test("trios can limit a team to one multi-time champion", () => {
+  const tournamentInfo = { tournamentStyle: "trios", maxPreviousChampions: 2, limitMultiTimeChampions: true };
+  const isChampion = (member) => member.name.startsWith("Champion");
+  const isMultiTimeChampion = (member) => member.name.includes("Multi");
+  const valid = [{ name: "Champion Multi" }, { name: "Champion Once" }, { name: "New Bowler" }];
+  const invalid = [{ name: "Champion Multi One" }, { name: "Champion Multi Two" }, { name: "New Bowler" }];
+  assert.equal(validateTeamChampionLimit({ tournamentInfo, members: valid, isChampion, isMultiTimeChampion }).ok, true);
+  assert.equal(validateTeamChampionLimit({ tournamentInfo, members: invalid, isChampion, isMultiTimeChampion }).ok, false);
+  assert.equal(validateTeamChampionLimit({ tournamentInfo: { ...tournamentInfo, limitMultiTimeChampions: false }, members: invalid, isChampion, isMultiTimeChampion }).ok, true);
+});
+
 test("an enabled doubles rule permits one past champion but rejects a pair of champions", () => {
   const tournamentInfo = { tournamentStyle: "doubles", maxPreviousChampions: 1 };
   const isChampion = (member) => member.name.startsWith("Champion");

@@ -48,7 +48,7 @@ export function findTeamRosterSlot(bowlers, members, teamSize, limit) {
   return { index: Math.ceil(bowlers.length / teamSize) * teamSize };
 }
 
-export function validateTeamChampionLimit({ tournamentInfo, members, isChampion, requireComplete = false }) {
+export function validateTeamChampionLimit({ tournamentInfo, members, isChampion, isMultiTimeChampion = () => false, requireComplete = false }) {
   const tournamentStyle = tournamentInfo.tournamentStyle;
   const maxChampions = Number(tournamentInfo.maxPreviousChampions);
   const teamSize = tournamentStyle === "doubles" ? 2 : tournamentStyle === "trios" ? 3 : 0;
@@ -57,6 +57,9 @@ export function validateTeamChampionLimit({ tournamentInfo, members, isChampion,
   const champions = namedMembers.filter(isChampion);
   const entryLabel = tournamentStyle === "doubles" ? "pair" : "trio";
   if (champions.length > maxChampions) return { ok: false, message: `This tournament allows at most ${maxChampions} previous champion per ${entryLabel}. At least one bowler must not have won a tournament.` };
+  if (tournamentStyle === "trios" && tournamentInfo.limitMultiTimeChampions && champions.filter(isMultiTimeChampion).length > 1) {
+    return { ok: false, message: "Only one previous champion on a trio may have multiple tournament wins." };
+  }
   if (requireComplete && namedMembers.length !== teamSize) return { ok: false, message: `Enter all ${teamSize} bowler names before adding this ${entryLabel} to Registration.` };
   return { ok: true, pending: namedMembers.length !== teamSize, championCount: champions.length };
 }

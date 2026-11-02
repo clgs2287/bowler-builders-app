@@ -5938,6 +5938,7 @@ function DashboardTab({
       series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
       reservationEligibility: savedInfo.reservationEligibility || "open",
       maxPreviousChampions: savedInfo.maxPreviousChampions ?? null,
+      limitMultiTimeChampions: Boolean(savedInfo.limitMultiTimeChampions),
       tournamentStyle: savedInfo.tournamentStyle || "singles",
       announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
       lanePatternImages: Array.isArray(savedInfo.lanePatternImages) ? savedInfo.lanePatternImages : [],
@@ -6457,6 +6458,12 @@ function DashboardTab({
                   <div className="grid grid-cols-[120px_1fr] items-center gap-3">
                     <Label className="text-left text-sm font-bold text-blue-900">{tournamentInfo.tournamentStyle === "doubles" ? "Max 1 Previous Champion" : "Max 2 Previous Champions"}</Label>
                     <Switch compact checked={Number(tournamentInfo.maxPreviousChampions) === (tournamentInfo.tournamentStyle === "doubles" ? 1 : 2)} onCheckedChange={(checked) => update("maxPreviousChampions", checked ? (tournamentInfo.tournamentStyle === "doubles" ? 1 : 2) : null)} />
+                  </div>
+                )}
+                {tournamentInfo.tournamentStyle === "trios" && Number(tournamentInfo.maxPreviousChampions) === 2 && (
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-3">
+                    <Label className="text-left text-sm font-bold text-blue-900">Max 1 Multi-Time Champion</Label>
+                    <Switch compact checked={Boolean(tournamentInfo.limitMultiTimeChampions)} onCheckedChange={(checked) => update("limitMultiTimeChampions", checked)} />
                   </div>
                 )}
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
@@ -6992,6 +6999,21 @@ function findChampionTitleForReservation(reservation = {}, tournamentHistory = [
   ) || null;
 }
 
+function getChampionTitleCountForReservation(reservation = {}, tournamentHistory = [], manualTitles = [], bowlerIdentities = []) {
+  const submittedNames = [reservation.name, reservation.nickname, getReservationDisplayName(reservation)]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (!submittedNames.length) return 0;
+  const matchesReservation = (name) => submittedNames.some((submittedName) => namesMatchWithIdentities(submittedName, name, bowlerIdentities));
+  const titleRows = [
+    ...getChampionTitleRows(tournamentHistory, manualTitles),
+    ...(tournamentHistory || []).flatMap((tournament) => (tournament.results || [])
+      .filter((result) => Number(result.place) === 1 && !result.tournamentWinner)
+      .map((result) => ({ bowler: result.name, tournament: tournament.name, date: tournament.date, source: tournament.series }))),
+  ].filter((title) => matchesReservation(title.bowler));
+  return new Set(titleRows.map((title) => [title.bowler, title.tournament, title.date].map(getIdentityKey).join("|"))).size;
+}
+
 function validateReservationEligibility({ reservation, tournamentInfo = {}, tournamentHistory = [], manualTitles = [], bowlerIdentities = [] }) {
   const eligibility = tournamentInfo.reservationEligibility || "open";
   if (eligibility === "open") return { ok: true };
@@ -7016,7 +7038,8 @@ function validateTrioChampionEligibility(members, tournamentInfo, tournamentHist
   return validateTeamChampionLimit({ tournamentInfo, members, requireComplete,
     isChampion: (member) => Boolean(findChampionTitleForReservation(member, tournamentHistory, manualTitles, bowlerIdentities)) ||
       (tournamentHistory || []).some((tournament) => (tournament.results || []).some((result) =>
-        Number(result.place) === 1 && [member.name, member.nickname].filter(Boolean).some((name) => namesMatchWithIdentities(name, result.name, bowlerIdentities))))
+        Number(result.place) === 1 && [member.name, member.nickname].filter(Boolean).some((name) => namesMatchWithIdentities(name, result.name, bowlerIdentities)))),
+    isMultiTimeChampion: (member) => getChampionTitleCountForReservation(member, tournamentHistory, manualTitles, bowlerIdentities) >= 2,
   });
 }
 
@@ -10985,6 +11008,11 @@ const registrationStatus =
           {["trios", "doubles"].includes(activeTournamentInfo.tournamentStyle) && Number(activeTournamentInfo.maxPreviousChampions) === (activeTournamentInfo.tournamentStyle === "doubles" ? 1 : 2) && (
             <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
               {activeTournamentInfo.tournamentStyle === "doubles" ? "Maximum one previous champion per pair. At least one bowler must not have won a tournament." : "Maximum two previous champions per trio. At least one bowler must not have won a tournament."}
+            </p>
+          )}
+          {activeTournamentInfo.tournamentStyle === "trios" && Number(activeTournamentInfo.maxPreviousChampions) === 2 && activeTournamentInfo.limitMultiTimeChampions && (
+            <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
+              Of the two allowed previous champions, only one may have multiple tournament wins.
             </p>
           )}
         </div>
@@ -23332,6 +23360,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
       series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
       reservationEligibility: savedInfo.reservationEligibility || "open",
       maxPreviousChampions: savedInfo.maxPreviousChampions ?? null,
+      limitMultiTimeChampions: Boolean(savedInfo.limitMultiTimeChampions),
       tournamentStyle: savedInfo.tournamentStyle || "singles",
       announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
       lanePatternImages: Array.isArray(savedInfo.lanePatternImages) ? savedInfo.lanePatternImages : [],
