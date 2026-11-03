@@ -1880,8 +1880,11 @@ function isDirectEliminatorFinalsFormat(tournamentFormat = "") {
 
 function getEliminatorCutCount(entries = 0, eliminatorState = {}, tournamentFormat = "") {
   const entryCount = Math.max(0, Number(entries || 0));
-  if (tournamentFormat === "stepladder") return Math.min(4, entryCount);
   const manualCut = Number(eliminatorState?.manualQualifiers || 0);
+  if (tournamentFormat === "stepladder") {
+    const fieldSize = Number.isFinite(manualCut) && manualCut > 0 ? Math.floor(manualCut) : 4;
+    return Math.min(entryCount, Math.max(3, Math.min(4, fieldSize)));
+  }
   if (entryCount <= 0) return 0;
   if (Number.isFinite(manualCut) && manualCut > 0) {
     return Math.max(1, Math.min(entryCount, Math.floor(manualCut)));
@@ -2310,19 +2313,12 @@ if (savedFinalsRounds.stepladderFinal) {
 
   const game2Ranked = skipEliminator || directToStepladder ? [] : rankRows(game2Rows, "game2Total");
 
+  const stepladderFieldSize = tournamentFormat === "stepladder" ? cutCount : 4;
   const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked)
-    .slice(0, 4)
+    .slice(0, stepladderFieldSize)
     .map((b, index) => ({ ...b, stepSeed: index + 1 }));
 
-  const seedMap = Object.fromEntries(
-    finalists.map((b) => [b.stepSeed, b])
-  );
-
-  const stepWinner1 = winnerFromStepladderMatch(seedMap[4], seedMap[3], stepScores, "step-1", useHandicapScores, tournamentFormat, eliminatorState);
-
-  const stepWinner2 = winnerFromStepladderMatch(stepWinner1, seedMap[2], stepScores, "step-2", useHandicapScores, tournamentFormat, eliminatorState);
-
-  const champion = winnerFromStepladderMatch(stepWinner2, seedMap[1], stepScores, "step-3", useHandicapScores, tournamentFormat, eliminatorState);
+  const { champion } = buildStepladderMatches(finalists, stepScores, useHandicapScores, tournamentFormat, eliminatorState);
 
   return `Winner - ${champion?.name || "Champion TBD"}`;
 }
@@ -3041,6 +3037,40 @@ function winnerFromStepladderMatch(left, right, scores, matchId, useHandicapScor
     return winnerFromBestOfThreeMatch(left, right, adjusted, matchId, false);
   }
   return winnerFromMatch(left, right, finalsGameScore(left, scores[`${matchId}-l`], useHandicapScores), finalsGameScore(right, scores[`${matchId}-r`], useHandicapScores), false);
+}
+
+function buildStepladderMatches(finalists, stepScores, useHandicapScores, tournamentFormat, eliminatorState = {}) {
+  const seedMap = Object.fromEntries(finalists.map((entry) => [entry.stepSeed, entry]));
+  const threeTeamField = finalists.length === 3;
+  const firstMatch = {
+    id: "step-1",
+    left: threeTeamField ? seedMap[3] : seedMap[4],
+    right: threeTeamField ? seedMap[2] : seedMap[3],
+  };
+  const firstWinner = winnerFromStepladderMatch(firstMatch.left, firstMatch.right, stepScores, firstMatch.id, useHandicapScores, tournamentFormat, eliminatorState);
+  const secondMatch = threeTeamField
+    ? null
+    : { id: "step-2", left: firstWinner, right: seedMap[2] };
+  const secondWinner = secondMatch
+    ? winnerFromStepladderMatch(secondMatch.left, secondMatch.right, stepScores, secondMatch.id, useHandicapScores, tournamentFormat, eliminatorState)
+    : firstWinner;
+  const championship = {
+    id: threeTeamField ? "step-2" : "step-3",
+    left: secondWinner,
+    right: seedMap[1],
+  };
+  const champion = winnerFromStepladderMatch(championship.left, championship.right, stepScores, championship.id, useHandicapScores, tournamentFormat, eliminatorState);
+
+  return {
+    seedMap,
+    threeTeamField,
+    firstMatch,
+    firstWinner,
+    secondMatch,
+    secondWinner,
+    championship,
+    champion,
+  };
 }
 
 function qualifyingScratchAverage(player) {
@@ -13612,14 +13642,9 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
     return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
   });
   const game2Ranked = skipEliminator || directToStepladder ? [] : rankRows(game2Rows, "game2Total");
-  const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
-  const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
-  const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-  const stepWinner1 = winnerFromStepladderMatch(stepMatch1.left, stepMatch1.right, stepScores, "step-1", useHandicapScores, tournamentFormat, eliminatorState);
-  const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-  const stepWinner2 = winnerFromStepladderMatch(stepMatch2.left, stepMatch2.right, stepScores, "step-2", useHandicapScores, tournamentFormat, eliminatorState);
-  const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-  const champion = winnerFromStepladderMatch(championship.left, championship.right, stepScores, "step-3", useHandicapScores, tournamentFormat, eliminatorState);
+  const stepladderFieldSize = tournamentFormat === "stepladder" ? cutCount : 4;
+  const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, stepladderFieldSize).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+  const { seedMap, threeTeamField, firstMatch: stepMatch1, firstWinner: stepWinner1, secondMatch: stepMatch2, secondWinner: stepWinner2, championship, champion } = buildStepladderMatches(finalists, stepScores, useHandicapScores, tournamentFormat, eliminatorState);
   const [directFinalsSection, setDirectFinalsSection] = useState("game1");
 
   return (
@@ -13688,27 +13713,26 @@ function PublicEliminatorView({ entries, bowlers, useHandicapScores, eliminatorS
 
       {(!directToStepladder || skipEliminator || directFinalsSection === "stepladder") && <AppCard>
         <CardContent className="p-3 md:p-5">
-          <h2 className="mb-4 text-xl font-semibold text-blue-900">Final 4 Stepladder</h2>
+          <h2 className="mb-4 text-xl font-semibold text-blue-900">Final {finalists.length} Stepladder</h2>
           {directToStepladder ? (
             <div className="rounded-3xl border border-blue-200 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 p-3 shadow-lg md:p-5">
-              <div className="grid gap-3 md:grid-cols-[1fr_44px_1fr_44px_1fr] md:items-center">
-                <div className="md:mt-24">
-                  <StepMatchPublic title="Match 1: #4 vs #3" match={stepMatch1} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
+              <div className={`grid gap-3 ${threeTeamField ? "md:grid-cols-[1fr_44px_1fr]" : "md:grid-cols-[1fr_44px_1fr_44px_1fr]"} md:items-center`}>
+                <div className={threeTeamField ? "md:mt-12" : "md:mt-24"}>
+                  <StepMatchPublic title={threeTeamField ? "Match 1: #3 vs #2" : "Match 1: #4 vs #3"} match={stepMatch1} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
                 </div>
                 <div className="hidden h-1 rounded-full bg-blue-300/80 md:block" />
-                <div className="md:mt-12">
+                {!threeTeamField && <><div className="md:mt-12">
                   <StepMatchPublic title="Match 2: Winner vs #2" match={stepMatch2} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
-                </div>
-                <div className="hidden h-1 rounded-full bg-blue-300/80 md:block" />
+                </div><div className="hidden h-1 rounded-full bg-blue-300/80 md:block" /></>}
                 <div>
                   <StepMatchPublic title="Championship: Winner vs #1" match={championship} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
                 </div>
               </div>
             </div>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-4">
-              <StepMatchPublic title="Match 1: #4 vs #3" match={stepMatch1} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
-              <StepMatchPublic title="Match 2: Winner vs #2" match={stepMatch2} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
+            <div className={`grid gap-4 ${threeTeamField ? "lg:grid-cols-2" : "lg:grid-cols-4"}`}>
+              <StepMatchPublic title={threeTeamField ? "Match 1: #3 vs #2" : "Match 1: #4 vs #3"} match={stepMatch1} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
+              {!threeTeamField && <StepMatchPublic title="Match 2: Winner vs #2" match={stepMatch2} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />}
               <StepMatchPublic title="Championship: Winner vs #1" match={championship} stepScores={stepScores} useHandicapScores={useHandicapScores} tournamentFormat={tournamentFormat} eliminatorState={eliminatorState} />
             </div>
           )}
@@ -15776,18 +15800,13 @@ function getFinalPlacementRows({ entries, bowlers, useHandicapScores, tournament
       return { ...b, elimGame2: g2, elimGame2Score: game2Score, game2Total };
     });
     const game2Ranked = skipEliminator || directToStepladder ? [] : rankRows(game2Rows, "game2Total");
-    const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
-    const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
-    const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-    const stepWinner1 = winnerFromStepladderMatch(stepMatch1.left, stepMatch1.right, stepScores, "step-1", useHandicapScores, tournamentFormat, eliminatorState);
-    const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-    const stepWinner2 = winnerFromStepladderMatch(stepMatch2.left, stepMatch2.right, stepScores, "step-2", useHandicapScores, tournamentFormat, eliminatorState);
-    const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-    const champion = winnerFromStepladderMatch(championship.left, championship.right, stepScores, "step-3", useHandicapScores, tournamentFormat, eliminatorState);
+    const stepladderFieldSize = tournamentFormat === "stepladder" ? cutCount : 4;
+    const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, stepladderFieldSize).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+    const { firstMatch: stepMatch1, firstWinner: stepWinner1, secondMatch: stepMatch2, secondWinner: stepWinner2, championship, champion } = buildStepladderMatches(finalists, stepScores, useHandicapScores, tournamentFormat, eliminatorState);
     const finalOrder = [];
     addUnique(finalOrder, champion);
     addUnique(finalOrder, championship.left && champion && String(championship.left.seed) === String(champion.seed) ? championship.right : championship.left);
-    addUnique(finalOrder, stepMatch2.left && stepWinner2 && String(stepMatch2.left.seed) === String(stepWinner2.seed) ? stepMatch2.right : stepMatch2.left);
+    if (stepMatch2) addUnique(finalOrder, stepMatch2.left && stepWinner2 && String(stepMatch2.left.seed) === String(stepWinner2.seed) ? stepMatch2.right : stepMatch2.left);
     addUnique(finalOrder, stepMatch1.left && stepWinner1 && String(stepMatch1.left.seed) === String(stepWinner1.seed) ? stepMatch1.right : stepMatch1.left);
     game2Ranked.forEach((player) => addUnique(finalOrder, player));
     game1Ranked.forEach((player) => addUnique(finalOrder, player));
@@ -16747,8 +16766,9 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   const displayedGame2Ranked = hasGame2Draft && game2EntryOrder.length
     ? game2EntryOrder.map(({ seed, rank }) => ({ ...game2RowsBySeed[seed], rank })).filter((row) => row.seed !== undefined)
     : game2Ranked;
-  const finalists = (skipEliminator ? cutBowlers : directToStepladder ? displayedGame1Ranked : displayedGame2Ranked).slice(0, 4).map((b, index) => ({ ...b, stepSeed: index + 1 }));
-  const seedMap = Object.fromEntries(finalists.map((b) => [b.stepSeed, b]));
+  const stepladderFieldSize = tournamentFormat === "stepladder" ? cutCount : 4;
+  const finalists = (skipEliminator ? cutBowlers : directToStepladder ? displayedGame1Ranked : displayedGame2Ranked).slice(0, stepladderFieldSize).map((b, index) => ({ ...b, stepSeed: index + 1 }));
+  const { seedMap, threeTeamField, firstMatch: stepMatch1, firstWinner: stepWinner1, secondMatch: stepMatch2, secondWinner: stepWinner2, championship, champion } = buildStepladderMatches(finalists, stepScores, useHandicapScores, tournamentFormat, eliminatorState);
   const lockGame1EntryOrder = () => setGame1EntryOrder((current) => current.length ? current : game1Ranked.map((row) => ({ seed: row.seed, rank: row.rank })));
   const lockGame2EntryOrder = () => setGame2EntryOrder((current) => current.length ? current : game2Ranked.map((row) => ({ seed: row.seed, rank: row.rank })));
   const updateGame1 = (seed, value) => {
@@ -16820,13 +16840,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
       return next;
     });
   };
-  const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-  const stepWinner1 = winnerFromStepladderMatch(stepMatch1.left, stepMatch1.right, stepScores, "step-1", useHandicapScores, tournamentFormat, eliminatorState);
-  const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-  const stepWinner2 = winnerFromStepladderMatch(stepMatch2.left, stepMatch2.right, stepScores, "step-2", useHandicapScores, tournamentFormat, eliminatorState);
-  const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
-  const champion = winnerFromStepladderMatch(championship.left, championship.right, stepScores, "step-3", useHandicapScores, tournamentFormat, eliminatorState);
-  return <div className="space-y-3 md:space-y-4">{stepladderScoringControl}<AppCard><CardContent className="p-3 md:p-5"><div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><h2 className="text-center text-xl font-semibold text-blue-900 md:text-left">{formatTournamentFormatLabel(tournamentFormat)}</h2><Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearEliminatorScores}>Clear Eliminator Scores</Button></div>{tournamentFormat !== "stepladder" && <div className="mb-4 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"><div><Label>Manual Finals Cut</Label><p className="mt-1 text-xs font-semibold text-blue-700">Leave blank for automatic 1-in-4 cut. Payout cashers can still be set separately in Finance.</p></div><div className="flex items-center gap-2"><SmallNumberInput value={eliminatorState.manualQualifiers || ""} onChange={(value) => setEliminatorState((current) => ({ ...current, manualQualifiers: value || "" }))} width="w-24" /><span className="text-xs font-bold text-blue-700">Auto: {suggestedCutCount}</span></div></div>}<div className="grid gap-3 md:grid-cols-6"><StatCard label={`Cut ${entryLabel}`} value={cutCount} />{tournamentFormat !== "stepladder" && <><StatCard label={directToStepladder ? "Eliminator Advancers" : "Game 1 Advancers"} value={skipEliminator ? "Skipped" : game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={skipEliminator || directToStepladder ? "Skipped" : 4} /></>}<StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} />{getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}</div><p className="mt-4 text-sm text-blue-700">{skipEliminator ? "The finals cut is already four entries, so this event starts directly with the stepladder." : directToStepladder ? "The eliminator uses qualifying average as carry-forward. Top 4 advance directly to stepladder." : "Eliminator games use qualifying average as carry-forward. In handicap events, finals scores add the bowler or team handicap."}</p></CardContent></AppCard>{!skipEliminator && <><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">{directToStepladder ? "Eliminator" : "Eliminator Game 1"}</h2>
+  return <div className="space-y-3 md:space-y-4">{stepladderScoringControl}<AppCard><CardContent className="p-3 md:p-5"><div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><h2 className="text-center text-xl font-semibold text-blue-900 md:text-left">{formatTournamentFormatLabel(tournamentFormat)}</h2><Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={clearEliminatorScores}>Clear Eliminator Scores</Button></div>{tournamentFormat === "stepladder" && <div className="mb-4 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"><div><Label>Stepladder Field</Label><p className="mt-1 text-xs font-semibold text-blue-700">Choose 3 or 4 teams/bowlers. Payout spots remain separate in Finance.</p></div><select className="rounded-lg border border-blue-300 bg-white p-2 text-sm font-black text-blue-950" value={cutCount} onChange={(event) => { if (Object.keys(stepScores).length && !window.confirm("Changing the stepladder field clears stepladder scores. Continue?")) return; setEliminatorState((current) => ({ ...current, manualQualifiers: event.target.value, stepScores: {}, stepMemberScores: {} })); setSavedFinalsRounds((current) => { const next = { ...current }; delete next.stepladderFinal; return next; }); }}><option value="3">3</option><option value="4">4</option></select></div>}{tournamentFormat !== "stepladder" && <div className="mb-4 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end"><div><Label>Manual Finals Cut</Label><p className="mt-1 text-xs font-semibold text-blue-700">Leave blank for automatic 1-in-4 cut. Payout cashers can still be set separately in Finance.</p></div><div className="flex items-center gap-2"><SmallNumberInput value={eliminatorState.manualQualifiers || ""} onChange={(value) => setEliminatorState((current) => ({ ...current, manualQualifiers: value || "" }))} width="w-24" /><span className="text-xs font-bold text-blue-700">Auto: {suggestedCutCount}</span></div></div>}<div className="grid gap-3 md:grid-cols-6"><StatCard label={`Cut ${entryLabel}`} value={cutCount} />{tournamentFormat !== "stepladder" && <><StatCard label={directToStepladder ? "Eliminator Advancers" : "Game 1 Advancers"} value={skipEliminator ? "Skipped" : game1AdvancersCount} /><StatCard label="Game 2 Advancers" value={skipEliminator || directToStepladder ? "Skipped" : 4} /></>}<StatCard label="Stepladder Top Seed" value={seedMap[1]?.name || "TBD"} /><StatCard label="Champion" value={champion?.name || "TBD"} />{getTournamentTeamSize(tournamentStyle) > 1 && <StatCard label="Finals Game" value={finalsScoreMode === "baker" ? "Baker" : "Team Total"} />}</div><p className="mt-4 text-sm text-blue-700">{skipEliminator ? `The finals cut is already ${cutCount} entries, so this event starts directly with the stepladder.` : directToStepladder ? "The eliminator uses qualifying average as carry-forward. Top 4 advance directly to stepladder." : "Eliminator games use qualifying average as carry-forward. In handicap events, finals scores add the bowler or team handicap."}</p></CardContent></AppCard>{!skipEliminator && <><AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-3 text-xl font-semibold text-blue-900">{directToStepladder ? "Eliminator" : "Eliminator Game 1"}</h2>
 
 <p className="mb-4 text-sm text-blue-700">
   Average + Game 1. Top half advances.
@@ -16887,8 +16901,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   </Button>
 </div>
 
-<div className="grid gap-4 lg:grid-cols-4"><StepMatch
-  title="Match 1: #3 vs #4"
+<div className={`grid gap-4 ${threeTeamField ? "lg:grid-cols-2" : "lg:grid-cols-4"}`}><StepMatch
+  title={threeTeamField ? "Match 1: #3 vs #2" : "Match 1: #3 vs #4"}
   match={stepMatch1}
   winner={stepWinner1}
   stepScores={stepScores}
@@ -16900,7 +16914,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   matchScoring={tournamentFormat === "stepladder" ? eliminatorState.stepMatchScoring || "single" : "single"}
 />
 
-<StepMatch
+{!threeTeamField && <StepMatch
   title="Match 2: Winner vs #2"
   match={stepMatch2}
   winner={stepWinner2}
@@ -16911,7 +16925,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   memberScores={stepMemberScores}
   updateStepMemberScores={updateStepMembers}
   matchScoring={tournamentFormat === "stepladder" ? eliminatorState.stepMatchScoring || "single" : "single"}
-/>
+/>}
 
 <StepMatch
   title="Championship: Winner vs #1"
@@ -19001,15 +19015,11 @@ function ArchivedTournamentsTab({ tournamentInfo, bowlers, useHandicapScores, pa
         scores.push(game2Score);
       }
 
-      const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, 4).map((row, index) => ({ ...row, stepSeed: index + 1 }));
-      const seedMap = Object.fromEntries(finalists.map((row) => [row.stepSeed, row]));
-      const stepMatch1 = { id: "step-1", left: seedMap[4], right: seedMap[3] };
-      const stepWinner1 = winnerFromStepladderMatch(stepMatch1.left, stepMatch1.right, stepScores, "step-1", useHandicapScores, tournamentFormat, eliminatorState);
-      const stepMatch2 = { id: "step-2", left: stepWinner1, right: seedMap[2] };
-      const stepWinner2 = winnerFromStepladderMatch(stepMatch2.left, stepMatch2.right, stepScores, "step-2", useHandicapScores, tournamentFormat, eliminatorState);
-      const championship = { id: "step-3", left: stepWinner2, right: seedMap[1] };
+      const stepladderFieldSize = tournamentFormat === "stepladder" ? cutCount : 4;
+      const finalists = (skipEliminator ? cutBowlers : directToStepladder ? game1Ranked : game2Ranked).slice(0, stepladderFieldSize).map((row, index) => ({ ...row, stepSeed: index + 1 }));
+      const { firstMatch: stepMatch1, secondMatch: stepMatch2, championship } = buildStepladderMatches(finalists, stepScores, useHandicapScores, tournamentFormat, eliminatorState);
 
-      [stepMatch1, stepMatch2, championship].forEach((match) => {
+      [stepMatch1, stepMatch2, championship].filter(Boolean).forEach((match) => {
         const gameKeys = tournamentFormat === "stepladder" && eliminatorState.stepMatchScoring === "bestOf3" ? [1, 2, 3].map((game) => `${match.id}-g${game}`) : [match.id];
         gameKeys.forEach((key) => {
           const leftScore = Number(stepScores[`${key}-l`] || 0);
