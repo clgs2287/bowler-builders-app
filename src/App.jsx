@@ -9633,7 +9633,7 @@ function ReservationsTab({
         })
       : ""
   );
-  const reservedCount = (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0);
+  const reservedCount = getReservationEntryCount(reservationState.reservations, "Registered") || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
   const currentTournamentAnnouncementRecipients = useMemo(() => {
