@@ -83,11 +83,11 @@ begin
   if ((event_style = 'trios' and event_info->>'maxPreviousChampions' = '2')
       or (event_style = 'doubles' and event_info->>'maxPreviousChampions' = '1')) then
     select count(*) into previous_champion_count
-    from jsonb_array_elements(members) as submitted(member)
-    where coalesce(member->>'tbd', 'false') <> 'true' and exists (
+    from jsonb_array_elements(members) as submitted(submitted_member)
+    where coalesce(submitted_member->>'tbd', 'false') <> 'true' and exists (
       with submitted_names as (
         select lower(trim(value)) as name
-        from jsonb_array_elements_text(jsonb_build_array(member->>'name', member->>'nickname'))
+        from jsonb_array_elements_text(jsonb_build_array(submitted_member->>'name', submitted_member->>'nickname'))
         where trim(coalesce(value, '')) <> ''
       ), identity_names as (
         select aliases.name
