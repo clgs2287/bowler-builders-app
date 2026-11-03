@@ -28,8 +28,8 @@ export function buildTeamReservationRows(reservation, firstNumber = 1) {
   }));
 }
 
-export function teamReservationFits(registeredCount, limit, teamSize) {
-  return Number(registeredCount) + teamSize <= Number(limit);
+export function teamReservationFits(registeredCount, limit, entryCount = 1) {
+  return Number(registeredCount) + entryCount <= Number(limit);
 }
 
 export function isTbdReservation(reservation) {

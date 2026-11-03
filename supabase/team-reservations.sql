@@ -116,11 +116,11 @@ begin
     end if;
   end if;
 
-  select count(*) filter (where coalesce(nullif(data->>'status', ''), 'Registered') = 'Registered'),
+  select count(distinct coalesce(nullif(data->>'reservationGroupId', ''), id)) filter (where coalesce(nullif(data->>'status', ''), 'Registered') = 'Registered'),
     coalesce(max(case when coalesce(data->>'registrationNumber', '') ~ '^[0-9]+$'
       then (data->>'registrationNumber')::integer else 0 end), 0) + 1
     into registered_count, first_number from public.reservations where tournament_id = tournament_key;
-  next_status := case when payload->>'status' = 'Waitlisted' or registered_count + team_size > capacity
+  next_status := case when payload->>'status' = 'Waitlisted' or registered_count + 1 > capacity
     then 'Waitlisted' else 'Registered' end;
   for member in select value from jsonb_array_elements(members) loop
     member_name := case when member->>'tbd' = 'true' then 'TBD' else trim(member->>'name') end;

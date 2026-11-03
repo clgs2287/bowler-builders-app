@@ -1430,7 +1430,7 @@ function reservationBucketFromState(reservationState = {}) {
     reservationLimitUpdatedAt: reservationState.reservationLimitUpdatedAt || "",
     reservationNextNumber: Number(reservationState.reservationNextNumber || 1),
     waitlistOnlyNames: reservationState.waitlistOnlyNames || "",
-    reservationCount: (reservationState.reservations || []).length || Number(reservationState.reservationCount || 0),
+    reservationCount: getReservationEntryCount(reservationState.reservations) || Number(reservationState.reservationCount || 0),
     reservations: reservationState.reservations || [],
     publicReservations: reservationState.publicReservations || [],
     publicTournamentInfo: reservationState.publicTournamentInfo || null,
@@ -1472,7 +1472,7 @@ function sanitizeReservationsByTournament(reservationsByTournament = {}) {
         reservationLimitUpdatedAt: bucket?.reservationLimitUpdatedAt || "",
         reservationNextNumber: Number(bucket?.reservationNextNumber || 1),
         waitlistOnlyNames: bucket?.waitlistOnlyNames || "",
-        reservationCount: (bucket?.reservations || []).length || Number(bucket?.reservationCount || 0),
+        reservationCount: getReservationEntryCount(bucket?.reservations) || Number(bucket?.reservationCount || 0),
         reservations: [],
         publicReservations: [],
         publicTournamentInfo: bucket?.publicTournamentInfo || null,
@@ -1575,6 +1575,14 @@ function getNextReservationNumber(reservationState = {}) {
     ...existingNumbers.map((number) => number + 1),
     1
   );
+}
+
+function getReservationEntryCount(reservations = [], status = "") {
+  const entryIds = (reservations || [])
+    .filter((reservation) => !status || String(reservation.status || "Registered") === status)
+    .map((reservation) => String(reservation.reservationGroupId || reservation.id || "").trim())
+    .filter(Boolean);
+  return new Set(entryIds).size;
 }
 
 function getOpenReservationKeys(reservationState = {}) {
@@ -9787,7 +9795,7 @@ function ReservationsTab({
         reservationLimitUpdatedAt: eventReservationSettings.reservationLimitUpdatedAt || savedBucket.reservationLimitUpdatedAt || "",
         reservationNextNumber: Number(savedBucket.reservationNextNumber || 1),
         waitlistOnlyNames: eventReservationSettings.waitlistOnlyNames || savedBucket.waitlistOnlyNames || "",
-        reservationCount: Number(savedBucket.reservationCount || (savedBucket.reservations || []).length || 0),
+        reservationCount: Number(savedBucket.reservationCount || getReservationEntryCount(savedBucket.reservations, "Registered") || 0),
         reservations: savedBucket.reservations || [],
         publicReservations: savedBucket.publicReservations || [],
         publicTournamentInfo,
@@ -9854,7 +9862,7 @@ function ReservationsTab({
           ? updater(reservation)
           : reservation
       );
-      const registeredCount = nextReservations.filter((item) => item.status === "Registered").length;
+      const registeredCount = getReservationEntryCount(nextReservations, "Registered");
       const reservationsByTournament = { ...(current.reservationsByTournament || {}) };
       if (currentKey) {
         reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
@@ -9884,8 +9892,8 @@ function ReservationsTab({
       if (!eligibility.ok) { setRosterNotice(eligibility.message); return; }
     }
     if (group.length && editingReservation.status === "Registered") {
-      const otherRegistered = (reservationState.reservations || []).filter((item) => item.reservationGroupId !== editingReservation.reservationGroupId && item.status === "Registered").length;
-      if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, group.length)) {
+      const otherRegistered = getReservationEntryCount((reservationState.reservations || []).filter((item) => item.reservationGroupId !== editingReservation.reservationGroupId), "Registered");
+      if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT)) {
         setRosterNotice("There are not enough open spots for this full entry. It must remain waitlisted.");
         return;
       }
@@ -9919,8 +9927,8 @@ function ReservationsTab({
       ? (reservationState.reservations || []).filter((item) => item.reservationGroupId === reservation.reservationGroupId)
       : [reservation];
     if (reservation.reservationGroupId && nextStatus === "Registered") {
-      const otherRegistered = (reservationState.reservations || []).filter((item) => item.reservationGroupId !== reservation.reservationGroupId && item.status === "Registered").length;
-      if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, group.length)) {
+      const otherRegistered = getReservationEntryCount((reservationState.reservations || []).filter((item) => item.reservationGroupId !== reservation.reservationGroupId), "Registered");
+      if (!teamReservationFits(otherRegistered, reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT)) {
         setRosterNotice("There are not enough open spots for this full entry. It must remain waitlisted.");
         return;
       }
@@ -10127,13 +10135,13 @@ function ReservationsTab({
           reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
             ...reservationBucketFromState(current),
             reservations: nextReservations,
-            reservationCount: Math.max(0, Number(current.reservationCount || nextReservations.length) - removedCount),
+            reservationCount: getReservationEntryCount(nextReservations, "Registered"),
           });
         }
         return {
           ...current,
           reservations: nextReservations,
-          reservationCount: Math.max(0, Number(current.reservationCount || nextReservations.length) - removedCount),
+          reservationCount: getReservationEntryCount(nextReservations, "Registered"),
           reservationsByTournament,
         };
       });
@@ -10164,13 +10172,13 @@ function ReservationsTab({
           reservationsByTournament[currentKey] = mergeReservationBucket(reservationsByTournament[currentKey], {
             ...reservationBucketFromState(current),
             reservations: nextReservations,
-            reservationCount: nextReservations.length,
+            reservationCount: getReservationEntryCount(nextReservations, "Registered"),
           });
         }
         return {
           ...current,
           reservations: nextReservations,
-          reservationCount: nextReservations.length,
+          reservationCount: getReservationEntryCount(nextReservations, "Registered"),
           reservationsByTournament,
         };
       });
@@ -10931,10 +10939,10 @@ function PublicReservations({
   const currentReservations =
   activeReservationState.reservations || [];
   const currentReservationCount = Number(
-    activeReservationState.reservationCount ?? currentReservations.length
+    activeReservationState.reservationCount ?? getReservationEntryCount(currentReservations, "Registered")
   );
   const currentRegisteredReservationCount = currentReservations.length
-    ? currentReservations.filter((reservation) => String(reservation.status || "Registered") === "Registered").length
+    ? getReservationEntryCount(currentReservations, "Registered")
     : currentReservationCount;
   const formForcedToWaitlist = [form, ...(isTeamReservation ? form.partners.slice(0, reservationTeamSize - 1) : [])]
     .some((member) => isReservationWaitlistOnly(member, activeReservationState));
@@ -10943,7 +10951,7 @@ const registrationStatus =
   formForcedToWaitlist
     ? "Waitlisted"
     : teamReservationFits(currentRegisteredReservationCount,
-      activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT, reservationTeamSize)
+      activeReservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT)
     ? "Registered"
     : "Waitlisted";
 
@@ -11174,7 +11182,7 @@ const registrationStatus =
         ...reservationBucketFromState(selectedState),
         entriesOpen: true,
         reservationNextNumber: Math.max(Number(selectedState.reservationNextNumber || 1), Number(savedReservation.registrationNumber || registrationNumber) + reservationTeamSize),
-        reservationCount: savedReservation.status === "Registered" ? currentCount + reservationTeamSize : currentCount,
+        reservationCount: savedReservation.status === "Registered" ? currentCount + 1 : currentCount,
         reservations: nextReservations,
       };
       const reservationsByTournament = {
@@ -22784,7 +22792,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
       reservationLimitUpdatedAt: reservationState.reservationLimitUpdatedAt || "",
       reservationNextNumber: getNextReservationNumber(reservationState),
       waitlistOnlyNames: reservationState.waitlistOnlyNames || "",
-      reservationCount: (reservationState.reservations || []).length,
+      reservationCount: getReservationEntryCount(reservationState.reservations, "Registered"),
       publicTournamentInfo: currentPublicTournamentInfo,
       reservationsByTournament: sanitizeReservationsByTournament(reservationsForSettings),
     };
@@ -23049,7 +23057,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
             if (!tournamentKey) return;
             const canonicalKey = canonicalScheduleReservationKey(nextSchedule, tournamentKey);
             reservationsByTournament[canonicalKey] = mergeReservationBucket(reservationsByTournament[canonicalKey], {
-              reservationCount: Number(reservationCountByTournament[tournamentKey] ?? publicReservations.length),
+              reservationCount: Number(reservationCountByTournament[tournamentKey] ?? getReservationEntryCount(publicReservations, "Registered")),
               tournamentKey: canonicalKey,
               reservations: reservationsByTournament[canonicalKey]?.reservations || [],
               publicReservations,
@@ -23110,7 +23118,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
             reservationNextNumber: Number(currentBucket.reservationNextNumber || reservationSettings.reservationNextNumber || 1),
             waitlistOnlyNames: currentBucket.waitlistOnlyNames || reservationSettings.waitlistOnlyNames || "",
             reservationCount: nextReservations.length
-              ? currentTournamentReservations.length
+              ? getReservationEntryCount(currentTournamentReservations, "Registered")
               : currentReservationCount,
             reservations: currentTournamentReservations,
             publicReservations: currentTournamentReservations.length

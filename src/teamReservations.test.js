@@ -19,10 +19,10 @@ test("duplicate names, missing partners, and TBD placeholders are rejected", () 
   }
 });
 
-test("a whole entry needs enough remaining capacity", () => {
-  assert.equal(teamReservationFits(10, 12, 3), false);
-  assert.equal(teamReservationFits(9, 12, 3), true);
-  assert.equal(teamReservationFits(10, 12, 2), true);
+test("a team is one reservation entry regardless of its number of bowlers", () => {
+  assert.equal(teamReservationFits(15, 16), true);
+  assert.equal(teamReservationFits(16, 16), false);
+  assert.equal(teamReservationFits(14, 16, 2), true);
 });
 
 test("nicknames stay attached to the correct bowler and remain optional", () => {

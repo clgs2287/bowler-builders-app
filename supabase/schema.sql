@@ -515,7 +515,7 @@ begin
   insert into public.reservation_public_counts (tournament_id, reservation_count, updated_at)
   select
     reservations.tournament_id,
-    count(*)::integer,
+    count(distinct coalesce(nullif(reservations.data->>'reservationGroupId', ''), reservations.id))::integer,
     now()
   from public.reservations
   where coalesce(nullif(trim(reservations.data->>'status'), ''), 'Registered') = 'Registered'
