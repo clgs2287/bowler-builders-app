@@ -136,6 +136,7 @@ create table if not exists public.reservation_public_roster (
   display_name text not null default 'Reserved Bowler',
   status text not null default 'Registered',
   registration_number text,
+  reservation_group_id text,
   updated_at timestamptz not null default now()
 );
 
@@ -489,7 +490,7 @@ begin
   delete from public.reservation_public_roster
   where target_tournament_id is null or tournament_id = target_tournament_id;
 
-  insert into public.reservation_public_roster (id, tournament_id, display_name, status, registration_number, updated_at)
+  insert into public.reservation_public_roster (id, tournament_id, display_name, status, registration_number, reservation_group_id, updated_at)
   select
     reservations.id,
     coalesce(reservations.tournament_id, ''),
@@ -499,6 +500,7 @@ begin
     end,
     coalesce(nullif(trim(reservations.data->>'status'), ''), 'Registered'),
     coalesce(nullif(trim(reservations.data->>'registrationNumber'), ''), nullif(trim(reservations.data->>'confirmationNumber'), '')),
+    nullif(trim(reservations.data->>'reservationGroupId'), ''),
     now()
   from public.reservations
   where target_tournament_id is null or reservations.tournament_id = target_tournament_id
@@ -507,6 +509,7 @@ begin
       display_name = excluded.display_name,
       status = excluded.status,
       registration_number = excluded.registration_number,
+      reservation_group_id = excluded.reservation_group_id,
       updated_at = excluded.updated_at;
 
   delete from public.reservation_public_counts

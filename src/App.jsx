@@ -1521,6 +1521,7 @@ function publicReservationRosterFromRows(rows = []) {
     status: row.status || "Registered",
     registrationNumber: row.registration_number || "",
     confirmationNumber: row.registration_number || "",
+    reservationGroupId: row.reservation_group_id || "",
     publicOnly: true,
   })).filter((reservation) => reservation.name);
 }
@@ -4510,6 +4511,13 @@ function TournamentInfoTab({
     Number(a.registrationNumber || a.confirmationNumber || 0) - Number(b.registrationNumber || b.confirmationNumber || 0) ||
     String(getReservationDisplayName(a)).localeCompare(String(getReservationDisplayName(b)))
   ));
+  const publicReservationGroups = Array.from(sortedPublicReservationEntries.reduce((groups, reservation) => {
+    const key = reservation.reservationGroupId || `single-${reservation.id}`;
+    const group = groups.get(key) || { key, members: [], registrationNumber: reservation.registrationNumber || reservation.confirmationNumber || 0, status: reservation.status || "Registered" };
+    group.members.push(reservation);
+    groups.set(key, group);
+    return groups;
+  }, new Map()).values());
   const publicReservationCount = Number(
     matchingReservationState?.reservationCount ??
     publicReservationEntries.length ??
@@ -4721,17 +4729,24 @@ const infoRows = [
     </div>
     {isField && showReservationRoster && (
       <div className="rounded-2xl border border-blue-100 bg-white p-3">
-        {sortedPublicReservationEntries.length ? (
+        {publicReservationGroups.length ? (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {sortedPublicReservationEntries.map((reservation, index) => (
-              <div key={reservation.id || `${reservation.tournamentKey || "reservation"}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-slate-50 px-3 py-2">
-                <span className="text-sm font-bold text-slate-900">
-                  {reservation.registrationNumber || reservation.confirmationNumber || index + 1}. {getReservationDisplayName(reservation)}
-                </span>
-                {reservation.status && (
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${String(reservation.status).toLowerCase().includes("wait") ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
-                    {reservation.status}
+            {publicReservationGroups.map((group, index) => (
+              <div key={group.key} className="rounded-xl border border-blue-100 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-slate-900">
+                    {group.members.length > 1 ? `Team ${index + 1}` : `${group.registrationNumber || index + 1}. ${getReservationDisplayName(group.members[0])}`}
                   </span>
+                  {group.status && (
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${String(group.status).toLowerCase().includes("wait") ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}>
+                      {group.status}
+                    </span>
+                  )}
+                </div>
+                {group.members.length > 1 && (
+                  <ol className="mt-2 space-y-1 border-t border-blue-100 pt-2 text-sm font-semibold text-slate-800">
+                    {group.members.map((member, memberIndex) => <li key={member.id || memberIndex}>{memberIndex + 1}. {getReservationDisplayName(member)}</li>)}
+                  </ol>
                 )}
               </div>
             ))}
@@ -22979,7 +22994,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
           loadSupabaseRestRows("bowler_identities", "?select=id,data&order=created_at.asc", controller.signal),
           reservationRead,
           loadSupabaseRestRows("reservation_public_counts", "?select=tournament_id,reservation_count", controller.signal),
-          loadSupabaseRestRows("reservation_public_roster", "?select=id,tournament_id,display_name,status,registration_number&order=registration_number.asc", controller.signal),
+          loadSupabaseRestRows("reservation_public_roster", "?select=id,tournament_id,display_name,status,registration_number,reservation_group_id&order=registration_number.asc", controller.signal),
           archiveRead,
           loadSupabaseRestRows("active_tournament_snapshots", "?select=id,data&id=eq.active", controller.signal),
           draftRead,
