@@ -35,7 +35,8 @@ test("roster placement preserves existing teams and does not split the new entry
   const members = buildTeamReservationRows(entry([{ name: "Cory" }, { name: "Mallory" }, { name: "Jimmy" }]));
   assert.equal(findTeamRosterSlot([{ name: "Existing" }, { name: "" }], members, 3, 12).index, 3);
   assert.equal(findTeamRosterSlot([{ name: "" }, { name: "" }, { name: "" }], members, 3, 12).index, 0);
-  assert.equal(findTeamRosterSlot(Array.from({ length: 10 }, () => ({ name: "Existing" })), members, 3, 12).rosterFull, true);
+  assert.equal(Boolean(findTeamRosterSlot(Array.from({ length: 33 }, () => ({ name: "Existing" })), members, 3, 12).rosterFull), false);
+  assert.equal(findTeamRosterSlot(Array.from({ length: 36 }, () => ({ name: "Existing" })), members, 3, 12).rosterFull, true);
   assert.ok(findTeamRosterSlot([{ reservationId: members[0].id, name: "Cory" }], members, 3, 12).error);
 });
 

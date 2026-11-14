@@ -41,7 +41,8 @@ export function findTeamRosterSlot(bowlers, members, teamSize, limit) {
   if (existing.every((index) => index >= 0)) return { alreadyExists: true, index: existing[0] };
   if (existing.some((index) => index >= 0)) return { error: "This entry is partly in Registration. Remove its existing members before adding the full entry." };
   const namedCount = bowlers.filter((bowler) => String(bowler.name || "").trim()).length;
-  if (limit > 0 && namedCount + teamSize > limit) return { rosterFull: true };
+  const bowlerLimit = limit > 0 ? limit * teamSize : 0;
+  if (bowlerLimit > 0 && namedCount + teamSize > bowlerLimit) return { rosterFull: true };
   for (let index = 0; index + teamSize <= bowlers.length; index += teamSize) {
     if (bowlers.slice(index, index + teamSize).every((bowler) => !String(bowler.name || "").trim())) return { index };
   }
