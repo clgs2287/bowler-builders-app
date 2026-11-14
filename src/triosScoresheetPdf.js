@@ -65,6 +65,12 @@ export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualif
     doc.setFontSize(twoUp ? 15 : admin ? 13 : 19);
     const lanes = [...new Set(team.members.map((member) => String(member.lane || "").match(/\d+/)?.[0]).filter(Boolean))];
     doc.text(`Team ${team.number}${blankLaneAssignments ? " - Starting Lane: __________" : lanes.length ? ` - Starting Lane ${lanes.join(", ")}` : " - Unassigned"}`, margin, y);
+    if (twoUp && index % 2 === 1 && qrDataUrl) {
+      doc.addImage(qrDataUrl, "PNG", 7.37, y - 0.22, 0.45, 0.45);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.5);
+      doc.text("Public Leaderboard", 7.595, y + 0.29, { align: "center" });
+    }
     y += twoUp ? 0.25 : admin ? 0.18 : 0.35;
     const rowHeight = twoUp ? 0.72 : admin ? 0.43 : 0.95;
     const headerHeight = twoUp ? 0.42 : admin ? 0.38 : 0.55;
