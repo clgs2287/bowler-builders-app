@@ -61,16 +61,24 @@ export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualif
       doc.setLineDashPattern([], 0);
     }
     let y = twoUp ? 1.35 + (index % 2) * 4.3 : admin ? 1.35 + (index % 3) * 3 : 1.55;
+    if (twoUp && index % 2 === 1) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text(doc.splitTextToSize(tournamentInfo.name || "Tournament", width - 1), margin, 5.75);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text([tournamentInfo.center, tournamentInfo.date].filter(Boolean).join(" - "), margin, 6.15);
+      if (qrDataUrl) {
+        doc.addImage(qrDataUrl, "PNG", 7.35, 5.5, 0.65, 0.65);
+        doc.setFontSize(7);
+        doc.text("Public Leaderboard", 7.675, 6.27, { align: "center" });
+      }
+      y = 6.45;
+    }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(twoUp ? 15 : admin ? 13 : 19);
     const lanes = [...new Set(team.members.map((member) => String(member.lane || "").match(/\d+/)?.[0]).filter(Boolean))];
     doc.text(`Team ${team.number}${blankLaneAssignments ? " - Starting Lane: __________" : lanes.length ? ` - Starting Lane ${lanes.join(", ")}` : " - Unassigned"}`, margin, y);
-    if (twoUp && index % 2 === 1 && qrDataUrl) {
-      doc.addImage(qrDataUrl, "PNG", 7.37, y - 0.22, 0.45, 0.45);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(5.5);
-      doc.text("Public Leaderboard", 7.595, y + 0.29, { align: "center" });
-    }
     y += twoUp ? 0.25 : admin ? 0.18 : 0.35;
     const rowHeight = twoUp ? 0.72 : admin ? 0.43 : 0.95;
     const headerHeight = twoUp ? 0.42 : admin ? 0.38 : 0.55;
