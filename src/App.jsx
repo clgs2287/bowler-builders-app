@@ -8242,11 +8242,11 @@ const removeQualifyingAdjustment = (bowlerId) => {
   });
 };
 
-const downloadScoreEntrySheetPdf = async () => {
+const downloadScoreEntrySheetPdf = async (blankLaneAssignments = false) => {
   if (tournamentInfo.tournamentStyle === "trios") {
     const laneForGame = (lane, gameIndex) => lanePairForGame(lane, gameIndex, tournamentInfo?.lanesUsed, tournamentInfo?.movePairs || 1, tournamentInfo?.movementMode || "custom", { odd: tournamentInfo?.customRotation || "", even: tournamentInfo?.evenCustomRotation || "" });
-    const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin: true, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, laneForGame });
-    doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-score-entry`).replace(/\.jpg$/, ".pdf"));
+    const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin: true, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, laneForGame, blankLaneAssignments });
+    doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-score-entry${blankLaneAssignments ? "-blank-lanes" : ""}`).replace(/\.jpg$/, ".pdf"));
     return;
   }
   const { jsPDF } = await import("jspdf");
@@ -8393,6 +8393,10 @@ const downloadScoreEntrySheetPdf = async () => {
   <Button variant="outline" className="rounded-2xl" onClick={downloadScoreEntrySheetPdf}>
     Download Score Entry PDF
   </Button>
+
+  {tournamentInfo.tournamentStyle === "trios" && <Button variant="outline" className="rounded-2xl" onClick={() => downloadScoreEntrySheetPdf(true)}>
+    Download Blank-Lane Score Entry PDF
+  </Button>}
 
   <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("qualifying-results.csv", exportRows)}>
     Export Results CSV
@@ -11607,7 +11611,7 @@ const printableSheets =
     });
   })];
 
-  const downloadScoresheetsPdf = async () => {
+  const downloadScoresheetsPdf = async (blankLaneAssignments = false) => {
     if (tournamentStyle === "trios") {
       let qrDataUrl = "";
       try {
@@ -11616,8 +11620,8 @@ const printableSheets =
         console.warn("Could not add leaderboard QR to team scoresheets PDF", error);
       }
       const laneForGame = (lane, gameIndex) => lanePairForGame(lane, gameIndex, tournamentInfo?.lanesUsed, tournamentInfo?.movePairs || 1, tournamentInfo?.movementMode || "custom", { odd: tournamentInfo?.customRotation || "", even: tournamentInfo?.evenCustomRotation || "" });
-      const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames: gamesCount, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, qrDataUrl, laneForGame });
-      doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-team-scoresheets`).replace(/\.jpg$/, ".pdf"));
+      const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames: gamesCount, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, qrDataUrl, laneForGame, blankLaneAssignments });
+      doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-team-scoresheets${blankLaneAssignments ? "-blank-lanes" : ""}`).replace(/\.jpg$/, ".pdf"));
       return;
     }
     const { jsPDF } = await import("jspdf");
@@ -12004,6 +12008,13 @@ Lane {lanePairForGame(
 >
   Download Scoresheets PDF
 </Button>
+
+{tournamentStyle === "trios" && <Button
+  className="rounded-2xl bg-blue-700 hover:bg-blue-800"
+  onClick={() => downloadScoresheetsPdf(true)}
+>
+  Download Blank-Lane Team Sheets PDF
+</Button>}
 
 <Button
   className="rounded-2xl bg-green-700 hover:bg-green-800"

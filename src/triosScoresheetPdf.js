@@ -8,7 +8,7 @@ export function getPrintableTrios(bowlers) {
   return teams;
 }
 
-export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin = false, useHandicapScores = false, average, handicap, qrDataUrl = "", laneForGame = () => "" }) {
+export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin = false, useHandicapScores = false, average, handicap, qrDataUrl = "", laneForGame = () => "", blankLaneAssignments = false }) {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "in", format: "letter" });
   const teams = getPrintableTrios(bowlers);
@@ -58,14 +58,14 @@ export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualif
     doc.setFont("helvetica", "bold");
     doc.setFontSize(admin ? 13 : 19);
     const lanes = [...new Set(team.members.map((member) => String(member.lane || "").match(/\d+/)?.[0]).filter(Boolean))];
-    doc.text(`Team ${team.number}${lanes.length ? ` - Starting Lane ${lanes.join(", ")}` : " - Unassigned"}`, margin, y);
+    doc.text(`Team ${team.number}${blankLaneAssignments ? " - Starting Lane: __________" : lanes.length ? ` - Starting Lane ${lanes.join(", ")}` : " - Unassigned"}`, margin, y);
     y += admin ? 0.18 : 0.35;
     const rowHeight = admin ? 0.43 : 0.95;
     const headerHeight = admin ? 0.38 : 0.55;
     let x = margin;
     columns.forEach((column) => {
       const gameIndex = Number(String(column.key).replace("game", ""));
-      const laneLabel = Number.isFinite(gameIndex) ? laneForGame(team.members[0]?.lane, gameIndex) : "";
+      const laneLabel = !blankLaneAssignments && Number.isFinite(gameIndex) ? laneForGame(team.members[0]?.lane, gameIndex) : "";
       cell(laneLabel ? `${column.label}\n${laneLabel}` : column.label, x, y, column.width, headerHeight, { bold: true, fill: 235, size: laneLabel ? 8 : 10 });
       x += column.width;
     });
@@ -74,7 +74,7 @@ export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualif
       const member = team.members[memberIndex];
       x = margin;
       columns.forEach((column) => {
-        const value = column.key === "name" ? member?.name || "" : column.key === "position" ? member?.lane || "" : column.key === "average" ? (member?.name ? average(member) : "") : column.key === "handicap" ? (member?.name ? handicap(member) : "") : "";
+        const value = column.key === "name" ? member?.name || "" : column.key === "position" ? (blankLaneAssignments ? "" : member?.lane || "") : column.key === "average" ? (member?.name ? average(member) : "") : column.key === "handicap" ? (member?.name ? handicap(member) : "") : "";
         cell(value, x, y, column.width, rowHeight, { bold: column.key === "name", left: column.key === "name", size: column.key === "name" ? (admin ? 12 : 15) : 10 });
         x += column.width;
       });
