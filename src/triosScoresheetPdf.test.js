@@ -20,5 +20,6 @@ test("one page per team and three intact teams per admin page without editing ro
   const options = { bowlers, tournamentInfo: { name: "Test" }, qualifyingGames: 4 };
   assert.equal((await createTriosScoresheetPdf(options)).getNumberOfPages(), 16);
   assert.equal((await createTriosScoresheetPdf({ ...options, admin: true })).getNumberOfPages(), 6);
+  assert.equal((await createTriosScoresheetPdf({ ...options, twoUp: true, blankLaneAssignments: true })).getNumberOfPages(), 8);
   assert.equal(JSON.stringify(bowlers), before);
 });

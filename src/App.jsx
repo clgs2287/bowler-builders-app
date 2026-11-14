@@ -11611,7 +11611,7 @@ const printableSheets =
     });
   })];
 
-  const downloadScoresheetsPdf = async (blankLaneAssignments = false) => {
+  const downloadScoresheetsPdf = async (blankLaneAssignments = false, twoUp = false) => {
     if (tournamentStyle === "trios") {
       let qrDataUrl = "";
       try {
@@ -11620,8 +11620,8 @@ const printableSheets =
         console.warn("Could not add leaderboard QR to team scoresheets PDF", error);
       }
       const laneForGame = (lane, gameIndex) => lanePairForGame(lane, gameIndex, tournamentInfo?.lanesUsed, tournamentInfo?.movePairs || 1, tournamentInfo?.movementMode || "custom", { odd: tournamentInfo?.customRotation || "", even: tournamentInfo?.evenCustomRotation || "" });
-      const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames: gamesCount, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, qrDataUrl, laneForGame, blankLaneAssignments });
-      doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-team-scoresheets${blankLaneAssignments ? "-blank-lanes" : ""}`).replace(/\.jpg$/, ".pdf"));
+      const doc = await createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames: gamesCount, useHandicapScores, average: bowlerAverageDisplay, handicap: handicapPerGame, qrDataUrl, laneForGame, blankLaneAssignments, twoUp });
+      doc.save(safeStorageFileName(`${tournamentInfo.name || "Tournament"}-team-scoresheets${blankLaneAssignments ? "-blank-lanes" : ""}${twoUp ? "-two-up" : ""}`).replace(/\.jpg$/, ".pdf"));
       return;
     }
     const { jsPDF } = await import("jspdf");
@@ -12014,6 +12014,13 @@ Lane {lanePairForGame(
   onClick={() => downloadScoresheetsPdf(true)}
 >
   Download Blank-Lane Team Sheets PDF
+</Button>}
+
+{tournamentStyle === "trios" && <Button
+  className="rounded-2xl bg-blue-700 hover:bg-blue-800"
+  onClick={() => downloadScoresheetsPdf(true, true)}
+>
+  Download 2-Up Blank-Lane Team Sheets PDF
 </Button>}
 
 <Button

@@ -8,11 +8,12 @@ export function getPrintableTrios(bowlers) {
   return teams;
 }
 
-export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin = false, useHandicapScores = false, average, handicap, qrDataUrl = "", laneForGame = () => "", blankLaneAssignments = false }) {
+export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualifyingGames, admin = false, twoUp = false, useHandicapScores = false, average, handicap, qrDataUrl = "", laneForGame = () => "", blankLaneAssignments = false }) {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "in", format: "letter" });
   const teams = getPrintableTrios(bowlers);
   const games = Math.max(1, Number(qualifyingGames || 4));
+  const teamsPerPage = twoUp ? 2 : admin ? 3 : 1;
   const margin = 0.4;
   const width = 7.7;
   const nameWidth = useHandicapScores ? 2.25 : 2.7;
@@ -50,18 +51,23 @@ export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualif
   header();
   teams.forEach((team, index) => {
     // Keep each trio and its total together; admin sheets hold three trios per page.
-    if (index > 0 && (!admin || index % 3 === 0)) {
+    if (index > 0 && index % teamsPerPage === 0) {
       doc.addPage();
       header();
     }
-    let y = admin ? 1.35 + (index % 3) * 3 : 1.55;
+    if (twoUp && index % 2 === 1) {
+      doc.setLineDashPattern([0.05, 0.04], 0);
+      doc.line(margin, 5.35, margin + width, 5.35);
+      doc.setLineDashPattern([], 0);
+    }
+    let y = twoUp ? 1.35 + (index % 2) * 4.3 : admin ? 1.35 + (index % 3) * 3 : 1.55;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(admin ? 13 : 19);
+    doc.setFontSize(twoUp ? 15 : admin ? 13 : 19);
     const lanes = [...new Set(team.members.map((member) => String(member.lane || "").match(/\d+/)?.[0]).filter(Boolean))];
     doc.text(`Team ${team.number}${blankLaneAssignments ? " - Starting Lane: __________" : lanes.length ? ` - Starting Lane ${lanes.join(", ")}` : " - Unassigned"}`, margin, y);
-    y += admin ? 0.18 : 0.35;
-    const rowHeight = admin ? 0.43 : 0.95;
-    const headerHeight = admin ? 0.38 : 0.55;
+    y += twoUp ? 0.25 : admin ? 0.18 : 0.35;
+    const rowHeight = twoUp ? 0.72 : admin ? 0.43 : 0.95;
+    const headerHeight = twoUp ? 0.42 : admin ? 0.38 : 0.55;
     let x = margin;
     columns.forEach((column) => {
       const gameIndex = Number(String(column.key).replace("game", ""));
@@ -75,14 +81,14 @@ export async function createTriosScoresheetPdf({ bowlers, tournamentInfo, qualif
       x = margin;
       columns.forEach((column) => {
         const value = column.key === "name" ? member?.name || "" : column.key === "position" ? (blankLaneAssignments ? "" : member?.lane || "") : column.key === "average" ? (member?.name ? average(member) : "") : column.key === "handicap" ? (member?.name ? handicap(member) : "") : "";
-        cell(value, x, y, column.width, rowHeight, { bold: column.key === "name", left: column.key === "name", size: column.key === "name" ? (admin ? 12 : 15) : 10 });
+        cell(value, x, y, column.width, rowHeight, { bold: column.key === "name", left: column.key === "name", size: column.key === "name" ? (twoUp ? 13 : admin ? 12 : 15) : 10 });
         x += column.width;
       });
       y += rowHeight;
     }
     x = margin;
     columns.forEach((column) => {
-      cell(column.key === "name" ? "Team Total" : "", x, y, column.width, rowHeight, { bold: true, fill: 240, left: column.key === "name", size: admin ? 12 : 14 });
+      cell(column.key === "name" ? "Team Total" : "", x, y, column.width, rowHeight, { bold: true, fill: 240, left: column.key === "name", size: twoUp ? 13 : admin ? 12 : 14 });
       x += column.width;
     });
   });
