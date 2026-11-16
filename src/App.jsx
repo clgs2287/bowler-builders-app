@@ -16695,7 +16695,7 @@ function StepMatch({ title, match, winner, stepScores, updateStep, rolloffScores
         <p className="text-xs font-bold text-blue-900">Wins: {record.left}-{record.right}</p>
         {needsRolloff && <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
           <p className="mb-2 font-black">8th-10th Frame Rolloff Total</p>
-          {[['l', match.left], ['r', match.right]].map(([side, player]) => <div key={side} className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"><span className="break-words font-semibold">{playerLabel(player)}</span><Input type="number" min={1} max={30} inputMode="numeric" className="h-8 w-16 text-center text-sm" value={rolloffScores[`${match.id}-${side}`] ?? ""} onChange={(event) => updateRolloff?.(`${match.id}-${side}`, clampBowlingScoreInput(event.target.value, 1, 30))} /></div>)}
+          {[['l', match.left], ['r', match.right]].map(([side, player]) => <div key={side} className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"><span className="break-words font-semibold">{playerLabel(player)}</span><Input type="number" min={1} max={60} inputMode="numeric" className="h-8 w-16 text-center text-sm" value={rolloffScores[`${match.id}-${side}`] ?? ""} onChange={(event) => updateRolloff?.(`${match.id}-${side}`, clampBowlingScoreInput(event.target.value, 1, 60))} /></div>)}
           {winner?.name && <p className="mt-2 font-bold text-green-800">Rolloff winner: {winner.name}</p>}
         </div>}
         <p className="mt-2 text-sm text-blue-900">Winner: {winner?.name || "TBD"}</p>
