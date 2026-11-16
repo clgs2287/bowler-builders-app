@@ -2887,6 +2887,7 @@ function maskEliminatorStateForPublishedSnapshot(eliminatorState = {}, savedFina
     game2MemberScores: savedFinalsRounds?.eliminatorGame2 ? eliminatorState.game2MemberScores || {} : {},
     stepScores: savedFinalsRounds?.stepladderFinal ? eliminatorState.stepScores || {} : {},
     stepMemberScores: savedFinalsRounds?.stepladderFinal ? eliminatorState.stepMemberScores || {} : {},
+    stepRolloffScores: savedFinalsRounds?.stepladderFinal ? eliminatorState.stepRolloffScores || {} : {},
   };
 }
 
@@ -2984,7 +2985,7 @@ function BracketPlayerLabel({ player, children, className = "" }) {
   );
 }
 
-function winnerFromBestOfThreeMatch(left, right, scores = {}, matchId, advanceByes = true) {
+function winnerFromBestOfThreeMatch(left, right, scores = {}, matchId, advanceByes = true, rolloffScores = {}) {
   const leftMissing = !left;
   const rightMissing = !right;
   const leftIsBye = !leftMissing && left.name === "BYE";
@@ -3010,6 +3011,15 @@ function winnerFromBestOfThreeMatch(left, right, scores = {}, matchId, advanceBy
 
   if (leftWins >= 2) return left;
   if (rightWins >= 2) return right;
+  const allGamesCompleted = [1, 2, 3].every((gameNumber) =>
+    Number(scores[`${matchId}-g${gameNumber}-l`] || 0) > 0 &&
+    Number(scores[`${matchId}-g${gameNumber}-r`] || 0) > 0
+  );
+  const leftRolloff = Number(rolloffScores?.[`${matchId}-l`] || 0);
+  const rightRolloff = Number(rolloffScores?.[`${matchId}-r`] || 0);
+  if (allGamesCompleted && leftWins === rightWins && leftRolloff > 0 && rightRolloff > 0 && leftRolloff !== rightRolloff) {
+    return leftRolloff > rightRolloff ? left : right;
+  }
   return null;
 }
 
@@ -3034,7 +3044,7 @@ function winnerFromStepladderMatch(left, right, scores, matchId, useHandicapScor
       adjusted[`${matchId}-g${game}-l`] = finalsGameScore(left, scores[`${matchId}-g${game}-l`], useHandicapScores);
       adjusted[`${matchId}-g${game}-r`] = finalsGameScore(right, scores[`${matchId}-g${game}-r`], useHandicapScores);
     });
-    return winnerFromBestOfThreeMatch(left, right, adjusted, matchId, false);
+    return winnerFromBestOfThreeMatch(left, right, adjusted, matchId, false, eliminatorState.stepRolloffScores || {});
   }
   return winnerFromMatch(left, right, finalsGameScore(left, scores[`${matchId}-l`], useHandicapScores), finalsGameScore(right, scores[`${matchId}-r`], useHandicapScores), false);
 }
@@ -12859,7 +12869,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                     {isExpanded && (
                       <tr className="border-t bg-white">
                         <td colSpan={colspan} className="p-2 md:p-3">
-                          <div className="inline-flex w-max flex-nowrap gap-1 overflow-x-auto rounded-lg border border-blue-100 bg-blue-50 p-1 text-center text-[9px] sm:gap-1 sm:p-1.5 sm:text-[10px] md:ml-24 md:gap-1.5 md:p-1.5 md:text-xs lg:gap-2 lg:p-2 lg:text-sm">
+                          {!b.isTeam && <div className="inline-flex w-max flex-nowrap gap-1 overflow-x-auto rounded-lg border border-blue-100 bg-blue-50 p-1 text-center text-[9px] sm:gap-1 sm:p-1.5 sm:text-[10px] md:ml-24 md:gap-1.5 md:p-1.5 md:text-xs lg:gap-2 lg:p-2 lg:text-sm">
                             {b.games.map((game, gameIndex) => (
                               <div key={`${b.seed}-public-game-${gameIndex}`} className="w-10 rounded-none bg-white p-[2px] shadow-sm first:rounded-l-md last:rounded-r-md sm:w-12 sm:rounded-md sm:p-1 md:w-[3.75rem] md:rounded-lg md:p-1.5 lg:w-[4.5rem] lg:p-2">
                                 <p className="text-[9px] font-semibold text-blue-600 sm:text-[10px] md:text-xs">G{gameIndex + 1}</p>
@@ -12883,7 +12893,7 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
 )}
                               </div>
                             ))}
-                          </div>
+                          </div>}
                           {b.isTeam && (
                             <div className="mt-3 overflow-auto rounded-xl border border-blue-100 bg-white">
                               <table className="w-full min-w-[520px] text-xs">
@@ -12915,6 +12925,16 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                                       </tr>
                                     );
                                   })}
+                                  <tr className="border-t-2 border-blue-300 bg-blue-50 font-black text-blue-950">
+                                    <td className="p-2">Team Total</td>
+                                    {useHandicapScores && <td className="p-2" />}
+                                    {b.games.map((game, gameIndex) => (
+                                      <td key={`${b.seed}-team-total-game-${gameIndex}`} className="p-2 text-center">{Number(game || 0) || " - -"}</td>
+                                    ))}
+                                    <td className="p-2 text-center">{b.scratch}</td>
+                                    {useHandicapScores && <td className="p-2 text-center">{earnedHandicap}</td>}
+                                    {useHandicapScores && <td className="p-2 text-center">{b.handicap}</td>}
+                                  </tr>
                                 </tbody>
                               </table>
                             </div>
@@ -13588,6 +13608,9 @@ function StepMatchPublic({ title, match, stepScores, useHandicapScores = false, 
   const winner = winnerFromStepladderMatch(match.left, match.right, stepScores, match.id, useHandicapScores, tournamentFormat, eliminatorState);
   if (tournamentFormat === "stepladder" && eliminatorState.stepMatchScoring === "bestOf3") {
     const record = getBestOfThreeRecord(stepScores, match.id);
+    const rolloffScores = eliminatorState.stepRolloffScores || {};
+    const leftRolloff = Number(rolloffScores[`${match.id}-l`] || 0);
+    const rightRolloff = Number(rolloffScores[`${match.id}-r`] || 0);
     return (
       <div className="rounded-xl border border-blue-200 bg-white p-3 text-blue-950 shadow-sm">
         <h3 className="mb-2 font-bold text-blue-900">{title}</h3>
@@ -13603,6 +13626,11 @@ function StepMatchPublic({ title, match, stepScores, useHandicapScores = false, 
             ))}</tbody>
           </table>
         </div>
+        {leftRolloff > 0 && rightRolloff > 0 && (
+          <p className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-xs font-bold text-amber-950">
+            8th-10th Frame Rolloff: {leftRolloff} - {rightRolloff}
+          </p>
+        )}
         {title.toLowerCase().includes("championship") && winner && <p className="mt-3 bg-green-100 p-2 font-bold text-green-900">Champion: {winner.name}</p>}
       </div>
     );
@@ -16637,7 +16665,7 @@ function StepScore({ scoreKey, stepScores, updateStep, maxScore = 300 }) {
   );
 }
 
-function StepMatch({ title, match, winner, stepScores, updateStep, useHandicapScores = false, finalsScoreMode = "baker", memberScores = {}, updateStepMemberScores, matchScoring = "single" }) {
+function StepMatch({ title, match, winner, stepScores, updateStep, rolloffScores = {}, updateRolloff, useHandicapScores = false, finalsScoreMode = "baker", memberScores = {}, updateStepMemberScores, matchScoring = "single" }) {
   const playerLabel = (player) => {
     if (!player) return "TBD";
     if (!useHandicapScores) return player.name || "TBD";
@@ -16646,6 +16674,7 @@ function StepMatch({ title, match, winner, stepScores, updateStep, useHandicapSc
 
   if (matchScoring === "bestOf3") {
     const record = getBestOfThreeRecord(stepScores, match.id);
+    const needsRolloff = [1, 2, 3].every((game) => Number(stepScores[`${match.id}-g${game}-l`] || 0) > 0 && Number(stepScores[`${match.id}-g${game}-r`] || 0) > 0) && record.left === record.right;
     return (
       <div className="rounded-xl border border-blue-200 bg-white p-3 shadow-sm">
         <h3 className="mb-3 font-bold text-blue-900">{title}</h3>
@@ -16664,6 +16693,11 @@ function StepMatch({ title, match, winner, stepScores, updateStep, useHandicapSc
           </div>
         ))}
         <p className="text-xs font-bold text-blue-900">Wins: {record.left}-{record.right}</p>
+        {needsRolloff && <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-950">
+          <p className="mb-2 font-black">8th-10th Frame Rolloff Total</p>
+          {[['l', match.left], ['r', match.right]].map(([side, player]) => <div key={side} className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2"><span className="break-words font-semibold">{playerLabel(player)}</span><Input type="number" min={1} max={30} inputMode="numeric" className="h-8 w-16 text-center text-sm" value={rolloffScores[`${match.id}-${side}`] ?? ""} onChange={(event) => updateRolloff?.(`${match.id}-${side}`, clampBowlingScoreInput(event.target.value, 1, 30))} /></div>)}
+          {winner?.name && <p className="mt-2 font-bold text-green-800">Rolloff winner: {winner.name}</p>}
+        </div>}
         <p className="mt-2 text-sm text-blue-900">Winner: {winner?.name || "TBD"}</p>
       </div>
     );
@@ -16738,7 +16772,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
       <select id="stepladder-match-scoring" className="w-full rounded-lg border border-blue-300 bg-white p-2 text-sm font-semibold text-blue-950"
         value={eliminatorState.stepMatchScoring || "single"} onChange={(event) => {
           if (Object.keys(stepScores).length && !window.confirm("Changing match scoring clears the stepladder scores. Continue?")) return;
-          setEliminatorState((current) => ({ ...current, stepMatchScoring: event.target.value, stepScores: {}, stepMemberScores: {} }));
+          setEliminatorState((current) => ({ ...current, stepMatchScoring: event.target.value, stepScores: {}, stepMemberScores: {}, stepRolloffScores: {} }));
           setSavedFinalsRounds((current) => { const next = { ...current }; delete next.stepladderFinal; return next; });
         }}>
         <option value="single">{finalsScoreMode === "baker" && getTournamentTeamSize(tournamentStyle) > 1 ? "One Baker Game" : "One Game"}</option>
@@ -16798,6 +16832,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
     setGame2DraftScores((current) => ({ ...current, [seed]: value }));
   };
   const updateStep = (key, value) => setEliminatorState((current) => ({ ...current, stepScores: { ...(current.stepScores || {}), [key]: value } }));
+  const updateStepRolloff = (key, value) => setEliminatorState((current) => ({ ...current, stepRolloffScores: { ...(current.stepRolloffScores || {}), [key]: value } }));
   const updateGame1Members = (seed, nextMemberScores, value) => {
     lockGame1EntryOrder();
     setGame1DraftScores((current) => ({ ...current, [seed]: value }));
@@ -16840,6 +16875,7 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
       game1Scores: {},
       game2Scores: {},
       stepScores: {},
+      stepRolloffScores: {},
       game1MemberScores: {},
       game2MemberScores: {},
       stepMemberScores: {},
@@ -16925,6 +16961,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   winner={stepWinner1}
   stepScores={stepScores}
   updateStep={updateStep}
+  rolloffScores={eliminatorState.stepRolloffScores || {}}
+  updateRolloff={updateStepRolloff}
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
   memberScores={stepMemberScores}
@@ -16938,6 +16976,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   winner={stepWinner2}
   stepScores={stepScores}
   updateStep={updateStep}
+  rolloffScores={eliminatorState.stepRolloffScores || {}}
+  updateRolloff={updateStepRolloff}
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
   memberScores={stepMemberScores}
@@ -16951,6 +16991,8 @@ setSavedFinalsRounds, tournamentInfo = {}, tournamentFormat = "eliminator" }) {
   winner={champion}
   stepScores={stepScores}
   updateStep={updateStep}
+  rolloffScores={eliminatorState.stepRolloffScores || {}}
+  updateRolloff={updateStepRolloff}
   useHandicapScores={useHandicapScores}
   finalsScoreMode={finalsScoreMode}
   memberScores={stepMemberScores}
