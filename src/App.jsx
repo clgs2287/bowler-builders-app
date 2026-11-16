@@ -12897,16 +12897,16 @@ function StandingsPublic({ ranked, financials, useHandicapScores, tournamentForm
                           {b.isTeam && (
                             <div className="mt-3 overflow-auto rounded-xl border border-blue-100 bg-white">
                               <table className="w-full min-w-[520px] text-xs">
-                                <thead className="bg-blue-100 text-blue-950">
+                                <thead className="bg-blue-950 text-white">
                                   <tr>
-                                    <th className="p-2 text-left">Bowler</th>
-                                    {useHandicapScores && <th className="p-2 text-center">Hdcp</th>}
+                                    <th className="p-2 text-left text-white">Bowler</th>
+                                    {useHandicapScores && <th className="p-2 text-center text-white">Hdcp</th>}
                                     {b.games.map((_, gameIndex) => (
-                                      <th key={`${b.seed}-member-head-${gameIndex}`} className="p-2 text-center">G{gameIndex + 1}</th>
+                                      <th key={`${b.seed}-member-head-${gameIndex}`} className="p-2 text-center text-white">G{gameIndex + 1}</th>
                                     ))}
-                                    <th className="p-2 text-center">Scratch</th>
-                                    {useHandicapScores && <th className="p-2 text-center">Hdcp</th>}
-                                    {useHandicapScores && <th className="p-2 text-center">Total</th>}
+                                    <th className="p-2 text-center text-white">Scratch</th>
+                                    {useHandicapScores && <th className="p-2 text-center text-white">Hdcp</th>}
+                                    {useHandicapScores && <th className="p-2 text-center text-white">Total</th>}
                                   </tr>
                                 </thead>
                                 <tbody>
