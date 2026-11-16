@@ -14750,6 +14750,13 @@ const publicTitleSeriesOptions = Array.from(
 ).sort((a, b) => String(a).localeCompare(String(b)));
 
 const filteredPublicTitles = publicAllTitles.filter((title) => {
+  const titleSearch = search.trim().toLowerCase();
+  const titleNames = [
+    title.bowler,
+    getCanonicalBowlerName(title.bowler, bowlerIdentities),
+    publicRealNameFor(title.bowler),
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (titleSearch && !titleNames.includes(titleSearch)) return false;
   if (publicTitleSeriesFilter !== "All" && getHistoricalTitleSeries(title) !== publicTitleSeriesFilter) return false;
   if (publicTitleFilter === "major") return Boolean(title.major);
   if (publicTitleFilter === "fkm") return Boolean(title.eligible) && !title.major;
@@ -14995,7 +15002,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             </select>
             <Input
               className="w-full md:w-72"
-              placeholder="Search bowler..."
+              placeholder={publicStatsTab === "titles" ? "Search title holder..." : "Search bowler..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
