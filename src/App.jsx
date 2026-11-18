@@ -1043,6 +1043,12 @@ function formatPhoneNumber(value) {
   return `(${digits.slice(0, 3)})${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+function formatUsbcMemberId(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 4) return digits;
+  return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+}
+
 function reservationTournamentKey({ name = "", date = "", center = "" } = {}) {
   return [name, date, center]
     .map((part) => String(part || "").trim().toLowerCase())
@@ -8733,7 +8739,7 @@ function MultiDayEventsTab({
         const existing = profiles[key] || {};
         profiles[key] = {
           name: member.name || existing.name || "",
-          usbc: member.usbc || existing.usbc || "",
+          usbc: formatUsbcMemberId(member.usbc || existing.usbc || ""),
           average: member.average || existing.average || "",
           league: member.league || existing.league || "",
           youth: Boolean(existing.youth || member.youth),
@@ -8748,7 +8754,7 @@ function MultiDayEventsTab({
     if (!profile) return { ...member, name: nameValue };
     return {
       name: nameValue,
-      usbc: profile.usbc || "",
+      usbc: formatUsbcMemberId(profile.usbc || ""),
       average: profile.average || "",
       league: profile.league || "",
       allEvents: false,
@@ -8816,7 +8822,7 @@ function MultiDayEventsTab({
       rows[key] = rows[key] || {
         key,
         name,
-        usbc: member.usbc || "",
+        usbc: formatUsbcMemberId(member.usbc || ""),
         average: member.average || "",
         phone: member.phone || "",
         email: member.email || "",
@@ -10588,7 +10594,7 @@ function MultiDayEventsTab({
                                   <tr key={`${line.id}-member-${memberIndex}`} className="border-t">
                                     <td className="p-2 font-black text-blue-950">{memberIndex + 1}</td>
                                     <td className="p-2"><Input list="multi-day-known-bowlers" value={member.name || ""} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
-                                    <td className="p-2"><Input value={member.usbc || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", e.target.value)} /></td>
+                                    <td className="p-2"><Input value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", formatUsbcMemberId(e.target.value))} /></td>
                                     <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
                                     <td className="p-2"><Input value={member.league || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "league", e.target.value)} /></td>
                                     <td className="p-2 text-center"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "allEvents", checked)} /></td>
@@ -10843,7 +10849,7 @@ function MultiDayEventsTab({
                             <tr key={`${entry.id}-member-${memberIndex}`} className="border-t">
                               <td className="p-3 font-black text-blue-950">{memberIndex + 1}</td>
                               <td className="p-2"><Input value={member.name || ""} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
-                              <td className="p-2"><Input value={member.usbc || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", e.target.value)} /></td>
+                              <td className="p-2"><Input value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", formatUsbcMemberId(e.target.value))} /></td>
                               <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
                               <td className="p-2"><Input value={member.league || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "league", e.target.value)} placeholder="League / center" /></td>
                               <td className="p-3"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "allEvents", checked)} /></td>
