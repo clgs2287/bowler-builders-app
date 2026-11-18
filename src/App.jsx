@@ -8523,9 +8523,22 @@ function MultiDayEventsTab({
       return index === memberIndex ? { ...existing, [field]: value } : existing;
     }),
   }));
+  const insertPacketLineAfterMatchingEvent = (lines, competition) => {
+    const newLine = makePacketLine(competition);
+    const lastMatchingIndex = (lines || []).reduce(
+      (lastIndex, line, index) => (line.competition === competition ? index : lastIndex),
+      -1
+    );
+    if (lastMatchingIndex === -1) return [...(lines || []), newLine];
+    return [
+      ...(lines || []).slice(0, lastMatchingIndex + 1),
+      newLine,
+      ...(lines || []).slice(lastMatchingIndex + 1),
+    ];
+  };
   const addPacketLine = (packetId, competition) => updateRegistrationPacket(packetId, (packet) => ({
     ...packet,
-    lines: [...(packet.lines || []), makePacketLine(competition)],
+    lines: insertPacketLineAfterMatchingEvent(packet.lines, competition),
   }));
   const removePacketLine = (packetId, lineId) => updateRegistrationPacket(packetId, (packet) => ({
     ...packet,
