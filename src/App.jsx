@@ -10538,16 +10538,16 @@ function MultiDayEventsTab({
                       <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700" onClick={() => deleteRegistrationPacket(packet.id)}>Delete Packet</Button>
                     </div>
                   </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <div><Label>Captain / Submitter</Label><Input value={packet.captain || ""} onChange={(e) => updatePacketField(packet.id, "captain", e.target.value)} /></div>
-                    <div><Label>Phone</Label><Input value={packet.phone || ""} onChange={(e) => updatePacketField(packet.id, "phone", formatPhoneNumber(e.target.value))} /></div>
-                    <div><Label>Email</Label><Input value={packet.email || ""} onChange={(e) => updatePacketField(packet.id, "email", e.target.value)} /></div>
-                    <div><Label>Address</Label><Input value={packet.address || ""} onChange={(e) => updatePacketField(packet.id, "address", e.target.value)} /></div>
-                    <div><Label>City / State</Label><Input value={packet.city || ""} onChange={(e) => updatePacketField(packet.id, "city", e.target.value)} /></div>
-                    <div><Label>ZIP</Label><Input value={packet.zip || ""} onChange={(e) => updatePacketField(packet.id, "zip", e.target.value)} /></div>
-                    <div><Label>Check #</Label><Input value={packet.checkNumber || ""} onChange={(e) => updatePacketField(packet.id, "checkNumber", e.target.value)} /></div>
-                    <div><Label>Amount Paid</Label><Input type="number" value={packet.amountPaid || ""} onChange={(e) => updatePacketField(packet.id, "amountPaid", e.target.value)} /></div>
-                    <div><Label>Notes</Label><Input value={packet.notes || ""} onChange={(e) => updatePacketField(packet.id, "notes", e.target.value)} /></div>
+                  <div className="mt-4 grid gap-x-3 gap-y-2 md:grid-cols-3">
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Captain / Submitter</Label><Input className="w-full" value={packet.captain || ""} onChange={(e) => updatePacketField(packet.id, "captain", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Phone</Label><Input className="w-full" value={packet.phone || ""} onChange={(e) => updatePacketField(packet.id, "phone", formatPhoneNumber(e.target.value))} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Email</Label><Input className="w-full" value={packet.email || ""} onChange={(e) => updatePacketField(packet.id, "email", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Address</Label><Input className="w-full" value={packet.address || ""} onChange={(e) => updatePacketField(packet.id, "address", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>City / State</Label><Input className="w-full" value={packet.city || ""} onChange={(e) => updatePacketField(packet.id, "city", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>ZIP</Label><Input className="w-full" value={packet.zip || ""} onChange={(e) => updatePacketField(packet.id, "zip", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Check #</Label><Input className="w-full" value={packet.checkNumber || ""} onChange={(e) => updatePacketField(packet.id, "checkNumber", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Amount Paid</Label><Input className="w-full" type="number" value={packet.amountPaid || ""} onChange={(e) => updatePacketField(packet.id, "amountPaid", e.target.value)} /></div>
+                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-2"><Label>Notes</Label><Input className="w-full" value={packet.notes || ""} onChange={(e) => updatePacketField(packet.id, "notes", e.target.value)} /></div>
                   </div>
 
                   <div className="mt-4 space-y-3">
