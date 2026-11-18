@@ -10071,12 +10071,26 @@ function MultiDayEventsTab({
     const eventDefinitions = multiDayEvent.eventDefinitions || DEFAULT_MULTI_EVENT_DEFINITIONS;
     const enabledEvents = eventDefinitions.filter((eventType) => eventType.enabled);
     const dateRange = [multiDayEvent.startDate, multiDayEvent.endDate].filter(Boolean).join(" to ") || "Dates TBD";
-    const feeRows = [
-      { label: "Singles", perPerson: multiDayEvent.singlesPrice, bowlers: 1 },
-      { label: "Doubles", perPerson: multiDayEvent.doublesPrice, bowlers: 2 },
-      { label: "Trios", perPerson: multiDayEvent.teamPrice, bowlers: 3 },
-      { label: "All Events", perPerson: multiDayEvent.allEventsPrice, optional: true },
-    ].filter((row) => row.perPerson !== "" && row.perPerson !== undefined && row.perPerson !== null);
+    const eventFeeRows = enabledEvents.map((eventType) => {
+      const competition = eventType.competition || "Singles";
+      const isAllEvents = competition === "All Events";
+      const bowlers = isAllEvents ? 1 : Number(eventType.teamSize || (competition === "Doubles" ? 2 : competition === "Team" ? 3 : 1));
+      const perPerson = isAllEvents
+        ? multiDayEvent.allEventsPrice
+        : competition === "Doubles"
+          ? multiDayEvent.doublesPrice
+          : competition === "Team"
+            ? multiDayEvent.teamPrice
+            : multiDayEvent.singlesPrice;
+      return {
+        label: competition === "Team" ? "Trios" : eventType.label,
+        competition: competition === "Team" ? "Trios" : competition,
+        games: eventType.games || 3,
+        perPerson,
+        bowlers,
+        optional: isAllEvents,
+      };
+    }).filter((row) => row.perPerson !== "" && row.perPerson !== undefined && row.perPerson !== null);
     const divisionList = [
       scoringDivisions.scratch ? "Scratch" : "",
       scoringDivisions.handicap ? "Handicap" : "",
@@ -10150,21 +10164,14 @@ function MultiDayEventsTab({
 
             <aside className="space-y-4">
               <div className="rounded-2xl border border-blue-200 bg-white p-4">
-                <h3 className="font-black text-blue-950">Events</h3>
+                <h3 className="font-black text-blue-950">Events &amp; Entry Fees</h3>
                 <div className="mt-3 grid gap-2">
-                  {enabledEvents.map((eventType) => <div key={`multi-info-event-${eventType.id}`} className="rounded-xl border border-blue-100 bg-blue-50 p-3"><p className="font-black text-blue-950">{eventType.label}</p><p className="text-xs font-semibold text-blue-700">{eventType.competition} - {eventType.games || 3} games</p></div>)}
-                  {enabledEvents.length === 0 && <p className="text-sm font-semibold text-blue-700">Events will be posted here.</p>}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-blue-200 bg-white p-4">
-                <h3 className="font-black text-blue-950">Entry Fees</h3>
-                <div className="mt-3 divide-y divide-blue-100">
-                  {feeRows.map((row) => {
+                  {eventFeeRows.map((row) => {
                     const perPerson = Number(row.perPerson || 0);
                     const total = perPerson * Number(row.bowlers || 1);
-                    return <div key={`multi-info-fee-${row.label}`} className="flex items-center justify-between gap-3 py-2 text-sm"><div><p className="font-semibold text-blue-800">{row.label}</p><p className="text-xs font-medium text-blue-600">{currency(perPerson)} per person</p></div><span className="whitespace-nowrap text-right font-black text-blue-950">{row.optional ? `${currency(perPerson)} add-on` : `${currency(total)} total`}</span></div>;
+                    return <div key={`multi-info-event-fee-${row.label}`} className="rounded-xl border border-blue-100 bg-blue-50 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-blue-950">{row.label}</p><p className="text-xs font-semibold text-blue-700">{row.competition} - {row.games} games</p></div><span className="whitespace-nowrap text-right text-sm font-black text-blue-950">{row.optional ? `${currency(perPerson)} add-on` : `${currency(total)} total`}</span></div><p className="mt-1 text-xs font-medium text-blue-600">{currency(perPerson)} per person{row.optional ? " optional" : ""}</p></div>;
                   })}
-                  {feeRows.length === 0 && <p className="text-sm font-semibold text-blue-700">Fees will be posted here.</p>}
+                  {eventFeeRows.length === 0 && <p className="text-sm font-semibold text-blue-700">Events and fees will be posted here.</p>}
                 </div>
               </div>
               <div className="rounded-2xl border border-blue-200 bg-white p-4">
