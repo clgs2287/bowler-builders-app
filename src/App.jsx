@@ -10074,7 +10074,6 @@ function MultiDayEventsTab({
     const eventFeeRows = enabledEvents.map((eventType) => {
       const competition = eventType.competition || "Singles";
       const isAllEvents = competition === "All Events";
-      const bowlers = isAllEvents ? 1 : Number(eventType.teamSize || (competition === "Doubles" ? 2 : competition === "Team" ? 3 : 1));
       const perPerson = isAllEvents
         ? multiDayEvent.allEventsPrice
         : competition === "Doubles"
@@ -10087,8 +10086,6 @@ function MultiDayEventsTab({
         competition: competition === "Team" ? "Trios" : competition,
         games: eventType.games || 3,
         perPerson,
-        bowlers,
-        optional: isAllEvents,
       };
     }).filter((row) => row.perPerson !== "" && row.perPerson !== undefined && row.perPerson !== null);
     const divisionList = [
@@ -10168,8 +10165,7 @@ function MultiDayEventsTab({
                 <div className="mt-3 grid gap-2">
                   {eventFeeRows.map((row) => {
                     const perPerson = Number(row.perPerson || 0);
-                    const total = perPerson * Number(row.bowlers || 1);
-                    return <div key={`multi-info-event-fee-${row.label}`} className="rounded-xl border border-blue-100 bg-blue-50 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-blue-950">{row.label}</p><p className="text-xs font-semibold text-blue-700">{row.competition} - {row.games} games</p></div><span className="whitespace-nowrap text-right text-sm font-black text-blue-950">{row.optional ? `${currency(perPerson)} add-on` : `${currency(total)} total`}</span></div><p className="mt-1 text-xs font-medium text-blue-600">{currency(perPerson)} per person{row.optional ? " optional" : ""}</p></div>;
+                    return <div key={`multi-info-event-fee-${row.label}`} className="rounded-xl border border-blue-100 bg-blue-50 p-3"><p className="font-black text-blue-950">{row.label}</p><p className="text-xs font-semibold text-blue-700">{row.competition} - {row.games} games</p><p className="mt-1 text-xs font-medium text-blue-600">{currency(perPerson)} per person</p></div>;
                   })}
                   {eventFeeRows.length === 0 && <p className="text-sm font-semibold text-blue-700">Events and fees will be posted here.</p>}
                 </div>
