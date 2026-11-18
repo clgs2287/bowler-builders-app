@@ -8337,6 +8337,9 @@ function makeMultiDaySquadEntry(competition = "Singles") {
     memberDetails: Array.from({ length: memberCount }, () => ({
       name: "",
       usbc: "",
+      lastSeasonAverage: "",
+      lastSeasonGames: "",
+      lastSeasonCenter: "",
       average: "",
       league: "",
       allEvents: false,
@@ -8479,7 +8482,7 @@ function MultiDayEventsTab({
       firstChoiceSquadId: "",
       secondChoiceSquadId: "",
       paid: true,
-      members: Array.from({ length: memberCount }, () => ({ name: "", usbc: "", average: "", league: "", allEvents: false, youth: false })),
+      members: Array.from({ length: memberCount }, () => ({ name: "", usbc: "", lastSeasonAverage: "", lastSeasonGames: "", lastSeasonCenter: "", average: "", league: "", allEvents: false, youth: false })),
     };
   };
   const addRegistrationPacket = () => {
@@ -8740,6 +8743,9 @@ function MultiDayEventsTab({
         profiles[key] = {
           name: member.name || existing.name || "",
           usbc: formatUsbcMemberId(member.usbc || existing.usbc || ""),
+          lastSeasonAverage: member.lastSeasonAverage || existing.lastSeasonAverage || "",
+          lastSeasonGames: member.lastSeasonGames || existing.lastSeasonGames || "",
+          lastSeasonCenter: member.lastSeasonCenter || existing.lastSeasonCenter || "",
           average: member.average || existing.average || "",
           league: member.league || existing.league || "",
           youth: Boolean(existing.youth || member.youth),
@@ -8755,6 +8761,9 @@ function MultiDayEventsTab({
     return {
       name: nameValue,
       usbc: formatUsbcMemberId(profile.usbc || ""),
+      lastSeasonAverage: profile.lastSeasonAverage || "",
+      lastSeasonGames: profile.lastSeasonGames || "",
+      lastSeasonCenter: profile.lastSeasonCenter || "",
       average: profile.average || "",
       league: profile.league || "",
       allEvents: false,
@@ -9476,7 +9485,7 @@ function MultiDayEventsTab({
       ...entry,
       competition,
       members: Array.from({ length: count }, (_, index) => entry.members?.[index] || entry.memberDetails?.[index]?.name || ""),
-      memberDetails: Array.from({ length: count }, (_, index) => entry.memberDetails?.[index] || { name: entry.members?.[index] || "", usbc: "", average: "", league: "", allEvents: false, youth: false }),
+      memberDetails: Array.from({ length: count }, (_, index) => entry.memberDetails?.[index] || { name: entry.members?.[index] || "", usbc: "", lastSeasonAverage: "", lastSeasonGames: "", lastSeasonCenter: "", average: "", league: "", allEvents: false, youth: false }),
     };
   };
   const entryFeeEstimate = (entry, squad = activeSquad) => {
@@ -9810,6 +9819,9 @@ function MultiDayEventsTab({
       memberDetails: members.map((member) => ({
         name: member.name || "",
         usbc: member.usbc || "",
+        lastSeasonAverage: member.lastSeasonAverage || "",
+        lastSeasonGames: member.lastSeasonGames || "",
+        lastSeasonCenter: member.lastSeasonCenter || "",
         average: member.average || "",
         league: member.league || "",
         allEvents: Boolean(member.allEvents),
@@ -10570,7 +10582,7 @@ function MultiDayEventsTab({
                                 onChange={(e) => updatePacketLine(packet.id, line.id, (current) => {
                                   const nextCompetition = e.target.value;
                                   const nextCount = nextCompetition === "Singles" ? 1 : nextCompetition === "Doubles" ? 2 : Number(multiDayEvent.teamSize || 3);
-                                  const nextMembers = Array.from({ length: nextCount }, (_, index) => current.members?.[index] || { name: "", usbc: "", average: "", league: "", allEvents: false, youth: false });
+                                  const nextMembers = Array.from({ length: nextCount }, (_, index) => current.members?.[index] || { name: "", usbc: "", lastSeasonAverage: "", lastSeasonGames: "", lastSeasonCenter: "", average: "", league: "", allEvents: false, youth: false });
                                   return { ...current, competition: nextCompetition, members: nextMembers };
                                 })}
                                 className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"
@@ -10587,16 +10599,18 @@ function MultiDayEventsTab({
                             <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700" onClick={() => removePacketLine(packet.id, line.id)}>Delete</Button>
                           </div>
                           <div className="mt-3 overflow-auto rounded-xl border border-blue-100 bg-white">
-                            <table className="w-full min-w-[820px] text-sm">
-                              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Line</th><th className="p-2 text-left">Bowler</th><th className="p-2 text-left">USBC #</th><th className="p-2 text-left">Avg</th><th className="p-2 text-left">League / Center</th><th className="p-2 text-center">A/E</th><th className="p-2 text-center">Youth</th></tr></thead>
+                            <table className="w-full min-w-[1120px] text-sm">
+                              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Line</th><th className="p-2 text-left">Bowler</th><th className="p-2 text-left">USBC #</th><th className="p-2 text-left">Last Season Avg / Games</th><th className="p-2 text-left">Last Season Center</th><th className="p-2 text-left">Current Avg 1/1/27</th><th className="p-2 text-left">Current League / Center</th><th className="p-2 text-center">A/E</th><th className="p-2 text-center">Youth</th></tr></thead>
                               <tbody>
                                 {members.map((member, memberIndex) => (
                                   <tr key={`${line.id}-member-${memberIndex}`} className="border-t">
                                     <td className="p-2 font-black text-blue-950">{memberIndex + 1}</td>
                                     <td className="p-2"><Input list="multi-day-known-bowlers" value={member.name || ""} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
                                     <td className="p-2"><Input value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", formatUsbcMemberId(e.target.value))} /></td>
-                                    <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
-                                    <td className="p-2"><Input value={member.league || ""} onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "league", e.target.value)} /></td>
+                                    <td className="p-2"><div className="grid grid-cols-2 gap-2"><Input type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonAverage", e.target.value)} /><Input type="number" value={member.lastSeasonGames || ""} placeholder="Games" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonGames", e.target.value)} /></div></td>
+                                    <td className="p-2"><Input value={member.lastSeasonCenter || ""} placeholder="Center" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonCenter", e.target.value)} /></td>
+                                    <td className="p-2"><Input type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
+                                    <td className="p-2"><Input value={member.league || ""} placeholder="League / center" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "league", e.target.value)} /></td>
                                     <td className="p-2 text-center"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "allEvents", checked)} /></td>
                                     <td className="p-2 text-center"><Switch checked={Boolean(member.youth)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "youth", checked)} /></td>
                                   </tr>
@@ -10832,14 +10846,16 @@ function MultiDayEventsTab({
                     )}
 
                     <div className="mt-4 overflow-auto rounded-2xl border border-blue-100">
-                      <table className="w-full min-w-[920px] text-sm">
+                      <table className="w-full min-w-[1200px] text-sm">
                         <thead className="bg-blue-800 text-white">
                           <tr>
                             <th className="p-3 text-left">Line</th>
                             <th className="p-3 text-left">Bowler</th>
                             <th className="p-3 text-left">USBC #</th>
-                            <th className="p-3 text-left">Average</th>
-                            <th className="p-3 text-left">League / Center</th>
+                            <th className="p-3 text-left">Last Season Avg / Games</th>
+                            <th className="p-3 text-left">Last Season Center</th>
+                            <th className="p-3 text-left">Current Avg 1/1/27</th>
+                            <th className="p-3 text-left">Current League / Center</th>
                             <th className="p-3 text-left">All Events</th>
                             <th className="p-3 text-left">Youth</th>
                           </tr>
@@ -10850,7 +10866,9 @@ function MultiDayEventsTab({
                               <td className="p-3 font-black text-blue-950">{memberIndex + 1}</td>
                               <td className="p-2"><Input value={member.name || ""} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
                               <td className="p-2"><Input value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", formatUsbcMemberId(e.target.value))} /></td>
-                              <td className="p-2"><Input type="number" value={member.average || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
+                              <td className="p-2"><div className="grid grid-cols-2 gap-2"><Input type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonAverage", e.target.value)} /><Input type="number" value={member.lastSeasonGames || ""} placeholder="Games" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonGames", e.target.value)} /></div></td>
+                              <td className="p-2"><Input value={member.lastSeasonCenter || ""} placeholder="Center" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonCenter", e.target.value)} /></td>
+                              <td className="p-2"><Input type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
                               <td className="p-2"><Input value={member.league || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "league", e.target.value)} placeholder="League / center" /></td>
                               <td className="p-3"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "allEvents", checked)} /></td>
                               <td className="p-3"><Switch checked={Boolean(member.youth)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "youth", checked)} /></td>
