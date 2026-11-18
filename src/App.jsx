@@ -8621,8 +8621,20 @@ function MultiDayEventsTab({
       return { ...detail, name };
     });
   };
+  const tournamentAverageForMember = (member = {}) => {
+    const lastSeasonAverage = Number(member.lastSeasonAverage || 0);
+    const currentAverage = Number(member.average || 0);
+
+    if (lastSeasonAverage > 0 && currentAverage > 0) {
+      return Math.abs(currentAverage - lastSeasonAverage) >= 10
+        ? currentAverage
+        : lastSeasonAverage;
+    }
+
+    return lastSeasonAverage || currentAverage || 0;
+  };
   const handicapPerGame = (member = {}) => {
-    const average = Number(member.average || 0);
+    const average = tournamentAverageForMember(member);
     const base = Number(multiDayEvent.handicapBase || 0);
     const percent = Number(multiDayEvent.handicapPercent || 0);
     if (!average || !base || !percent || average >= base) return 0;
@@ -8638,7 +8650,7 @@ function MultiDayEventsTab({
   const memberScratchSeries = (entry, memberIndex) =>
     [0, 1, 2].reduce((sum, gameIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
   const entryAverageTotal = (entry, squad = activeSquad) =>
-    entryMembers(entry, squad).reduce((sum, member) => sum + Number(member.average || 0), 0);
+    entryMembers(entry, squad).reduce((sum, member) => sum + tournamentAverageForMember(member), 0);
   const entryGameScratchTotal = (entry, gameIndex, squad = activeSquad) =>
     entryMembers(entry, squad).reduce((sum, _member, memberIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
   const entryScratchTotal = (entry, squad = activeSquad) =>
@@ -10206,7 +10218,7 @@ function MultiDayEventsTab({
                 <div><Label>Team Size</Label><select value={multiDayEvent.teamSize || 3} onChange={(e) => updateEvent("teamSize", Number(e.target.value))} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value={3}>3 Person Teams / Trios</option><option value={4}>4 Person Teams</option><option value={5}>5 Person Teams</option></select></div>
                 <div><Label>Squad Format</Label><select value={multiDayEvent.squadMode || "fixed"} onChange={(e) => updateEvent("squadMode", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="fixed">Each squad is one event type</option><option value="mixed">Any event in any squad</option></select></div>
                 <div><Label>Max Bowlers Per Squad</Label><Input type="number" value={multiDayEvent.maxBowlersPerSquad || ""} onChange={(e) => updateEvent("maxBowlersPerSquad", e.target.value)} /></div>
-                <div><Label>Handicap</Label><div className="grid max-w-xs grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1fr)] items-center gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="100" /><span className="text-sm font-black text-blue-800">% of</span><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="240" /></div></div>
+                <div><Label>Handicap</Label><div className="grid max-w-xs grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1fr)] items-center gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="100" /><span className="text-sm font-black text-blue-800">% of</span><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="240" /></div><p className="mt-2 max-w-sm text-xs font-medium leading-5 text-blue-700">Tournament average and handicap use last season's average unless the current average differs by 10 pins or more.</p></div>
               </div>
             </div>
 
