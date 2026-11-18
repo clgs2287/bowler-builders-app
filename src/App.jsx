@@ -8626,7 +8626,7 @@ function MultiDayEventsTab({
     const currentAverage = Number(member.average || 0);
 
     if (lastSeasonAverage > 0 && currentAverage > 0) {
-      return Math.abs(currentAverage - lastSeasonAverage) >= 10
+      return currentAverage - lastSeasonAverage >= 10
         ? currentAverage
         : lastSeasonAverage;
     }
@@ -10218,7 +10218,7 @@ function MultiDayEventsTab({
                 <div><Label>Team Size</Label><select value={multiDayEvent.teamSize || 3} onChange={(e) => updateEvent("teamSize", Number(e.target.value))} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value={3}>3 Person Teams / Trios</option><option value={4}>4 Person Teams</option><option value={5}>5 Person Teams</option></select></div>
                 <div><Label>Squad Format</Label><select value={multiDayEvent.squadMode || "fixed"} onChange={(e) => updateEvent("squadMode", e.target.value)} className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950"><option value="fixed">Each squad is one event type</option><option value="mixed">Any event in any squad</option></select></div>
                 <div><Label>Max Bowlers Per Squad</Label><Input type="number" value={multiDayEvent.maxBowlersPerSquad || ""} onChange={(e) => updateEvent("maxBowlersPerSquad", e.target.value)} /></div>
-                <div><Label>Handicap</Label><div className="grid max-w-xs grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1fr)] items-center gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="100" /><span className="text-sm font-black text-blue-800">% of</span><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="240" /></div><p className="mt-2 max-w-sm text-xs font-medium leading-5 text-blue-700">Tournament average and handicap use last season's average unless the current average differs by 10 pins or more.</p></div>
+                <div><Label>Handicap</Label><div className="grid max-w-xs grid-cols-[minmax(0,0.8fr)_auto_minmax(0,1fr)] items-center gap-2"><Input type="number" value={multiDayEvent.handicapPercent || ""} onChange={(e) => updateEvent("handicapPercent", e.target.value)} placeholder="100" /><span className="text-sm font-black text-blue-800">% of</span><Input type="number" value={multiDayEvent.handicapBase || ""} onChange={(e) => updateEvent("handicapBase", e.target.value)} placeholder="240" /></div><p className="mt-2 max-w-sm text-xs font-medium leading-5 text-blue-700">Tournament average and handicap use last season's average unless the current average is 10 pins or more higher.</p></div>
               </div>
             </div>
 
