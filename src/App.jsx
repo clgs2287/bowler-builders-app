@@ -10072,11 +10072,11 @@ function MultiDayEventsTab({
     const enabledEvents = eventDefinitions.filter((eventType) => eventType.enabled);
     const dateRange = [multiDayEvent.startDate, multiDayEvent.endDate].filter(Boolean).join(" to ") || "Dates TBD";
     const feeRows = [
-      { label: "Singles", value: multiDayEvent.singlesPrice },
-      { label: "Doubles", value: multiDayEvent.doublesPrice },
-      { label: `${multiDayEvent.teamSize || 3}-Person Team`, value: multiDayEvent.teamPrice },
-      { label: "All Events", value: multiDayEvent.allEventsPrice },
-    ].filter((row) => row.value !== "" && row.value !== undefined && row.value !== null);
+      { label: "Singles", perPerson: multiDayEvent.singlesPrice, bowlers: 1 },
+      { label: "Doubles", perPerson: multiDayEvent.doublesPrice, bowlers: 2 },
+      { label: "Trios", perPerson: multiDayEvent.teamPrice, bowlers: 3 },
+      { label: "All Events", perPerson: multiDayEvent.allEventsPrice, optional: true },
+    ].filter((row) => row.perPerson !== "" && row.perPerson !== undefined && row.perPerson !== null);
     const divisionList = [
       scoringDivisions.scratch ? "Scratch" : "",
       scoringDivisions.handicap ? "Handicap" : "",
@@ -10159,7 +10159,11 @@ function MultiDayEventsTab({
               <div className="rounded-2xl border border-blue-200 bg-white p-4">
                 <h3 className="font-black text-blue-950">Entry Fees</h3>
                 <div className="mt-3 divide-y divide-blue-100">
-                  {feeRows.map((row) => <div key={`multi-info-fee-${row.label}`} className="flex items-center justify-between py-2 text-sm"><span className="font-semibold text-blue-800">{row.label}</span><span className="font-black text-blue-950">{currency(row.value)}</span></div>)}
+                  {feeRows.map((row) => {
+                    const perPerson = Number(row.perPerson || 0);
+                    const total = perPerson * Number(row.bowlers || 1);
+                    return <div key={`multi-info-fee-${row.label}`} className="flex items-center justify-between gap-3 py-2 text-sm"><div><p className="font-semibold text-blue-800">{row.label}</p><p className="text-xs font-medium text-blue-600">{currency(perPerson)} per person</p></div><span className="whitespace-nowrap text-right font-black text-blue-950">{row.optional ? `${currency(perPerson)} add-on` : `${currency(total)} total`}</span></div>;
+                  })}
                   {feeRows.length === 0 && <p className="text-sm font-semibold text-blue-700">Fees will be posted here.</p>}
                 </div>
               </div>
