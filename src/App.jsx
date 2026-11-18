@@ -10599,20 +10599,19 @@ function MultiDayEventsTab({
                             <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700" onClick={() => removePacketLine(packet.id, line.id)}>Delete</Button>
                           </div>
                           <div className="mt-3 overflow-auto rounded-xl border border-blue-100 bg-white">
-                            <table className="w-full min-w-[1120px] text-sm">
-                              <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Line</th><th className="p-2 text-left">Bowler</th><th className="p-2 text-left">USBC #</th><th className="p-2 text-left">Last Season Avg / Games</th><th className="p-2 text-left">Last Season Center</th><th className="p-2 text-left">Current Avg 1/1/27</th><th className="p-2 text-left">Current League / Center</th><th className="p-2 text-center">A/E</th><th className="p-2 text-center">Youth</th></tr></thead>
+                            <table className="w-full table-fixed text-xs md:text-sm">
+                              <thead className="bg-blue-800 text-white"><tr><th className="w-10 p-1.5 text-left">#</th><th className="w-[22%] p-1.5 text-left">Bowler</th><th className="w-[12%] p-1.5 text-left">USBC #</th><th className="w-[18%] p-1.5 text-left">Last Season<br /><span className="font-medium">Avg / Gms</span></th><th className="w-[12%] p-1.5 text-left">Current<br /><span className="font-medium">Avg 1/1/27</span></th><th className="w-[20%] p-1.5 text-left">Current Center</th><th className="w-12 p-1.5 text-center">A/E</th><th className="w-12 p-1.5 text-center">Youth</th></tr></thead>
                               <tbody>
                                 {members.map((member, memberIndex) => (
                                   <tr key={`${line.id}-member-${memberIndex}`} className="border-t">
-                                    <td className="p-2 font-black text-blue-950">{memberIndex + 1}</td>
-                                    <td className="p-2"><Input list="multi-day-known-bowlers" value={member.name || ""} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
-                                    <td className="p-2"><Input value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", formatUsbcMemberId(e.target.value))} /></td>
-                                    <td className="p-2"><div className="grid grid-cols-2 gap-2"><Input type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonAverage", e.target.value)} /><Input type="number" value={member.lastSeasonGames || ""} placeholder="Games" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonGames", e.target.value)} /></div></td>
-                                    <td className="p-2"><Input value={member.lastSeasonCenter || ""} placeholder="Center" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonCenter", e.target.value)} /></td>
-                                    <td className="p-2"><Input type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
-                                    <td className="p-2"><Input value={member.league || ""} placeholder="League / center" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "league", e.target.value)} /></td>
-                                    <td className="p-2 text-center"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "allEvents", checked)} /></td>
-                                    <td className="p-2 text-center"><Switch checked={Boolean(member.youth)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "youth", checked)} /></td>
+                                    <td className="p-1.5 font-black text-blue-950">{memberIndex + 1}</td>
+                                    <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" list="multi-day-known-bowlers" value={member.name || ""} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
+                                    <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", formatUsbcMemberId(e.target.value))} /></td>
+                                    <td className="p-1.5"><div className="grid grid-cols-2 gap-1"><Input className="w-full min-w-0 px-1.5 py-1 text-xs" type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonAverage", e.target.value)} /><Input className="w-full min-w-0 px-1.5 py-1 text-xs" type="number" value={member.lastSeasonGames || ""} placeholder="Gms" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonGames", e.target.value)} /></div></td>
+                                    <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
+                                    <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.league || ""} placeholder="Center" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "league", e.target.value)} /></td>
+                                    <td className="p-1.5 text-center"><Switch compact checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "allEvents", checked)} /></td>
+                                    <td className="p-1.5 text-center"><Switch compact checked={Boolean(member.youth)} onCheckedChange={(checked) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "youth", checked)} /></td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -10846,32 +10845,30 @@ function MultiDayEventsTab({
                     )}
 
                     <div className="mt-4 overflow-auto rounded-2xl border border-blue-100">
-                      <table className="w-full min-w-[1200px] text-sm">
+                      <table className="w-full table-fixed text-xs md:text-sm">
                         <thead className="bg-blue-800 text-white">
                           <tr>
-                            <th className="p-3 text-left">Line</th>
-                            <th className="p-3 text-left">Bowler</th>
-                            <th className="p-3 text-left">USBC #</th>
-                            <th className="p-3 text-left">Last Season Avg / Games</th>
-                            <th className="p-3 text-left">Last Season Center</th>
-                            <th className="p-3 text-left">Current Avg 1/1/27</th>
-                            <th className="p-3 text-left">Current League / Center</th>
-                            <th className="p-3 text-left">All Events</th>
-                            <th className="p-3 text-left">Youth</th>
+                            <th className="w-10 p-1.5 text-left">#</th>
+                            <th className="w-[22%] p-1.5 text-left">Bowler</th>
+                            <th className="w-[12%] p-1.5 text-left">USBC #</th>
+                            <th className="w-[18%] p-1.5 text-left">Last Season<br /><span className="font-medium">Avg / Gms</span></th>
+                            <th className="w-[12%] p-1.5 text-left">Current<br /><span className="font-medium">Avg 1/1/27</span></th>
+                            <th className="w-[20%] p-1.5 text-left">Current Center</th>
+                            <th className="w-12 p-1.5 text-center">A/E</th>
+                            <th className="w-12 p-1.5 text-center">Youth</th>
                           </tr>
                         </thead>
                         <tbody>
                           {members.map((member, memberIndex) => (
                             <tr key={`${entry.id}-member-${memberIndex}`} className="border-t">
-                              <td className="p-3 font-black text-blue-950">{memberIndex + 1}</td>
-                              <td className="p-2"><Input value={member.name || ""} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
-                              <td className="p-2"><Input value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", formatUsbcMemberId(e.target.value))} /></td>
-                              <td className="p-2"><div className="grid grid-cols-2 gap-2"><Input type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonAverage", e.target.value)} /><Input type="number" value={member.lastSeasonGames || ""} placeholder="Games" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonGames", e.target.value)} /></div></td>
-                              <td className="p-2"><Input value={member.lastSeasonCenter || ""} placeholder="Center" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonCenter", e.target.value)} /></td>
-                              <td className="p-2"><Input type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
-                              <td className="p-2"><Input value={member.league || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "league", e.target.value)} placeholder="League / center" /></td>
-                              <td className="p-3"><Switch checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "allEvents", checked)} /></td>
-                              <td className="p-3"><Switch checked={Boolean(member.youth)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "youth", checked)} /></td>
+                              <td className="p-1.5 font-black text-blue-950">{memberIndex + 1}</td>
+                              <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.name || ""} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
+                              <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.usbc || ""} inputMode="numeric" placeholder="####-####" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", formatUsbcMemberId(e.target.value))} /></td>
+                              <td className="p-1.5"><div className="grid grid-cols-2 gap-1"><Input className="w-full min-w-0 px-1.5 py-1 text-xs" type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonAverage", e.target.value)} /><Input className="w-full min-w-0 px-1.5 py-1 text-xs" type="number" value={member.lastSeasonGames || ""} placeholder="Gms" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonGames", e.target.value)} /></div></td>
+                              <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
+                              <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.league || ""} onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "league", e.target.value)} placeholder="Center" /></td>
+                              <td className="p-1.5 text-center"><Switch compact checked={Boolean(member.allEvents)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "allEvents", checked)} /></td>
+                              <td className="p-1.5 text-center"><Switch compact checked={Boolean(member.youth)} onCheckedChange={(checked) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "youth", checked)} /></td>
                             </tr>
                           ))}
                         </tbody>
