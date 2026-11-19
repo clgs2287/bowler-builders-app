@@ -1049,6 +1049,11 @@ function formatUsbcMemberId(value) {
   return `${digits.slice(0, 4)}-${digits.slice(4)}`;
 }
 
+function usbcMemberIdKey(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
+  return digits.length >= 5 ? digits : "";
+}
+
 function reservationTournamentKey({ name = "", date = "", center = "" } = {}) {
   return [name, date, center]
     .map((part) => String(part || "").trim().toLowerCase())
@@ -8351,6 +8356,8 @@ function MultiDayEventsTab({
   mode,
   multiDayEvent,
   setMultiDayEvent,
+  bowlerIdentities = [],
+  setBowlerIdentities = () => {},
   isAdminMode = false,
   workingSquadId = "",
   setWorkingSquadId = () => {},
@@ -8527,7 +8534,9 @@ function MultiDayEventsTab({
     ...current,
     members: Array.from({ length: memberCount }, (_, index) => {
       const existing = current.members?.[index] || {};
-      return index === memberIndex ? { ...existing, [field]: value } : existing;
+      if (index !== memberIndex) return existing;
+      const nextMember = { ...existing, [field]: value };
+      return field === "usbc" ? applyUsbcProfile(nextMember, value) : nextMember;
     }),
   }));
   const insertPacketLineAfterMatchingEvent = (lines, competition) => {
@@ -8763,6 +8772,57 @@ function MultiDayEventsTab({
     return profiles;
   }, {});
   const knownBowlerOptions = Object.values(knownBowlerProfiles).sort((a, b) => a.name.localeCompare(b.name));
+  const usbcProfilesById = new Map(
+    (bowlerIdentities || [])
+      .filter((identity) => usbcMemberIdKey(identity.usbcMemberId || identity.usbc))
+      .map((identity) => [usbcMemberIdKey(identity.usbcMemberId || identity.usbc), identity])
+  );
+  const usbcProfileName = (profile = {}) => String(profile.profileName || profile.nickname || profile.realName || "").trim();
+  const applyUsbcProfile = (member = {}, value = "") => {
+    const usbc = formatUsbcMemberId(value);
+    const profile = usbcProfilesById.get(usbcMemberIdKey(usbc));
+    return {
+      ...member,
+      usbc,
+      name: member.name || usbcProfileName(profile),
+    };
+  };
+  useEffect(() => {
+    const observedMembers = [
+      ...(multiDayEvent.registrationPackets || []).flatMap((packet) => (packet.lines || []).flatMap((line) => line.members || [])),
+      ...(multiDayEvent.squads || []).flatMap((squad) => (squad.entries || []).flatMap((entry) => entry.memberDetails || [])),
+    ].filter((member) => usbcMemberIdKey(member?.usbc) && String(member?.name || "").trim());
+
+    if (!observedMembers.length) return;
+
+    setBowlerIdentities((current) => {
+      let changed = false;
+      let next = [...(current || [])];
+      observedMembers.forEach((member) => {
+        const memberId = usbcMemberIdKey(member.usbc);
+        const name = String(member.name || "").trim();
+        const existingById = next.find((identity) => usbcMemberIdKey(identity.usbcMemberId || identity.usbc) === memberId);
+        const existingByName = findBowlerIdentityForName(next, name);
+        const existing = existingById || existingByName;
+
+        if (existing) {
+          if (usbcMemberIdKey(existing.usbcMemberId || existing.usbc) === memberId) return;
+          next = next.map((identity) => identity === existing ? { ...identity, usbcMemberId: formatUsbcMemberId(member.usbc) } : identity);
+          changed = true;
+          return;
+        }
+
+        next.push({
+          id: `usbc-profile-${memberId}`,
+          profileType: "usbc",
+          usbcMemberId: formatUsbcMemberId(member.usbc),
+          profileName: name,
+        });
+        changed = true;
+      });
+      return changed ? next : current;
+    });
+  }, [multiDayEvent.registrationPackets, multiDayEvent.squads, setBowlerIdentities]);
   const backfillKnownBowler = (member = {}, nameValue = "") => {
     const profile = knownBowlerProfiles[bowlerIdentityKey(nameValue)];
     if (!profile) return { ...member, name: nameValue };
@@ -8793,13 +8853,14 @@ function MultiDayEventsTab({
   });
   const updateEntryMemberDetail = (squadId, entryId, memberIndex, field, value) => updateSquadEntry(squadId, entryId, (current) => {
     const memberDetails = [...(current.memberDetails || [])];
-    memberDetails[memberIndex] = {
+    const nextMember = {
       ...(memberDetails[memberIndex] || {}),
       name: current.members?.[memberIndex] || memberDetails[memberIndex]?.name || "",
       [field]: value,
     };
+    memberDetails[memberIndex] = field === "usbc" ? applyUsbcProfile(nextMember, value) : nextMember;
     const members = [...(current.members || [])];
-    if (field === "name") members[memberIndex] = value;
+    if (field === "name" || field === "usbc") members[memberIndex] = memberDetails[memberIndex].name || "";
     return { ...current, members, memberDetails };
   });
   const updateMultiDayBowlerProfileDetail = (bowlerName, field, value) => {
@@ -22420,7 +22481,7 @@ else current.nonFkmTitles += titleCount;
   const identitySortLabel = (column) =>
     identitySort.column === column ? (identitySort.direction === "asc" ? " ?" : " ?") : "";
 
-  const sortedBowlerIdentities = [...(bowlerIdentities || [])].sort((a, b) => {
+  const sortedBowlerIdentities = [...(bowlerIdentities || [])].filter((identity) => identity.profileType !== "usbc").sort((a, b) => {
     const direction = identitySort.direction === "asc" ? 1 : -1;
     const valueFor = (identity) => {
       if (identitySort.column === "aliases") return (identity.aliases || []).join(", ");
@@ -26304,57 +26365,57 @@ const [multiDayWorkingSquadId, setMultiDayWorkingSquadId] = useState("");
 )}
 {activeTab === "multiDaySetup" && (
   <AppErrorBoundary key="multiDaySetup">
-    <MultiDayEventsTab mode="setup" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="setup" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDaySquads" && (
   <AppErrorBoundary key="multiDaySquads">
-    <MultiDayEventsTab mode="setup" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="setup" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayInfo" && (
   <AppErrorBoundary key="multiDayInfo">
-    <MultiDayEventsTab mode="info" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="info" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayRegistration" && (
   <AppErrorBoundary key="multiDayRegistration">
-    <MultiDayEventsTab mode="registration" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="registration" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayFinance" && (
   <AppErrorBoundary key="multiDayFinance">
-    <MultiDayEventsTab mode="finance" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="finance" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayCheckIn" && (
   <AppErrorBoundary key="multiDayCheckIn">
-    <MultiDayEventsTab mode="checkIn" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="checkIn" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDaySideAction" && (
   <AppErrorBoundary key="multiDaySideAction">
-    <MultiDayEventsTab mode="sideAction" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="sideAction" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayPublicSideAction" && (
   <AppErrorBoundary key="multiDayPublicSideAction">
-    <MultiDayEventsTab mode="publicSideAction" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="publicSideAction" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayScores" && (
   <AppErrorBoundary key="multiDayScores">
-    <MultiDayEventsTab mode="scores" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="scores" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayLeaderboards" && (
   <AppErrorBoundary key="multiDayLeaderboards">
-    <MultiDayEventsTab mode="leaderboards" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="leaderboards" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayArchive" && (
   <AppErrorBoundary key="multiDayArchive">
-    <MultiDayEventsTab mode="archive" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
+    <MultiDayEventsTab mode="archive" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
  {activeTab === "bracket" && (
