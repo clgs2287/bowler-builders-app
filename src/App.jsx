@@ -8781,10 +8781,16 @@ function MultiDayEventsTab({
   const applyUsbcProfile = (member = {}, value = "") => {
     const usbc = formatUsbcMemberId(value);
     const profile = usbcProfilesById.get(usbcMemberIdKey(usbc));
+    const name = member.name || usbcProfileName(profile);
+    const currentEventProfile = knownBowlerProfiles[bowlerIdentityKey(name)] || {};
     return {
       ...member,
       usbc,
-      name: member.name || usbcProfileName(profile),
+      name,
+      lastSeasonAverage: member.lastSeasonAverage || currentEventProfile.lastSeasonAverage || "",
+      average: member.average || currentEventProfile.average || "",
+      league: member.league || currentEventProfile.league || "",
+      youth: Boolean(member.youth || currentEventProfile.youth),
     };
   };
   useEffect(() => {
