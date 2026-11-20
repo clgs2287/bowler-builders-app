@@ -12149,15 +12149,25 @@ function MultiDayEventsTab({
                 Enter squad reservations like the paper forms: team/captain info, squad choices, averages, USBC numbers, and All Events.
               </p>
             </div>
-            {multiDayRegistrationView === "packets" ? (
-              <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addRegistrationPacket}>
-                Add Packet
-              </Button>
-            ) : multiDayRegistrationView === "entries" && activeSquad && (
-              <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>
-                Add Entry
-              </Button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="https://webapps.bowl.com/USBCFindA/Home/Member"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded-2xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 hover:bg-blue-100 md:px-4 md:text-sm"
+              >
+                USBC Find a Member
+              </a>
+              {multiDayRegistrationView === "packets" ? (
+                <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={addRegistrationPacket}>
+                  Add Packet
+                </Button>
+              ) : multiDayRegistrationView === "entries" && activeSquad && (
+                <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={() => addSquadEntry(activeSquad.id)}>
+                  Add Entry
+                </Button>
+              )}
+            </div>
           </div>
           {testDraftControls}
 
