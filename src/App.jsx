@@ -9175,6 +9175,7 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
         fkmTitle: false,
         series: DEFAULT_TOURNAMENT_SERIES,
         major: false,
+        publicDetailsPage: "tournamentInfo",
         eventId: "",
         reservationSettings: {
           entriesOpen: false,
@@ -9366,6 +9367,19 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                     <div className={`flex min-h-10 items-center justify-between gap-3 rounded-xl border border-yellow-100 bg-yellow-50 px-3 py-2 ${scheduleLocked ? "opacity-80" : ""}`}>
                       <Label className="text-xs font-black text-yellow-900">Major</Label>
                       <Switch compact checked={Boolean(selectedItem.major)} onCheckedChange={(checked) => !scheduleLocked && updateItem(selectedIndex, "major", checked)} />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label className="text-xs font-black text-blue-900">Public Details Page</Label>
+                      <select
+                        value={selectedItem.publicDetailsPage || "tournamentInfo"}
+                        disabled={scheduleLocked}
+                        onChange={(e) => updateItem(selectedIndex, "publicDetailsPage", e.target.value)}
+                        className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
+                      >
+                        <option value="tournamentInfo">Standard Tournament Info</option>
+                        <option value="multiDayInfo">Multi-Event Info</option>
+                      </select>
+                      <p className="text-xs font-semibold text-blue-700">Choose where this schedule listing opens when someone selects View Details.</p>
                     </div>
                   </div>
                 </section>
@@ -30032,6 +30046,16 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     ? scheduleItemForReservationKey(scheduleItems, selectedPublicEventKey)
     : publicHeaderOpenOption?.scheduleItem || nextUpcomingScheduleItem(scheduleItems);
   const publicHeaderInfo = publicHeaderScheduleItem ? getScheduleEventPublicInfo(publicHeaderScheduleItem) : null;
+  const openPublicEventDetails = (eventKey) => {
+    const scheduleItem = scheduleItemForReservationKey(scheduleItems, eventKey);
+    if (scheduleItem?.publicDetailsPage === "multiDayInfo") {
+      setSelectedPublicEventKey("");
+      setActiveTab("multiDayInfo");
+      return;
+    }
+    setSelectedPublicEventKey(eventKey || "");
+    setActiveTab("tournamentInfo");
+  };
   const usePublicHeaderContext = PUBLIC_TAB_IDS.has(activeTab);
   const headerTournamentInfo = usePublicHeaderContext ? publicHeaderInfo || tournamentInfo : tournamentInfo;
   const headerEventLabel = usePublicHeaderContext && publicHeaderOpenOption
@@ -30591,8 +30615,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         setActiveTab("publicreservations");
       }}
       onEventDetails={(eventKey) => {
-        setSelectedPublicEventKey(eventKey || "");
-        setActiveTab("tournamentInfo");
+        openPublicEventDetails(eventKey);
       }}
     />
   )
@@ -30643,8 +30666,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         setActiveTab("publicreservations");
       }}
       onEventDetails={(eventKey) => {
-        setSelectedPublicEventKey(eventKey || "");
-        setActiveTab("tournamentInfo");
+        openPublicEventDetails(eventKey);
       }}
     />
   </AppErrorBoundary>
