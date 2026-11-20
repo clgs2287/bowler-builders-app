@@ -11563,13 +11563,15 @@ function MultiDayEventsTab({
       } : item),
     }));
     setTestDraftNotice(`Submitted packet ${packet.packetNumber || ""} for ${packet.captain || "captain"}. Added ${placedEntries.length} entr${placedEntries.length === 1 ? "y" : "ies"}.`);
-  };  const saveMultiDayTestDraft = () => {
+  };  const saveMultiDayWorkspace = () => {
     if (typeof window === "undefined") return;
+    const savedAt = new Date().toISOString();
     window.localStorage.setItem(MULTI_DAY_TEST_STORAGE_KEY, JSON.stringify({
-      savedAt: new Date().toISOString(),
+      savedAt,
       event: multiDayEvent,
     }));
-    setTestDraftNotice(`Saved test draft for ${multiDayEvent.name || "multi-event tournament"}.`);
+    setMultiDayEvent((current) => ({ ...current, lastSavedAt: savedAt }));
+    setTestDraftNotice(`Saved ${multiDayEvent.name || "multi-event tournament"}.`);
   };
   const exportMultiDayData = () => {
     const stamp = new Date().toISOString().slice(0, 10);
@@ -11624,15 +11626,15 @@ function MultiDayEventsTab({
     if (typeof window === "undefined") return;
     const saved = window.localStorage.getItem(MULTI_DAY_TEST_STORAGE_KEY);
     if (!saved) {
-      setTestDraftNotice("No multi-event test draft has been saved in this browser yet.");
+      setTestDraftNotice("No local multi-event backup has been saved in this browser yet.");
       return;
     }
     try {
       const parsed = JSON.parse(saved);
       setMultiDayEvent({ ...createDefaultMultiDayEvent(), ...(parsed.event || {}) });
-      setTestDraftNotice(`Loaded test draft${parsed.savedAt ? ` from ${new Date(parsed.savedAt).toLocaleString()}` : ""}.`);
+      setTestDraftNotice(`Loaded local backup${parsed.savedAt ? ` from ${new Date(parsed.savedAt).toLocaleString()}` : ""}.`);
     } catch (_error) {
-      setTestDraftNotice("That saved test draft could not be loaded.");
+      setTestDraftNotice("That local multi-event backup could not be loaded.");
     }
   };
   const resetMultiDayOnly = () => {
@@ -11655,24 +11657,21 @@ function MultiDayEventsTab({
   const testDraftControls = isAdminMode ? (
     <div className="flex flex-col gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 md:flex-row md:items-center md:justify-between">
       <div className="text-sm font-semibold text-blue-800">
-        {testDraftNotice || "Save this multi-event test whenever you want to keep your entries and scores through refreshes."}
+        {testDraftNotice || "Multi-Event Workspace"}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" className="rounded-2xl border-red-200 bg-red-50 text-red-700 hover:bg-red-100" onClick={resetMultiDayOnly}>
           Reset Multi-Event Only
         </Button>
-        <Button variant="outline" className="rounded-2xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100" onClick={loadMultiDayTestDraft}>
-          Load Test Draft
+        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={saveMultiDayWorkspace}>
+          Save Multi-Event
         </Button>
         <Button variant="outline" className="rounded-2xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100" onClick={exportMultiDayData}>
-          Export Multi-Event Data
+          Export Backup
         </Button>
         <input ref={multiDayBackupInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importMultiDayData} />
         <Button variant="outline" className="rounded-2xl border-blue-200 bg-white text-blue-800 hover:bg-blue-100" onClick={() => multiDayBackupInputRef.current?.click()}>
-          Import Multi-Event Data
-        </Button>
-        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900" onClick={saveMultiDayTestDraft}>
-          Save Test Draft
+          Import Backup
         </Button>
       </div>
     </div>
