@@ -43,7 +43,7 @@ const normalizeRecipients = (recipients = []) => {
   return Array.from(byEmail.values());
 };
 
-const verifyOwner = async (request) => {
+const verifyAdmin = async (request) => {
   const authHeader = request.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
   if (!token) return { ok: false, status: 401, error: "Admin login is required." };
@@ -81,15 +81,8 @@ const verifyOwner = async (request) => {
     });
     const profiles = await profileResponse.json().catch(() => []);
     profile = Array.isArray(profiles) ? profiles[0] : null;
-    if (!profileResponse.ok || !profile) return { ok: false, status: 403, error: "Owner access is required." };
+    if (!profileResponse.ok || !profile) return { ok: false, status: 403, error: "Approved admin access is required." };
   }
-
-  const ownerEmails = String(process.env.OWNER_ADMIN_EMAILS || "cory.lagner@gmail.com")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-  const isOwner = String(profile.role || "").toLowerCase() === "owner" || ownerEmails.includes(String(profile.email || user.email || "").toLowerCase());
-  if (!isOwner) return { ok: false, status: 403, error: "Owner access is required." };
 
   return { ok: true, profile, user, token };
 };
@@ -106,6 +99,21 @@ const loadUnsubscribedEmails = async (accessToken = "") => {
   });
   const rows = await unsubscribeResponse.json().catch(() => []);
   if (!unsubscribeResponse.ok || !Array.isArray(rows)) return new Set();
+  return new Set(rows.map((row) => String(row.email || "").trim().toLowerCase()).filter(Boolean));
+};
+
+const loadSuppressedEmails = async (accessToken = "") => {
+  const { url, key } = getSupabaseConfig();
+  if (!url || !key || !accessToken) return new Set();
+
+  const suppressedResponse = await fetch(`${url.replace(/\/$/, "")}/rest/v1/announcement_suppressed_emails?select=email`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const rows = await suppressedResponse.json().catch(() => []);
+  if (!suppressedResponse.ok || !Array.isArray(rows)) return new Set();
   return new Set(rows.map((row) => String(row.email || "").trim().toLowerCase()).filter(Boolean));
 };
 
@@ -191,8 +199,8 @@ export default async function handler(request, response) {
     return response.status(405).json({ error: "Method not allowed" });
   }
 
-  const owner = await verifyOwner(request);
-  if (!owner.ok) return response.status(owner.status).json({ error: owner.error });
+  const admin = await verifyAdmin(request);
+  if (!admin.ok) return response.status(admin.status).json({ error: admin.error });
 
   try {
     const body = request.body || {};
@@ -209,11 +217,14 @@ export default async function handler(request, response) {
     if (!subject) return response.status(400).json({ error: "Subject is required." });
     if (!message) return response.status(400).json({ error: "Message is required." });
     if (!recipients.length) return response.status(400).json({ error: "No valid recipients were provided." });
-    const unsubscribedEmails = await loadUnsubscribedEmails(owner.token);
+    const unsubscribedEmails = await loadUnsubscribedEmails(admin.token);
+    const suppressedEmails = await loadSuppressedEmails(admin.token);
     const sendableRecipients = isTest
       ? recipients
-      : recipients.filter((recipient) => !unsubscribedEmails.has(recipient.email));
-    if (!sendableRecipients.length) return response.status(400).json({ error: "All selected recipients have unsubscribed from announcement emails." });
+      : recipients.filter((recipient) => !unsubscribedEmails.has(recipient.email) && !suppressedEmails.has(recipient.email));
+    const skippedUnsubscribed = recipients.filter((recipient) => unsubscribedEmails.has(recipient.email)).length;
+    const skippedSuppressed = recipients.filter((recipient) => suppressedEmails.has(recipient.email)).length;
+    if (!sendableRecipients.length) return response.status(400).json({ error: "All selected recipients are unsubscribed or suppressed from announcement emails." });
     const recipientLimit = getAnnouncementRecipientLimit();
     if (sendableRecipients.length > recipientLimit) {
       return response.status(400).json({ error: `Recipient list is limited to ${recipientLimit} emails per send.` });
@@ -252,10 +263,10 @@ export default async function handler(request, response) {
     }
 
     if (failed.length) {
-      return response.status(sent.length ? 207 : 500).json({ sent: sent.length, skippedUnsubscribed: recipients.length - sendableRecipients.length, failed, provider: sent[0]?.provider || failed[0]?.provider || "none" });
+      return response.status(sent.length ? 207 : 500).json({ sent: sent.length, skippedUnsubscribed, skippedSuppressed, failed, provider: sent[0]?.provider || failed[0]?.provider || "none" });
     }
 
-    return response.status(200).json({ sent: sent.length, skippedUnsubscribed: recipients.length - sendableRecipients.length, failed: [], provider: sent[0]?.provider || "none" });
+    return response.status(200).json({ sent: sent.length, skippedUnsubscribed, skippedSuppressed, failed: [], provider: sent[0]?.provider || "none" });
   } catch (error) {
     return response.status(500).json({ error: error.message || "Announcement email could not be sent." });
   }

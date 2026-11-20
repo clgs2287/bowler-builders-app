@@ -92,6 +92,32 @@ create table if not exists public.announcement_unsubscribes (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.announcement_suppressed_emails (
+  email text primary key,
+  reason text not null default 'suppressed',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.admin_activity_locks (
+  id text primary key,
+  user_id uuid references auth.users(id) on delete set null,
+  email text,
+  session_id text not null default '',
+  device_label text not null default '',
+  active_tab text not null default '',
+  tournament_id text not null default '',
+  tournament_name text not null default '',
+  request_user_id uuid references auth.users(id) on delete set null,
+  request_email text,
+  request_session_id text not null default '',
+  request_device_label text not null default '',
+  request_active_tab text not null default '',
+  requested_at timestamptz,
+  locked_at timestamptz not null default now(),
+  heartbeat_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.public_app_settings (
   id text primary key,
   value jsonb not null default '{}'::jsonb,
@@ -110,6 +136,7 @@ create table if not exists public.reservation_public_roster (
   display_name text not null default 'Reserved Bowler',
   status text not null default 'Registered',
   registration_number text,
+  reservation_group_id text,
   updated_at timestamptz not null default now()
 );
 
@@ -168,6 +195,11 @@ create trigger set_admin_profiles_updated_at
 before update on public.admin_profiles
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_admin_activity_locks_updated_at on public.admin_activity_locks;
+create trigger set_admin_activity_locks_updated_at
+before update on public.admin_activity_locks
+for each row execute function public.set_updated_at();
+
 alter table public.app_settings enable row level security;
 alter table public.schedule_events enable row level security;
 alter table public.manual_titles enable row level security;
@@ -178,6 +210,8 @@ alter table public.active_tournament_snapshots enable row level security;
 alter table public.tournament_drafts enable row level security;
 alter table public.admin_profiles enable row level security;
 alter table public.announcement_unsubscribes enable row level security;
+alter table public.announcement_suppressed_emails enable row level security;
+alter table public.admin_activity_locks enable row level security;
 alter table public.public_app_settings enable row level security;
 alter table public.reservation_public_counts enable row level security;
 alter table public.reservation_public_roster enable row level security;
@@ -203,6 +237,8 @@ revoke insert on public.reservations from anon;
 grant select, insert on public.reservations to authenticated;
 grant select on public.admin_profiles to authenticated;
 grant select on public.announcement_unsubscribes to authenticated;
+grant select, insert, update on public.announcement_suppressed_emails to authenticated;
+grant select, insert, update, delete on public.admin_activity_locks to authenticated;
 grant insert, update, delete on public.app_settings to authenticated;
 grant insert, update, delete on public.schedule_events to authenticated;
 grant insert, update, delete on public.manual_titles to authenticated;
@@ -454,7 +490,7 @@ begin
   delete from public.reservation_public_roster
   where target_tournament_id is null or tournament_id = target_tournament_id;
 
-  insert into public.reservation_public_roster (id, tournament_id, display_name, status, registration_number, updated_at)
+  insert into public.reservation_public_roster (id, tournament_id, display_name, status, registration_number, reservation_group_id, updated_at)
   select
     reservations.id,
     coalesce(reservations.tournament_id, ''),
@@ -464,6 +500,7 @@ begin
     end,
     coalesce(nullif(trim(reservations.data->>'status'), ''), 'Registered'),
     coalesce(nullif(trim(reservations.data->>'registrationNumber'), ''), nullif(trim(reservations.data->>'confirmationNumber'), '')),
+    nullif(trim(reservations.data->>'reservationGroupId'), ''),
     now()
   from public.reservations
   where target_tournament_id is null or reservations.tournament_id = target_tournament_id
@@ -472,6 +509,7 @@ begin
       display_name = excluded.display_name,
       status = excluded.status,
       registration_number = excluded.registration_number,
+      reservation_group_id = excluded.reservation_group_id,
       updated_at = excluded.updated_at;
 
   delete from public.reservation_public_counts
@@ -480,7 +518,7 @@ begin
   insert into public.reservation_public_counts (tournament_id, reservation_count, updated_at)
   select
     reservations.tournament_id,
-    count(*)::integer,
+    count(distinct coalesce(nullif(reservations.data->>'reservationGroupId', ''), reservations.id))::integer,
     now()
   from public.reservations
   where coalesce(nullif(trim(reservations.data->>'status'), ''), 'Registered') = 'Registered'
@@ -596,6 +634,38 @@ create policy "Admins read announcement unsubscribes"
 on public.announcement_unsubscribes for select
 to authenticated
 using (public.is_admin());
+
+drop policy if exists "Admins read announcement suppressed emails" on public.announcement_suppressed_emails;
+create policy "Admins read announcement suppressed emails"
+on public.announcement_suppressed_emails for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins write announcement suppressed emails" on public.announcement_suppressed_emails;
+create policy "Admins write announcement suppressed emails"
+on public.announcement_suppressed_emails for insert
+to authenticated
+with check (public.is_admin());
+
+drop policy if exists "Admins update announcement suppressed emails" on public.announcement_suppressed_emails;
+create policy "Admins update announcement suppressed emails"
+on public.announcement_suppressed_emails for update
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "Admins read admin activity locks" on public.admin_activity_locks;
+create policy "Admins read admin activity locks"
+on public.admin_activity_locks for select
+to authenticated
+using (public.is_admin());
+
+drop policy if exists "Admins write admin activity locks" on public.admin_activity_locks;
+create policy "Admins write admin activity locks"
+on public.admin_activity_locks for all
+to authenticated
+using (public.is_admin())
+with check (public.is_admin());
 
 drop policy if exists "Admins write app settings" on public.app_settings;
 create policy "Admins write app settings"

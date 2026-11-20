@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/kwt-boy-points",
+      "destination": "/kwt-boy-points.html"
+    }
+  ],
   "headers": [
     {
       "source": "/",
