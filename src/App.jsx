@@ -3986,7 +3986,7 @@ tabs: [
       { id: "multiDayPublicSideAction", label: "Side Action" },
       { id: "multiDayPublicResults", label: "Results" },
       { id: "multiDayLeaderboards", label: "Leaderboards" },
-      { id: "multiDayArchive", label: "Archive" },
+      { id: "multiDayArchive", label: "Tournament History" },
     ],
   },
 
