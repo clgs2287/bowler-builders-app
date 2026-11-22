@@ -9961,21 +9961,28 @@ function MultiDayEventsTab({
     ...packet,
     lines: (packet.lines || []).map((line) => line.id === lineId ? updater(line) : line),
   }));
-  const updatePacketMemberName = (packetId, lineId, memberIndex, memberCount, value) => updatePacketLine(packetId, lineId, (current) => ({
-    ...current,
-    members: Array.from({ length: memberCount }, (_, index) => {
-      const existing = current.members?.[index] || {};
-      return index === memberIndex ? backfillKnownBowler(existing, value) : existing;
-    }),
+  const updatePacketMemberName = (packetId, lineId, memberIndex, memberCount, value) => updateRegistrationPacket(packetId, (packet) => ({
+    ...packet,
+    lines: (packet.lines || []).map((line) => line.id === lineId ? {
+      ...line,
+      members: Array.from({ length: memberCount }, (_, index) => {
+        const existing = line.members?.[index] || {};
+        return index === memberIndex ? backfillPacketBowler(packet, existing, { name: value }) : existing;
+      }),
+    } : line),
   }));
-  const updatePacketMemberDetail = (packetId, lineId, memberIndex, memberCount, field, value) => updatePacketLine(packetId, lineId, (current) => ({
-    ...current,
-    members: Array.from({ length: memberCount }, (_, index) => {
-      const existing = current.members?.[index] || {};
-      if (index !== memberIndex) return existing;
-      const nextMember = { ...existing, [field]: value };
-      return field === "usbc" ? applyUsbcProfile(nextMember, value) : nextMember;
-    }),
+  const updatePacketMemberDetail = (packetId, lineId, memberIndex, memberCount, field, value) => updateRegistrationPacket(packetId, (packet) => ({
+    ...packet,
+    lines: (packet.lines || []).map((line) => line.id === lineId ? {
+      ...line,
+      members: Array.from({ length: memberCount }, (_, index) => {
+        const existing = line.members?.[index] || {};
+        if (index !== memberIndex) return existing;
+        return field === "usbc"
+          ? backfillPacketBowler(packet, existing, { usbc: value })
+          : { ...existing, [field]: value };
+      }),
+    } : line),
   }));
   const insertPacketLineAfterMatchingEvent = (lines, competition) => {
     const newLine = makePacketLine(competition);
@@ -10301,6 +10308,32 @@ function MultiDayEventsTab({
       league: profile.league || "",
       allEvents: false,
       youth: Boolean(profile.youth),
+    };
+  };
+  const packetMemberProfile = (packet = {}, { name = "", usbc = "" } = {}) => {
+    const nameKey = bowlerIdentityKey(name);
+    const usbcKey = usbcMemberIdKey(usbc);
+    return (packet.lines || [])
+      .flatMap((line) => line.members || [])
+      .find((member) =>
+        (nameKey && bowlerIdentityKey(member?.name) === nameKey) ||
+        (usbcKey && usbcMemberIdKey(member?.usbc) === usbcKey)
+      ) || null;
+  };
+  const backfillPacketBowler = (packet = {}, member = {}, lookup = {}) => {
+    const requestedName = String(lookup.name ?? member.name ?? "");
+    const requestedUsbc = formatUsbcMemberId(lookup.usbc ?? member.usbc ?? "");
+    const packetProfile = packetMemberProfile(packet, { name: requestedName, usbc: requestedUsbc });
+    const base = packetProfile || (requestedUsbc ? applyUsbcProfile(member, requestedUsbc) : backfillKnownBowler(member, requestedName));
+    return {
+      ...base,
+      name: requestedName || base.name || "",
+      usbc: requestedUsbc || base.usbc || "",
+      lastSeasonAverage: member.lastSeasonAverage || base.lastSeasonAverage || "",
+      average: member.average || base.average || "",
+      league: member.league || base.league || "",
+      allEvents: Boolean(member.allEvents || base.allEvents),
+      youth: Boolean(member.youth || base.youth),
     };
   };
   const updateEntryName = (squadId, entryId, competition, value) => updateSquadEntry(squadId, entryId, (current) => {
