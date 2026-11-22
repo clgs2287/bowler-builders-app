@@ -30200,6 +30200,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     if (scheduleItem?.publicDetailsPage === "multiDayInfo") {
       setSelectedPublicEventKey("");
       setActiveTab("multiDayInfo");
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
       return;
     }
     setSelectedPublicEventKey(eventKey || "");
