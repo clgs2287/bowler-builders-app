@@ -14669,12 +14669,14 @@ function MultiDayEventsTab({
           });
         });
       });
-      return [...statsByBowler.values()].map((stat) => ({
-        ...stat,
-        tournaments: stat.tournamentsSet.size,
-        avg: stat.games ? stat.scratch / stat.games : 0,
-        handicapAvg: stat.games ? stat.total / stat.games : 0,
-      }));
+      return [...statsByBowler.values()]
+        .filter((stat) => !["singles ae", "doubles ae", "team ae"].includes(normalizeMatchText(stat.name)))
+        .map((stat) => ({
+          ...stat,
+          tournaments: stat.tournamentsSet.size,
+          avg: stat.games ? stat.scratch / stat.games : 0,
+          handicapAvg: stat.games ? stat.total / stat.games : 0,
+        }));
     })();
     const archiveStatsSearchTerm = normalizeMatchText(multiDayArchiveStatsSearch);
     const filteredArchivedBowlerStats = archivedBowlerStats.filter((row) =>
