@@ -11927,6 +11927,7 @@ function MultiDayEventsTab({
               <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
                 <p className="text-xs uppercase text-blue-200">Location</p>
                 <p className="mt-1 text-lg">{multiDayEvent.center || "Center TBD"}</p>
+                {multiDayEvent.address && <p className="mt-1 text-sm text-blue-100">{multiDayEvent.address}</p>}
               </div>
               <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
                 <p className="text-xs uppercase text-blue-200">Entries Close</p>
