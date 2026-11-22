@@ -9827,6 +9827,8 @@ function MultiDayEventsTab({
   const [expandedMultiDayLeaderboardKey, setExpandedMultiDayLeaderboardKey] = useState(null);
   const [expandedMultiDayArchiveKey, setExpandedMultiDayArchiveKey] = useState(null);
   const [multiDayArchiveView, setMultiDayArchiveView] = useState("tournaments");
+  const [multiDayArchiveYear, setMultiDayArchiveYear] = useState("all");
+  const [multiDayArchiveStatsSeason, setMultiDayArchiveStatsSeason] = useState("all");
   const [multiDayArchiveStatsSearch, setMultiDayArchiveStatsSearch] = useState("");
   const [multiDayArchiveSections, setMultiDayArchiveSections] = useState({});
   const [multiDayArchivePaidFilters, setMultiDayArchivePaidFilters] = useState({});
@@ -14502,6 +14504,7 @@ function MultiDayEventsTab({
         id: `multi-archive-${Date.now()}`,
         archivedAt: new Date().toISOString(),
         name: multiDayEvent.name || "Multi-Event Tournament",
+        season: multiDayEvent.season || "",
         dates: [multiDayEvent.startDate, multiDayEvent.endDate].filter(Boolean).join(" to "),
         center: multiDayEvent.center || "",
         restoreSnapshot,
@@ -14534,6 +14537,14 @@ function MultiDayEventsTab({
       setTestDraftNotice(`Restored ${archive.name || "multi-event tournament"}.`);
     };
     const archives = multiDayEvent.archives || [];
+    const archiveSeason = (archive = {}) => {
+      const explicitSeason = archive.season || archive.restoreSnapshot?.season;
+      if (explicitSeason) return String(explicitSeason);
+      const matchedYear = String(archive.dates || archive.archivedAt || "").match(/20\d{2}/)?.[0];
+      return matchedYear || "Unknown";
+    };
+    const archiveSeasons = Array.from(new Set(archives.map(archiveSeason))).sort((left, right) => right.localeCompare(left));
+    const filteredArchives = archives.filter((archive) => multiDayArchiveYear === "all" || archiveSeason(archive) === multiDayArchiveYear);
     const archiveSortValue = (row, key) => {
       if (key === "place") return Number(String(row.place || "").replace(/[^0-9.]/g, "")) || 9999;
       if (["avg", "cash", "cashes", "events", "games", "handicap", "handicapAvg", "payout", "score", "scratch", "tournaments", "total", "wins"].includes(key)) return Number(row[key] || 0);
@@ -14595,7 +14606,7 @@ function MultiDayEventsTab({
         return current;
       };
       const detailSeen = new Set();
-      archives.forEach((archive) => {
+      archives.filter((archive) => multiDayArchiveStatsSeason === "all" || archiveSeason(archive) === multiDayArchiveStatsSeason).forEach((archive) => {
         (archive.leaderboards || [])
           .filter((section) => {
             const title = String(section.title || "").toLowerCase();
@@ -14624,6 +14635,7 @@ function MultiDayEventsTab({
                 stat.total += total;
                 stat.details.push({
                   archive: archive.name || "Archived Tournament",
+                  season: archiveSeason(archive),
                   dates: archive.dates || "",
                   event: eventName,
                   entry: row.name || detailName,
@@ -14700,14 +14712,24 @@ function MultiDayEventsTab({
                 <h3 className="text-xl font-black text-blue-950">Multi-Event Bowler Stats</h3>
                 <p className="text-sm font-semibold text-blue-700">Aggregated from saved multi-event archives.</p>
               </div>
-              <div className="w-full md:max-w-xs">
-                <Label>Search</Label>
-                <Input value={multiDayArchiveStatsSearch} onChange={(event) => setMultiDayArchiveStatsSearch(event.target.value)} placeholder="Type a bowler..." className="mt-1" />
+              <div className="grid w-full gap-3 md:max-w-xl md:grid-cols-2">
+                <div>
+                  <Label>Season</Label>
+                  <select value={multiDayArchiveStatsSeason} onChange={(event) => setMultiDayArchiveStatsSeason(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">
+                    <option value="all">All Seasons</option>
+                    {archiveSeasons.map((season) => <option key={`stats-season-${season}`} value={season}>{season}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label>Search</Label>
+                  <Input value={multiDayArchiveStatsSearch} onChange={(event) => setMultiDayArchiveStatsSearch(event.target.value)} placeholder="Type a bowler..." className="mt-1" />
+                </div>
               </div>
             </div>
             <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
               <table className="w-full min-w-[920px] text-sm">
                 <thead className="bg-blue-800 text-white"><tr>
+                  <th className="w-14 p-3 text-right">#</th>
                   <th className="p-3 text-left">{archiveSortButton("multi-archive-stats", "name", "Bowler")}</th>
                   <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "tournaments", "Tourn.", "desc")}</th>
                   <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "events", "Events", "desc")}</th>
@@ -14717,12 +14739,13 @@ function MultiDayEventsTab({
                   <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "total", "HDCP Total", "desc")}</th>
                   <th className="p-3 text-right">{archiveSortButton("multi-archive-stats", "handicapAvg", "HDCP Avg", "desc")}</th>
                 </tr></thead>
-                <tbody>{sortedArchiveRows(filteredArchivedBowlerStats, "multi-archive-stats", "avg", "desc").map((row) => {
+                <tbody>{sortedArchiveRows(filteredArchivedBowlerStats, "multi-archive-stats", "avg", "desc").map((row, index) => {
                   const rowKey = `multi-archive-stats-${row.key}`;
                   const expanded = expandedMultiDayArchiveKey === rowKey;
                   return (
                     <React.Fragment key={rowKey}>
                       <tr className="border-t">
+                        <td className="p-3 text-right font-black text-blue-950">{index + 1}</td>
                         <td className="p-3">
                           <button type="button" onClick={() => setExpandedMultiDayArchiveKey(expanded ? null : rowKey)} className="text-left font-black text-blue-950 underline-offset-4 hover:underline">
                             {row.name} <span className="text-xs text-blue-600">{expanded ? "▲" : "▼"}</span>
@@ -14738,7 +14761,7 @@ function MultiDayEventsTab({
                       </tr>
                       {expanded && (
                         <tr className="border-t bg-blue-50/60">
-                          <td className="p-3" colSpan={8}>
+                          <td className="p-3" colSpan={9}>
                             <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                               <table className="w-full min-w-[760px] text-xs">
                                 <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Tournament</th><th className="p-2 text-left">Event</th><th className="p-2 text-left">Entry</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
@@ -14751,7 +14774,7 @@ function MultiDayEventsTab({
                     </React.Fragment>
                   );
                 })}
-                {filteredArchivedBowlerStats.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={8}>No bowler stats match this search.</td></tr>}</tbody>
+                {filteredArchivedBowlerStats.length === 0 && <tr><td className="p-4 text-blue-700" colSpan={9}>No bowler stats match this search.</td></tr>}</tbody>
               </table>
             </div>
           </CardContent>
@@ -14759,7 +14782,18 @@ function MultiDayEventsTab({
         )}
         {multiDayArchiveView === "tournaments" && (
         <>
-        {archives.map((archive) => {
+        <AppCard>
+          <CardContent className="p-4 md:p-6">
+            <div className="w-full md:max-w-xs">
+              <Label>Season</Label>
+              <select value={multiDayArchiveYear} onChange={(event) => setMultiDayArchiveYear(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">
+                <option value="all">All Seasons</option>
+                {archiveSeasons.map((season) => <option key={`archive-season-${season}`} value={season}>{season}</option>)}
+              </select>
+            </div>
+          </CardContent>
+        </AppCard>
+        {filteredArchives.map((archive) => {
           const activeArchiveSection = multiDayArchiveSections[archive.id] || "winners";
           const paidFilters = multiDayArchivePaidFilters[archive.id] || { event: "all", division: "all", search: "" };
           const sideFilters = { squad: "all", division: "all", search: "", ...(multiDayArchiveSideFilters[archive.id] || {}) };
@@ -15097,6 +15131,7 @@ function MultiDayEventsTab({
           );
         })}
         {archives.length === 0 && <AppCard><CardContent className="p-4 text-sm font-semibold text-blue-700">No multi-event archives saved yet.</CardContent></AppCard>}
+        {archives.length > 0 && filteredArchives.length === 0 && <AppCard><CardContent className="p-4 text-sm font-semibold text-blue-700">No archives match that season.</CardContent></AppCard>}
         </>
         )}
       </div>
