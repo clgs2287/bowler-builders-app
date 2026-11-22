@@ -4020,7 +4020,7 @@ tabs: [
   },
 ];
 
-function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator", publicResultsUnlocked = true, tournamentInfo = {}, multiDayPublicVisible = false) {
+function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator", publicResultsUnlocked = true, tournamentInfo = {}, multiDayPublicVisible = false, multiDayEventName = "") {
   const matchplayTournament = isMatchplayTournament(tournamentFormat, tournamentInfo);
   const eliminatorTournament = isEliminatorTournamentStyle(tournamentInfo.tournamentStyle || "singles");
 
@@ -4028,6 +4028,7 @@ function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator",
     .filter((section) => isAdminMode || section.id === "leaderboard" || (section.id === "multiDay" && multiDayPublicVisible))
     .map((section) => ({
       ...section,
+      label: section.id === "multiDay" && multiDayEventName ? multiDayEventName : section.label,
       tabs: section.tabs.filter((tab) => {
         if (tab.hideForSweeper && tournamentFormat === "sweeper") return false;
         if (matchplayTournament && tab.id === "public") return false;
@@ -4039,8 +4040,8 @@ function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator",
     .filter((section) => section.tabs.length > 0);
 }
 
-function getSectionForTab(activeTab, isAdminMode = true, tournamentFormat = "eliminator", publicResultsUnlocked = true, tournamentInfo = {}, multiDayPublicVisible = false) {
-  const sections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible);
+function getSectionForTab(activeTab, isAdminMode = true, tournamentFormat = "eliminator", publicResultsUnlocked = true, tournamentInfo = {}, multiDayPublicVisible = false, multiDayEventName = "") {
+  const sections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible, multiDayEventName);
   return sections.find((section) => section.tabs.some((tab) => tab.id === activeTab)) || sections[0] || appSections[0];
 }
 
@@ -4051,9 +4052,9 @@ function getDisplayTabLabel(tab, tournamentInfo = {}, tournamentFormat = "") {
   return tab.label;
 }
 
-function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, publicResultsUnlocked = true, multiDayPublicVisible = false }) {
+function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, publicResultsUnlocked = true, multiDayPublicVisible = false, multiDayEventName = "" }) {
   const selectId = React.useId();
-  const visibleSections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible);
+  const visibleSections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible, multiDayEventName);
 
   return (
     <div className="md:hidden rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
@@ -4077,9 +4078,9 @@ function MobileTabSelect({ activeTab, setActiveTab, tournamentFormat = "eliminat
   );
 }
 
-function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, isOwnerAdmin = false, publicResultsUnlocked = true, multiDayPublicVisible = false }) {
-  const activeSection = getSectionForTab(activeTab, isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible);
-  const visibleSections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible);
+function DesktopTabs({ activeTab, setActiveTab, resetSavedTournament, tournamentFormat = "eliminator", tournamentInfo = {}, isAdminMode = true, isOwnerAdmin = false, publicResultsUnlocked = true, multiDayPublicVisible = false, multiDayEventName = "" }) {
+  const activeSection = getSectionForTab(activeTab, isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible, multiDayEventName);
+  const visibleSections = visibleAppSections(isAdminMode, tournamentFormat, publicResultsUnlocked, tournamentInfo, multiDayPublicVisible, multiDayEventName);
   const visibleActiveTabs = activeSection.tabs.filter((tab) => !(tab.hideForSweeper && tournamentFormat === "sweeper"));
 
   return (
@@ -30496,8 +30497,8 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
                   </div>
                 )}
               </div>
-              <MobileTabSelect activeTab={activeTab} setActiveTab={(tabId) => { if (tabId === "tournamentInfo") setSelectedPublicEventKey(""); setActiveTab(tabId); }} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} publicResultsUnlocked={publicResultsUnlocked} multiDayPublicVisible={Boolean(multiDayEvent.publicVisible)} />
-              <DesktopTabs activeTab={activeTab} setActiveTab={(tabId) => { if (tabId === "tournamentInfo") setSelectedPublicEventKey(""); setActiveTab(tabId); }} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} isOwnerAdmin={isOwnerAdmin} publicResultsUnlocked={publicResultsUnlocked} multiDayPublicVisible={Boolean(multiDayEvent.publicVisible)} />
+              <MobileTabSelect activeTab={activeTab} setActiveTab={(tabId) => { if (tabId === "tournamentInfo") setSelectedPublicEventKey(""); setActiveTab(tabId); }} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} publicResultsUnlocked={publicResultsUnlocked} multiDayPublicVisible={Boolean(multiDayEvent.publicVisible)} multiDayEventName={multiDayEvent.name} />
+              <DesktopTabs activeTab={activeTab} setActiveTab={(tabId) => { if (tabId === "tournamentInfo") setSelectedPublicEventKey(""); setActiveTab(tabId); }} resetSavedTournament={resetSavedTournament} tournamentFormat={tournamentFormat} tournamentInfo={tournamentInfo} isAdminMode={isAdminMode} isOwnerAdmin={isOwnerAdmin} publicResultsUnlocked={publicResultsUnlocked} multiDayPublicVisible={Boolean(multiDayEvent.publicVisible)} multiDayEventName={multiDayEvent.name} />
             </div>
           </div>
         </div>
