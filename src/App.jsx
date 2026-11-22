@@ -11252,7 +11252,23 @@ function MultiDayEventsTab({
       },
     };
   });
-  const multiDayPayoutSpotCount = (row) => {
+  const updateMultiDayPayoutSpotCount = (competition, division, value, minimum) => updateMultiDayFinanceSettings((current) => {
+    const eventOverrides = { ...((current.payoutSpotOverrides || {})[competition] || {}) };
+    const spotCount = Number(value || 0);
+    if (!Number.isFinite(spotCount) || spotCount <= minimum) {
+      delete eventOverrides[division];
+    } else {
+      eventOverrides[division] = Math.floor(spotCount);
+    }
+    return {
+      ...current,
+      payoutSpotOverrides: {
+        ...(current.payoutSpotOverrides || {}),
+        [competition]: eventOverrides,
+      },
+    };
+  });
+  const multiDayBasePayoutSpotCount = (row) => {
     const preset = {
       Singles: 12,
       Doubles: 7,
@@ -11268,6 +11284,11 @@ function MultiDayEventsTab({
     const remainder = count % ratio;
     return Math.max(1, whole + (remainder >= ratio / 2 ? 1 : 0));
   };
+  const multiDayPayoutSpotCount = (row, division = "") => {
+    const base = multiDayBasePayoutSpotCount(row);
+    const override = Number(multiDayFinanceSettings.payoutSpotOverrides?.[row.competition]?.[division] || 0);
+    return Math.max(base, Number.isFinite(override) ? Math.floor(override) : base);
+  };
   const multiDayPresetPayouts = (competition) => ({
     Singles: [250, 225, 200, 175, 150, 125, 100, 90, 80, 70, 60, 50],
     Doubles: [500, 380, 280, 200, 140, 120, 100],
@@ -11277,9 +11298,9 @@ function MultiDayEventsTab({
   }[competition] || []);
   const multiDayPayoutPlan = (prizeFund, spots, competition = "") => {
     const preset = multiDayPresetPayouts(competition);
-    if (preset.length) return preset.map((amount, index) => ({ place: index + 1, amount }));
     const fund = Number(prizeFund || 0);
     const count = Math.max(0, Number(spots || 0));
+    if (preset.length) return Array.from({ length: count }, (_, index) => ({ place: index + 1, amount: preset[index] || 0 }));
     if (!fund || !count) return [];
     const baseWeights = count === 1
       ? [1]
@@ -11302,10 +11323,14 @@ function MultiDayEventsTab({
     const row = multiDayFinanceSummaryRows.find((item) => item.competition === competition);
     const fund = division === "Scratch" ? Number(row?.scratchPrize || 0) : Number(row?.handicapPrize || 0);
     const manual = multiDayFinanceSettings.manualPayouts?.[competition]?.[division.toLowerCase()] || {};
-    return multiDayPayoutPlan(fund, spots).map((payout) => ({
+    return multiDayPayoutPlan(fund, spots, competition).map((payout) => ({
       ...payout,
       amount: manual[payout.place] === undefined ? payout.amount : Math.max(0, Number(manual[payout.place] || 0)),
     }));
+  };
+  const multiDayPayoutSpotCountForEvent = (competition, division = "") => {
+    const row = multiDayFinanceSummaryRows.find((item) => item.competition === competition);
+    return row ? multiDayPayoutSpotCount(row, division) : 0;
   };
   const multiDayEntryDisplayName = (entry, squad = activeSquad) => {
     const competition = getSquadEntryCompetition(entry, squad);
@@ -12875,16 +12900,19 @@ function MultiDayEventsTab({
               <tbody>
                 {multiDayFinanceSummaryRows.map((row) => {
                   const expanded = expandedMultiDayFinanceEvent === row.competition;
+                  const basePaidSpots = multiDayBasePayoutSpotCount(row);
                   const paidSpots = multiDayPayoutSpotCount(row);
                   const manualPayouts = multiDayFinanceSettings.manualPayouts?.[row.competition] || {};
-                  const applyManualPayouts = (division, fund) => multiDayPayoutPlan(fund, paidSpots).map((payout) => ({
+                  const applyManualPayouts = (division, fund, spots) => multiDayPayoutPlan(fund, spots, row.competition).map((payout) => ({
                     ...payout,
                     amount: manualPayouts[division]?.[payout.place] === undefined
                       ? payout.amount
                       : Math.max(0, Number(manualPayouts[division][payout.place] || 0)),
                   }));
-                  const scratchPlan = applyManualPayouts("scratch", row.scratchPrize);
-                  const handicapPlan = applyManualPayouts("handicap", row.handicapPrize);
+                  const scratchSpots = multiDayPayoutSpotCount(row, "scratch");
+                  const handicapSpots = multiDayPayoutSpotCount(row, "handicap");
+                  const scratchPlan = applyManualPayouts("scratch", row.scratchPrize, scratchSpots);
+                  const handicapPlan = applyManualPayouts("handicap", row.handicapPrize, handicapSpots);
                   return (
                     <React.Fragment key={row.competition}>
                       <tr className="border-t">
@@ -12908,7 +12936,7 @@ function MultiDayEventsTab({
                         <tr className="border-t bg-blue-50/60">
                           <td className="p-4" colSpan={11}>
                             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm font-bold text-blue-900">
-                              <span>{paidSpots} paid spot{paidSpots === 1 ? "" : "s"} per division</span>
+                              <span>{paidSpots} standard paid spot{paidSpots === 1 ? "" : "s"} per division</span>
                               <span>{row.competition === "Youth" ? "Top Scratch and Handicap youth split; no bowler can win both youth awards." : row.competition === "All Events" ? "1:14 or major portion" : "1:8 or major portion"}</span>
                             </div>
                             <div className="mb-4 grid gap-3 rounded-xl border border-blue-100 bg-white p-3 md:grid-cols-3">
@@ -12928,13 +12956,13 @@ function MultiDayEventsTab({
                             </div>
                             <div className="grid gap-4 md:grid-cols-2">
                               {[
-                                { key: "scratch", label: "Scratch", fund: row.scratchPrize, rows: scratchPlan },
-                                { key: "handicap", label: "Handicap", fund: row.handicapPrize, rows: handicapPlan },
+                                { key: "scratch", label: "Scratch", fund: row.scratchPrize, rows: scratchPlan, spots: scratchSpots },
+                                { key: "handicap", label: "Handicap", fund: row.handicapPrize, rows: handicapPlan, spots: handicapSpots },
                               ].map((division) => (
                                 <div key={`${row.competition}-${division.label}`} className="rounded-2xl border border-blue-200 bg-white">
                                   <div className="flex items-start justify-between gap-3 border-b border-blue-100 px-4 py-3">
                                     <div><h4 className="font-black text-blue-950">{division.label} Payouts</h4><p className="text-xs font-bold text-blue-700">Prize fund {currency(division.fund)}</p></div>
-                                    <Button variant="outline" className="h-8 rounded-xl px-2 text-xs" onClick={() => clearMultiDayManualPayouts(row.competition, division.key)}>Reset</Button>
+                                    <div className="flex items-end gap-2"><label className="text-right text-xs font-black text-blue-800">Paid Spots<Input className="mt-1 h-8 w-16 text-right" type="number" min={basePaidSpots} value={division.spots} onChange={(e) => updateMultiDayPayoutSpotCount(row.competition, division.key, e.target.value, basePaidSpots)} /></label><Button variant="outline" className="h-8 rounded-xl px-2 text-xs" onClick={() => clearMultiDayManualPayouts(row.competition, division.key)}>Reset</Button></div>
                                   </div>
                                   <table className="w-full text-sm">
                                     <thead className="bg-blue-800 text-white">
@@ -12954,6 +12982,7 @@ function MultiDayEventsTab({
                                     </tbody>
                                   </table>
                                   {division.rows.length > 0 && <p className="border-t border-blue-100 px-3 py-2 text-right text-xs font-bold text-blue-700">Assigned {currency(division.rows.reduce((sum, payout) => sum + Number(payout.amount || 0), 0))} - {currency(Math.max(0, Number(division.fund || 0) - division.rows.reduce((sum, payout) => sum + Number(payout.amount || 0), 0)))} remaining</p>}
+                                  {division.spots > basePaidSpots && <p className="px-3 pb-3 text-xs font-bold text-amber-800">Added payout spots start at $0. Enter the tie payout amount for each added place.</p>}
                                 </div>
                               ))}
                             </div>
@@ -14286,10 +14315,11 @@ function MultiDayEventsTab({
       return winners;
     };
     const buildArchivePaidWinners = () => archivePaidWinnerConfigs.flatMap((config) => {
-      const payoutCount = archivePresetPayoutCount(config.id);
-      if (!payoutCount) return [];
-      const scratchPayoutPlan = multiDayFinalPayoutPlan(config.label, "Scratch", payoutCount);
-      const handicapPayoutPlan = multiDayFinalPayoutPlan(config.label, "Handicap", payoutCount);
+      const scratchPayoutCount = multiDayPayoutSpotCountForEvent(config.label, "scratch");
+      const handicapPayoutCount = multiDayPayoutSpotCountForEvent(config.label, "handicap");
+      if (!scratchPayoutCount && !handicapPayoutCount) return [];
+      const scratchPayoutPlan = multiDayFinalPayoutPlan(config.label, "Scratch", scratchPayoutCount);
+      const handicapPayoutPlan = multiDayFinalPayoutPlan(config.label, "Handicap", handicapPayoutCount);
       const scratchPlaced = archivePlaceRows(archiveBestRows(config.rows || [], "scratch", config.id), "scratch");
       const handicapPlaced = archivePlaceRows(archiveBestRows(config.rows || [], "total", config.id), "total");
       const scratchByKey = new Map(scratchPlaced.map((row) => [archivePaidKey(row, config.id), row]));
@@ -14307,7 +14337,7 @@ function MultiDayEventsTab({
       return ["Scratch", "Handicap"].flatMap((division) => archiveVisiblePaidWinners(
         [...chosenByKey.values()].filter((row) => row.division === division),
         division === "Scratch" ? scratchPayoutPlan : handicapPayoutPlan,
-        payoutCount
+        division === "Scratch" ? scratchPayoutCount : handicapPayoutCount
       ));
     });
     const buildArchiveFirstPlaces = (paidRows) => paidRows.filter((row) => String(row.place) === "1").map((row) => ({
@@ -15372,12 +15402,13 @@ function MultiDayEventsTab({
     };
     const standardPaidWinnerRows = paidWinnerConfigs.flatMap((config) => {
       const rows = config.rows || [];
-      const payoutCount = payoutCountForRows(rows, config.id);
-      if (!payoutCount) return [];
+      const scratchPayoutCount = multiDayPayoutSpotCountForEvent(config.label, "scratch");
+      const handicapPayoutCount = multiDayPayoutSpotCountForEvent(config.label, "handicap");
+      if (!scratchPayoutCount && !handicapPayoutCount) return [];
       const scratchPlaced = placeRows(bestPaidRowsForDivision(rows, "scratch", config.id), "scratch");
       const handicapPlaced = placeRows(bestPaidRowsForDivision(rows, "total", config.id), "total");
-      const scratchPayoutPlan = multiDayFinalPayoutPlan(config.label, "Scratch", payoutCount);
-      const handicapPayoutPlan = multiDayFinalPayoutPlan(config.label, "Handicap", payoutCount);
+      const scratchPayoutPlan = multiDayFinalPayoutPlan(config.label, "Scratch", scratchPayoutCount);
+      const handicapPayoutPlan = multiDayFinalPayoutPlan(config.label, "Handicap", handicapPayoutCount);
       const scratchByKey = new Map(scratchPlaced.map((row) => [paidWinnerKey(row, config.id), row]));
       const handicapByKey = new Map(handicapPlaced.map((row) => [paidWinnerKey(row, config.id), row]));
       const chosenByKey = new Map();
@@ -15411,7 +15442,11 @@ function MultiDayEventsTab({
         const divisionRows = [...chosenByKey.values()]
           .filter((row) => row.division === division)
           .sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || String(a.name || "").localeCompare(String(b.name || "")));
-        visiblePaidWinners(divisionRows, division === "Scratch" ? scratchPayoutPlan : handicapPayoutPlan, payoutCount).forEach((row) => winners.push(row));
+        visiblePaidWinners(
+          divisionRows,
+          division === "Scratch" ? scratchPayoutPlan : handicapPayoutPlan,
+          division === "Scratch" ? scratchPayoutCount : handicapPayoutCount
+        ).forEach((row) => winners.push(row));
       });
       return winners;
     });
