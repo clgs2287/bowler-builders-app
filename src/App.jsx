@@ -15448,7 +15448,9 @@ function MultiDayEventsTab({
           chosenByKey.set(key, { ...handicapRow, event: config.label, division: "Handicap", divisionPlace: handicapRow.place, divisionPlaceLabel: handicapRow.placeLabel, score: handicapRow.total, payoutAmount: payoutAmountForPlacedRow(handicapPlaced, handicapRow, handicapPayoutPlan) });
           return;
         }
-        const useHandicap = handicapRow.place < scratchRow.place;
+        // When a bowler's initial rank is the same in both divisions, preserve
+        // the better practical finish by assigning Handicap before re-ranking.
+        const useHandicap = handicapRow.place <= scratchRow.place;
         const chosen = useHandicap ? handicapRow : scratchRow;
         chosenByKey.set(key, {
           ...chosen,
