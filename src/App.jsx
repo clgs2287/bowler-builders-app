@@ -14544,7 +14544,13 @@ function MultiDayEventsTab({
       return matchedYear || "Unknown";
     };
     const archiveSeasons = Array.from(new Set(archives.map(archiveSeason))).sort((left, right) => right.localeCompare(left));
-    const filteredArchives = archives.filter((archive) => multiDayArchiveYear === "all" || archiveSeason(archive) === multiDayArchiveYear);
+    const filteredArchives = archives
+      .filter((archive) => multiDayArchiveYear === "all" || archiveSeason(archive) === multiDayArchiveYear)
+      .sort((left, right) =>
+        archiveSeason(right).localeCompare(archiveSeason(left)) ||
+        String(right.dates || right.archivedAt || "").localeCompare(String(left.dates || left.archivedAt || "")) ||
+        String(right.archivedAt || "").localeCompare(String(left.archivedAt || ""))
+      );
     const archiveSortValue = (row, key) => {
       if (key === "place") return Number(String(row.place || "").replace(/[^0-9.]/g, "")) || 9999;
       if (["avg", "cash", "cashes", "events", "games", "handicap", "handicapAvg", "payout", "score", "scratch", "tournaments", "total", "wins"].includes(key)) return Number(row[key] || 0);
