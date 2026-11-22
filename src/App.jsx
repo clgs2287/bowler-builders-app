@@ -4028,7 +4028,7 @@ function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator",
     .filter((section) => isAdminMode || section.id === "leaderboard" || (section.id === "multiDay" && multiDayPublicVisible))
     .map((section) => ({
       ...section,
-      label: section.id === "multiDay" && multiDayEventName ? multiDayEventName : section.label,
+      label: section.id === "multiDay" && multiDayEventName ? multiDayEventName.replace(/\s*['’]?\d{2,4}\s*$/, "") : section.label,
       tabs: section.tabs.filter((tab) => {
         if (tab.hideForSweeper && tournamentFormat === "sweeper") return false;
         if (matchplayTournament && tab.id === "public") return false;
