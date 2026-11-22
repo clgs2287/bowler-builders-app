@@ -1205,8 +1205,7 @@ function formatPhoneNumber(value) {
 function formatUsbcMemberId(value) {
   return String(value || "")
     .replace(/[^\d-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/-+/g, "-");
 }
 
 function usbcMemberIdKey(value) {
@@ -12448,7 +12447,7 @@ function MultiDayEventsTab({
                                 {members.map((member, memberIndex) => (
                                   <tr key={`${line.id}-member-${memberIndex}`} className="border-t">
                                     <td className="p-1.5 font-black text-blue-950">{memberIndex + 1}</td>
-                                    <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" list="multi-day-known-bowlers" value={formatEntryBowlerName(member.name)} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
+                                    <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" list="multi-day-known-bowlers" value={member.name || ""} onChange={(e) => updatePacketMemberName(packet.id, line.id, memberIndex, memberCount, e.target.value)} /></td>
                                     <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.usbc || ""} inputMode="text" placeholder="USBC #" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "usbc", formatUsbcMemberId(e.target.value))} /></td>
                                     <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "lastSeasonAverage", e.target.value)} /></td>
                                     <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updatePacketMemberDetail(packet.id, line.id, memberIndex, memberCount, "average", e.target.value)} /></td>
@@ -12630,7 +12629,7 @@ function MultiDayEventsTab({
                       <div>
                         <Label>{competition === "Singles" ? "Bowler Name" : `${competition} / Team Name`}</Label>
                         <Input
-                          value={competition === "Singles" ? formatEntryBowlerName(entry.name) : entry.name || ""}
+                          value={entry.name || ""}
                           list={competition === "Singles" ? "multi-day-known-bowlers" : undefined}
                           onChange={(e) => updateEntryName(activeSquad.id, entry.id, competition, e.target.value)}
                           placeholder={competition === "Singles" ? "Bowler name" : "Team name"}
@@ -12705,7 +12704,7 @@ function MultiDayEventsTab({
                           {members.map((member, memberIndex) => (
                             <tr key={`${entry.id}-member-${memberIndex}`} className="border-t">
                               <td className="p-1.5 font-black text-blue-950">{memberIndex + 1}</td>
-                              <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={formatEntryBowlerName(member.name)} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
+                              <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.name || ""} list="multi-day-known-bowlers" onChange={(e) => updateEntryMemberName(activeSquad.id, entry.id, memberIndex, e.target.value)} placeholder={`Bowler ${memberIndex + 1}`} /></td>
                               <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" value={member.usbc || ""} inputMode="text" placeholder="USBC #" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "usbc", formatUsbcMemberId(e.target.value))} /></td>
                               <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" type="number" value={member.lastSeasonAverage || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "lastSeasonAverage", e.target.value)} /></td>
                               <td className="p-1.5"><Input className="w-full min-w-0 px-2 py-1 text-xs" type="number" value={member.average || ""} placeholder="Avg" onChange={(e) => updateEntryMemberDetail(activeSquad.id, entry.id, memberIndex, "average", e.target.value)} /></td>
