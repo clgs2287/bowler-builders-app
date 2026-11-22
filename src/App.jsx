@@ -11915,7 +11915,10 @@ function MultiDayEventsTab({
         <section className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm">
           <div className="bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 p-5 text-white md:p-7">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-200">Multi-Event Tournament</p>
-            <h2 className="mt-2 text-3xl font-black md:text-4xl">{multiDayEvent.name || "Tournament Name"}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h2 className="text-3xl font-black md:text-4xl">{multiDayEvent.name || "Tournament Name"}</h2>
+              <span className="rounded-full border border-amber-200/60 bg-amber-100/15 px-3 py-1 text-sm font-black text-amber-100">Entry information coming soon</span>
+            </div>
             <div className="mt-4 grid gap-3 text-sm font-bold md:grid-cols-3">
               <div className="rounded-2xl border border-white/15 bg-white/10 p-3">
                 <p className="text-xs uppercase text-blue-200">Dates</p>
