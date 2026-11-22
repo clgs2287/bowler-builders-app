@@ -15105,7 +15105,7 @@ function MultiDayEventsTab({
 
   if (mode === "leaderboards") {
     const isPublicLeaderboard = !isAdminMode;
-    const leaderboardView = isPublicLeaderboard ? "standings" : multiDayLeaderboardView;
+    const leaderboardView = multiDayLeaderboardView;
     const leaderboardConfigs = [
       { id: "singles", label: "Singles", rows: singlesRows, nameLabel: "Bowler" },
       { id: "doubles", label: "Doubles", rows: doublesRows, nameLabel: "Doubles Entry" },
@@ -15113,6 +15113,10 @@ function MultiDayEventsTab({
       { id: "allEvents", label: "All Events", rows: allEventsRows, nameLabel: "Bowler" },
     ];
     const paidWinnerConfigs = [...leaderboardConfigs, { id: "youth", label: "Youth", rows: youthRows, nameLabel: "Bowler" }];
+    const publishedPayoutRows = (multiDayEvent.publishedPayouts?.winners || [])
+      .filter((row) => (multiDayPaidWinnerEvent === "all" || row.event === paidWinnerConfigs.find((config) => config.id === multiDayPaidWinnerEvent)?.label))
+      .filter((row) => multiDayPaidWinnerDivision === "all" || row.division === multiDayPaidWinnerDivision)
+      .sort((left, right) => String(left.event || "").localeCompare(String(right.event || "")) || String(left.division || "").localeCompare(String(right.division || "")) || Number(left.paidPlace || left.place || 0) - Number(right.paidPlace || right.place || 0) || String(left.name || "").localeCompare(String(right.name || "")));
     const activeLeaderboardConfig = leaderboardConfigs.find((config) => config.id === multiDayLeaderboardEvent) || leaderboardConfigs[0];
     const squadFilterOptions = squads
       .filter((squad) => (squad.entries || []).length > 0)
@@ -15563,7 +15567,7 @@ function MultiDayEventsTab({
               </div>
             </div>
 
-            {!isPublicLeaderboard && <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               {[
                 { id: "standings", label: "Standings" },
                 { id: "lookup", label: "Bowler Lookup" },
@@ -15578,7 +15582,7 @@ function MultiDayEventsTab({
                   {view.label}
                 </button>
               ))}
-            </div>}
+            </div>
 
             {leaderboardView === "standings" && <div className="flex flex-wrap gap-2">
               {leaderboardConfigs.map((config) => (
@@ -15604,7 +15608,42 @@ function MultiDayEventsTab({
               {scoreTable(`${activeLeaderboardConfig.label} Handicap`, filteredLeaderboardRows, "handicap", "total")}
             </div>}
             {leaderboardView === "lookup" && bowlerLookupTable}
-            {leaderboardView === "paid" && (
+            {leaderboardView === "paid" && (isPublicLeaderboard ? (
+              <div className="space-y-3">
+                <div>
+                  <h3 className="font-black text-blue-950">Final Payouts</h3>
+                  <p className="text-sm font-semibold text-blue-700">Final payouts are shown after they have been reviewed and published.</p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 md:max-w-2xl">
+                  <div>
+                    <Label>Payout Event</Label>
+                    <select value={multiDayPaidWinnerEvent} onChange={(event) => setMultiDayPaidWinnerEvent(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">
+                      <option value="all">All Payouts</option>
+                      {paidWinnerConfigs.map((config) => <option key={config.id} value={config.id}>{config.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Division</Label>
+                    <select value={multiDayPaidWinnerDivision} onChange={(event) => setMultiDayPaidWinnerDivision(event.target.value)} className="mt-1 h-10 w-full rounded-xl border border-blue-200 bg-white px-3 text-sm font-semibold text-blue-950">
+                      <option value="all">Scratch & Handicap</option>
+                      <option value="Scratch">Scratch</option>
+                      <option value="Handicap">Handicap</option>
+                    </select>
+                  </div>
+                </div>
+                {!multiDayEvent.publishedPayouts ? <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-800">Final payouts have not been published yet.</div> : (
+                  <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                    <table className="w-full min-w-[680px] text-sm">
+                      <thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Event</th><th className="p-3 text-left">Division</th><th className="p-3 text-left">Place</th><th className="p-3 text-left">Winner</th><th className="p-3 text-right">Series</th><th className="p-3 text-right">Payout</th></tr></thead>
+                      <tbody>
+                        {publishedPayoutRows.map((winner, index) => <tr key={`${winner.event}-${winner.division}-${winner.name}-${index}`} className={winner.bonus ? "border-t bg-green-50" : "border-t"}><td className="p-3 font-bold text-blue-950">{winner.event}</td><td className="p-3">{winner.division}{winner.bonus && <span className="ml-2 rounded-full bg-green-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Bonus</span>}</td><td className="p-3">#{winner.paidPlaceLabel || winner.place || "1"}</td><td className="p-3 font-semibold">{winner.name}</td><td className="p-3 text-right font-black">{winner.score || "-"}</td><td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(winner.payoutAmount || winner.payout || 0)}</td></tr>)}
+                        {publishedPayoutRows.length === 0 && <tr><td colSpan={6} className="p-4 text-blue-700">No finalized payouts match these filters.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
               <div className="space-y-3">
                 <div className="flex flex-col gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -15641,7 +15680,7 @@ function MultiDayEventsTab({
                 </div>
                 {paidWinnersTable}
               </div>
-            )}
+            ))}
           </CardContent>
         </AppCard>
       </div>
