@@ -11275,13 +11275,13 @@ function MultiDayEventsTab({
       },
     };
   });
-  const updateMultiDayPayoutSpotCount = (competition, division, value, minimum) => updateMultiDayFinanceSettings((current) => {
+  const updateMultiDayPayoutSpotCount = (competition, division, value, defaultCount) => updateMultiDayFinanceSettings((current) => {
     const eventOverrides = { ...((current.payoutSpotOverrides || {})[competition] || {}) };
     const spotCount = Number(value || 0);
-    if (!Number.isFinite(spotCount) || spotCount <= minimum) {
+    if (!Number.isFinite(spotCount) || spotCount < 1 || spotCount === defaultCount) {
       delete eventOverrides[division];
     } else {
-      eventOverrides[division] = Math.floor(spotCount);
+      eventOverrides[division] = Math.max(1, Math.floor(spotCount));
     }
     return {
       ...current,
@@ -11310,7 +11310,7 @@ function MultiDayEventsTab({
   const multiDayPayoutSpotCount = (row, division = "") => {
     const base = multiDayBasePayoutSpotCount(row);
     const override = Number(multiDayFinanceSettings.payoutSpotOverrides?.[row.competition]?.[division] || 0);
-    return Math.max(base, Number.isFinite(override) ? Math.floor(override) : base);
+    return Number.isFinite(override) && override >= 1 ? Math.floor(override) : base;
   };
   const multiDayPresetPayouts = (competition) => ({
     Singles: [250, 225, 200, 175, 150, 125, 100, 90, 80, 70, 60, 50],
@@ -12985,7 +12985,7 @@ function MultiDayEventsTab({
                                 <div key={`${row.competition}-${division.label}`} className="rounded-2xl border border-blue-200 bg-white">
                                   <div className="flex items-start justify-between gap-3 border-b border-blue-100 px-4 py-3">
                                     <div><h4 className="font-black text-blue-950">{division.label} Payouts</h4><p className="text-xs font-bold text-blue-700">Prize fund {currency(division.fund)}</p></div>
-                                    <div className="flex items-end gap-2"><label className="text-right text-xs font-black text-blue-800">Paid Spots<PayoutSpotInput value={division.spots} minimum={basePaidSpots} onCommit={(next) => updateMultiDayPayoutSpotCount(row.competition, division.key, next, basePaidSpots)} /></label><Button variant="outline" className="h-8 rounded-xl px-2 text-xs" onClick={() => clearMultiDayManualPayouts(row.competition, division.key)}>Reset</Button></div>
+                                    <div className="flex items-end gap-2"><label className="text-right text-xs font-black text-blue-800">Paid Spots<PayoutSpotInput value={division.spots} minimum={1} onCommit={(next) => updateMultiDayPayoutSpotCount(row.competition, division.key, next, basePaidSpots)} /></label><Button variant="outline" className="h-8 rounded-xl px-2 text-xs" onClick={() => clearMultiDayManualPayouts(row.competition, division.key)}>Reset</Button></div>
                                   </div>
                                   <table className="w-full text-sm">
                                     <thead className="bg-blue-800 text-white">
