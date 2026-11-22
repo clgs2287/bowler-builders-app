@@ -14623,16 +14623,17 @@ function MultiDayEventsTab({
             (section.rows || []).forEach((row) => {
               (row.details || []).forEach((detail, detailIndex) => {
                 const detailName = detail.name || row.name;
-                const stat = ensureBowlerStats(detailName);
-                if (!stat) return;
+                if (["Singles AE", "Doubles AE", "Team AE"].includes(detailName)) return;
                 const seenKey = [archive.id, section.title, row.name, detailName, detailIndex].join("|");
                 if (detailSeen.has(seenKey)) return;
-                detailSeen.add(seenKey);
                 const games = (detail.games || []).map((score) => Number(score || 0)).filter((score) => score > 0);
                 const scratch = Number(detail.scratch || games.reduce((sum, score) => sum + score, 0) || 0);
                 const total = Number(detail.total || scratch || 0);
                 const handicap = Math.max(0, Number(detail.handicap || total - scratch || 0));
                 if (!scratch && !total) return;
+                const stat = ensureBowlerStats(detailName);
+                if (!stat) return;
+                detailSeen.add(seenKey);
                 stat.tournamentsSet.add(archive.id);
                 stat.events += 1;
                 stat.games += games.length || (scratch ? 3 : 0);
