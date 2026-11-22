@@ -1083,7 +1083,6 @@ const PUBLIC_TAB_IDS = new Set([
   "publicreservations",
   "multiDayInfo",
   "multiDayPublicSideAction",
-  "multiDayPublicResults",
   "multiDayLeaderboards",
   "multiDayArchive",
 ]);
@@ -1091,7 +1090,7 @@ const PUBLIC_TAB_IDS = new Set([
 const MULTI_DAY_PUBLIC_TAB_IDS = new Set([
   "multiDayInfo",
   "multiDayPublicSideAction",
-  "multiDayPublicResults",
+  "multiDayLeaderboards",
   "multiDayArchive",
 ]);
 
@@ -4005,7 +4004,6 @@ tabs: [
       { id: "multiDaySideAction", label: "Brackets" },
       { id: "multiDayScores", label: "Score Entry" },
       { id: "multiDayPublicSideAction", label: "Side Action" },
-      { id: "multiDayPublicResults", label: "Results" },
       { id: "multiDayLeaderboards", label: "Leaderboards" },
       { id: "multiDayArchive", label: "Tournament History" },
     ],
@@ -4035,9 +4033,8 @@ function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator",
         if (matchplayTournament && tab.id === "public") return false;
         if (eliminatorTournament && tab.id === "public") return false;
         if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(tab.id)) return false;
-        if (!isAdminMode && tab.id === "multiDayLeaderboards") return false;
         return isAdminMode || PUBLIC_TAB_IDS.has(tab.id);
-      }),
+      }).map((tab) => !isAdminMode && tab.id === "multiDayLeaderboards" ? { ...tab, label: "Leaderboard" } : tab),
     }))
     .filter((section) => section.tabs.length > 0);
 }
@@ -9836,7 +9833,6 @@ function MultiDayEventsTab({
   const [multiDayArchiveSideFilters, setMultiDayArchiveSideFilters] = useState({});
   const [multiDayArchiveLeaderboardTabs, setMultiDayArchiveLeaderboardTabs] = useState({});
   const [multiDayArchiveSort, setMultiDayArchiveSort] = useState({});
-  const [multiDayPublicResultsSort, setMultiDayPublicResultsSort] = useState({ key: "event", direction: "asc" });
   const [multiDayLeaderboardSort, setMultiDayLeaderboardSort] = useState({
     scratch: { key: "scratch", direction: "desc" },
     handicap: { key: "total", direction: "desc" },
@@ -15107,36 +15103,9 @@ function MultiDayEventsTab({
     );
   }
 
-  if (mode === "leaderboards" || mode === "publicResults") {
-    const isPublicResultsMode = mode === "publicResults";
-    const publishedPayouts = multiDayEvent.publishedPayouts;
-    const publishedWinners = publishedPayouts?.winners || [];
-    const leaderboardView = isPublicResultsMode ? "standings" : multiDayLeaderboardView;
-    const publicResultsSortArrow = (key) => multiDayPublicResultsSort.key === key
-      ? multiDayPublicResultsSort.direction === "asc" ? "▲" : "▼"
-      : "↕";
-    const setPublicResultsSort = (key, defaultDirection = "asc") => setMultiDayPublicResultsSort((current) => ({
-      key,
-      direction: current.key === key && current.direction === defaultDirection ? "desc" : defaultDirection,
-    }));
-    const sortedPublishedWinners = [...publishedWinners].sort((left, right) => {
-      const { key, direction } = multiDayPublicResultsSort;
-      const factor = direction === "asc" ? 1 : -1;
-      const valueFor = (winner) => {
-        if (key === "place") return Number(winner.paidPlace || winner.place || 0);
-        if (key === "series") return Number(winner.score || 0);
-        if (key === "payout") return Number(winner.payoutAmount || winner.payout || 0);
-        return String(winner[key] || "").toLowerCase();
-      };
-      const leftValue = valueFor(left);
-      const rightValue = valueFor(right);
-      if (typeof leftValue === "number" && typeof rightValue === "number") {
-        if (leftValue !== rightValue) return (leftValue - rightValue) * factor;
-      } else if (leftValue !== rightValue) {
-        return String(leftValue).localeCompare(String(rightValue)) * factor;
-      }
-      return String(left.name || "").localeCompare(String(right.name || ""));
-    });
+  if (mode === "leaderboards") {
+    const isPublicLeaderboard = !isAdminMode;
+    const leaderboardView = isPublicLeaderboard ? "standings" : multiDayLeaderboardView;
     const leaderboardConfigs = [
       { id: "singles", label: "Singles", rows: singlesRows, nameLabel: "Bowler" },
       { id: "doubles", label: "Doubles", rows: doublesRows, nameLabel: "Doubles Entry" },
@@ -15571,42 +15540,12 @@ function MultiDayEventsTab({
 
     return (
       <div className="space-y-4">
-        {!isPublicResultsMode && testDraftControls}
-        {isPublicResultsMode && (
-          <AppCard>
-            <CardContent className="space-y-5 p-4 md:p-6">
-              <div>
-                <h2 className="text-2xl font-black text-blue-950">Final Payouts</h2>
-                <p className="text-sm font-semibold text-blue-700">Official tournament prize results are posted after review and finalization.</p>
-              </div>
-              {!publishedPayouts ? (
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-800">Final payouts have not been published yet.</div>
-              ) : (
-                <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                  <table className="w-full min-w-[680px] text-sm">
-                    <thead className="bg-blue-800 text-white"><tr>
-                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("event")} className="font-black">Event {publicResultsSortArrow("event")}</button></th>
-                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("division")} className="font-black">Division {publicResultsSortArrow("division")}</button></th>
-                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("place", "asc")} className="font-black">Place {publicResultsSortArrow("place")}</button></th>
-                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("name")} className="font-black">Winner {publicResultsSortArrow("name")}</button></th>
-                      <th className="p-3 text-right"><button type="button" onClick={() => setPublicResultsSort("series", "desc")} className="font-black">Series {publicResultsSortArrow("series")}</button></th>
-                      <th className="p-3 text-right"><button type="button" onClick={() => setPublicResultsSort("payout", "desc")} className="font-black">Payout {publicResultsSortArrow("payout")}</button></th>
-                    </tr></thead>
-                    <tbody>
-                      {sortedPublishedWinners.map((winner, index) => <tr key={`${winner.event}-${winner.division}-${winner.name}-${index}`} className={winner.bonus ? "border-t bg-green-50" : "border-t"}><td className="p-3 font-bold text-blue-950">{winner.event}</td><td className="p-3">{winner.division}{winner.bonus && <span className="ml-2 rounded-full bg-green-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Bonus</span>}</td><td className="p-3">#{winner.paidPlaceLabel || winner.place || "1"}</td><td className="p-3 font-semibold">{winner.name}</td><td className="p-3 text-right font-black">{winner.score || "-"}</td><td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(winner.payoutAmount || winner.payout || 0)}</td></tr>)}
-                      {sortedPublishedWinners.length === 0 && <tr><td colSpan={6} className="p-4 text-blue-700">No finalized payouts were published.</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </AppCard>
-        )}
+        {!isPublicLeaderboard && testDraftControls}
         <AppCard>
           <CardContent className="space-y-4 p-4 md:p-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-2xl font-black text-blue-950">{isPublicResultsMode ? "Tournament Standings" : "Multi-Event Leaderboards"}</h2>
+                <h2 className="text-2xl font-black text-blue-950">{isPublicLeaderboard ? "Tournament Leaderboard" : "Multi-Event Leaderboards"}</h2>
                 <p className="text-sm font-semibold text-blue-700">View scratch and handicap standings by event, with optional squad filtering.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 md:min-w-[520px]">
@@ -15624,7 +15563,7 @@ function MultiDayEventsTab({
               </div>
             </div>
 
-            {!isPublicResultsMode && <div className="flex flex-wrap gap-2">
+            {!isPublicLeaderboard && <div className="flex flex-wrap gap-2">
               {[
                 { id: "standings", label: "Standings" },
                 { id: "lookup", label: "Bowler Lookup" },
@@ -30238,6 +30177,11 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
       return;
     }
 
+    if (!isAdminMode && activeTab === "multiDayPublicResults") {
+      setActiveTab("multiDayLeaderboards");
+      return;
+    }
+
     if (!isAdminMode && (!PUBLIC_TAB_IDS.has(activeTab) || (MULTI_DAY_PUBLIC_TAB_IDS.has(activeTab) && !multiDayEvent.publicVisible))) {
       setActiveTab("tournamentInfo");
       return;
@@ -30589,11 +30533,6 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 {activeTab === "multiDayPublicSideAction" && (
   <AppErrorBoundary key="multiDayPublicSideAction">
     <MultiDayEventsTab mode="publicSideAction" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
-  </AppErrorBoundary>
-)}
-{activeTab === "multiDayPublicResults" && (
-  <AppErrorBoundary key="multiDayPublicResults">
-    <MultiDayEventsTab mode="publicResults" multiDayEvent={multiDayEvent} setMultiDayEvent={setMultiDayEvent} bowlerIdentities={bowlerIdentities} setBowlerIdentities={setBowlerIdentities} isAdminMode={isAdminMode} workingSquadId={multiDayWorkingSquadId} setWorkingSquadId={setMultiDayWorkingSquadId} />
   </AppErrorBoundary>
 )}
 {activeTab === "multiDayScores" && (
