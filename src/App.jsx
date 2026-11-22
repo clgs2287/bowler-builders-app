@@ -1092,7 +1092,6 @@ const MULTI_DAY_PUBLIC_TAB_IDS = new Set([
   "multiDayInfo",
   "multiDayPublicSideAction",
   "multiDayPublicResults",
-  "multiDayLeaderboards",
   "multiDayArchive",
 ]);
 
@@ -4036,6 +4035,7 @@ function visibleAppSections(isAdminMode = true, tournamentFormat = "eliminator",
         if (matchplayTournament && tab.id === "public") return false;
         if (eliminatorTournament && tab.id === "public") return false;
         if (!isAdminMode && !publicResultsUnlocked && ["public", "publicfinals"].includes(tab.id)) return false;
+        if (!isAdminMode && tab.id === "multiDayLeaderboards") return false;
         return isAdminMode || PUBLIC_TAB_IDS.has(tab.id);
       }),
     }))
@@ -9836,6 +9836,7 @@ function MultiDayEventsTab({
   const [multiDayArchiveSideFilters, setMultiDayArchiveSideFilters] = useState({});
   const [multiDayArchiveLeaderboardTabs, setMultiDayArchiveLeaderboardTabs] = useState({});
   const [multiDayArchiveSort, setMultiDayArchiveSort] = useState({});
+  const [multiDayPublicResultsSort, setMultiDayPublicResultsSort] = useState({ key: "event", direction: "asc" });
   const [multiDayLeaderboardSort, setMultiDayLeaderboardSort] = useState({
     scratch: { key: "scratch", direction: "desc" },
     handicap: { key: "total", direction: "desc" },
@@ -13426,36 +13427,6 @@ function MultiDayEventsTab({
       </AppCard>
     );
   }
-  if (mode === "publicResults") {
-    const publishedPayouts = multiDayEvent.publishedPayouts;
-    const winners = publishedPayouts?.winners || [];
-    return (
-      <AppCard>
-        <CardContent className="space-y-5 p-4 md:p-6">
-          <div>
-            <h2 className="text-2xl font-black text-blue-950">Final Payouts</h2>
-            <p className="text-sm font-semibold text-blue-700">Official tournament prize results are posted after review and finalization.</p>
-          </div>
-          {!publishedPayouts ? (
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-800">Final payouts have not been published yet.</div>
-          ) : (
-            <>
-              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Published {new Date(publishedPayouts.publishedAt).toLocaleString()}</p>
-              <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                <table className="w-full min-w-[680px] text-sm">
-                  <thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Event</th><th className="p-3 text-left">Division</th><th className="p-3 text-left">Place</th><th className="p-3 text-left">Winner</th><th className="p-3 text-right">Series</th><th className="p-3 text-right">Payout</th></tr></thead>
-                  <tbody>
-                    {winners.map((winner, index) => <tr key={`${winner.event}-${winner.division}-${winner.name}-${index}`} className={winner.bonus ? "border-t bg-green-50" : "border-t"}><td className="p-3 font-bold text-blue-950">{winner.event}</td><td className="p-3">{winner.division}{winner.bonus && <span className="ml-2 rounded-full bg-green-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Bonus</span>}</td><td className="p-3">#{winner.paidPlaceLabel || winner.place || "1"}</td><td className="p-3 font-semibold">{winner.name}</td><td className="p-3 text-right font-black">{winner.score || "-"}</td><td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(winner.payoutAmount || winner.payout || 0)}</td></tr>)}
-                    {winners.length === 0 && <tr><td colSpan={6} className="p-4 text-blue-700">No finalized payouts were published.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </AppCard>
-    );
-  }
   if (mode === "laneAssignments") {
     const laneCounts = laneOccupancyForSquad(activeSquad);
     const laneSummary = Object.entries(laneCounts)
@@ -15136,7 +15107,36 @@ function MultiDayEventsTab({
     );
   }
 
-  if (mode === "leaderboards") {
+  if (mode === "leaderboards" || mode === "publicResults") {
+    const isPublicResultsMode = mode === "publicResults";
+    const publishedPayouts = multiDayEvent.publishedPayouts;
+    const publishedWinners = publishedPayouts?.winners || [];
+    const leaderboardView = isPublicResultsMode ? "standings" : multiDayLeaderboardView;
+    const publicResultsSortArrow = (key) => multiDayPublicResultsSort.key === key
+      ? multiDayPublicResultsSort.direction === "asc" ? "▲" : "▼"
+      : "↕";
+    const setPublicResultsSort = (key, defaultDirection = "asc") => setMultiDayPublicResultsSort((current) => ({
+      key,
+      direction: current.key === key && current.direction === defaultDirection ? "desc" : defaultDirection,
+    }));
+    const sortedPublishedWinners = [...publishedWinners].sort((left, right) => {
+      const { key, direction } = multiDayPublicResultsSort;
+      const factor = direction === "asc" ? 1 : -1;
+      const valueFor = (winner) => {
+        if (key === "place") return Number(winner.paidPlace || winner.place || 0);
+        if (key === "series") return Number(winner.score || 0);
+        if (key === "payout") return Number(winner.payoutAmount || winner.payout || 0);
+        return String(winner[key] || "").toLowerCase();
+      };
+      const leftValue = valueFor(left);
+      const rightValue = valueFor(right);
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        if (leftValue !== rightValue) return (leftValue - rightValue) * factor;
+      } else if (leftValue !== rightValue) {
+        return String(leftValue).localeCompare(String(rightValue)) * factor;
+      }
+      return String(left.name || "").localeCompare(String(right.name || ""));
+    });
     const leaderboardConfigs = [
       { id: "singles", label: "Singles", rows: singlesRows, nameLabel: "Bowler" },
       { id: "doubles", label: "Doubles", rows: doublesRows, nameLabel: "Doubles Entry" },
@@ -15571,12 +15571,42 @@ function MultiDayEventsTab({
 
     return (
       <div className="space-y-4">
-        {testDraftControls}
+        {!isPublicResultsMode && testDraftControls}
+        {isPublicResultsMode && (
+          <AppCard>
+            <CardContent className="space-y-5 p-4 md:p-6">
+              <div>
+                <h2 className="text-2xl font-black text-blue-950">Final Payouts</h2>
+                <p className="text-sm font-semibold text-blue-700">Official tournament prize results are posted after review and finalization.</p>
+              </div>
+              {!publishedPayouts ? (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-800">Final payouts have not been published yet.</div>
+              ) : (
+                <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                  <table className="w-full min-w-[680px] text-sm">
+                    <thead className="bg-blue-800 text-white"><tr>
+                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("event")} className="font-black">Event {publicResultsSortArrow("event")}</button></th>
+                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("division")} className="font-black">Division {publicResultsSortArrow("division")}</button></th>
+                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("place", "asc")} className="font-black">Place {publicResultsSortArrow("place")}</button></th>
+                      <th className="p-3 text-left"><button type="button" onClick={() => setPublicResultsSort("name")} className="font-black">Winner {publicResultsSortArrow("name")}</button></th>
+                      <th className="p-3 text-right"><button type="button" onClick={() => setPublicResultsSort("series", "desc")} className="font-black">Series {publicResultsSortArrow("series")}</button></th>
+                      <th className="p-3 text-right"><button type="button" onClick={() => setPublicResultsSort("payout", "desc")} className="font-black">Payout {publicResultsSortArrow("payout")}</button></th>
+                    </tr></thead>
+                    <tbody>
+                      {sortedPublishedWinners.map((winner, index) => <tr key={`${winner.event}-${winner.division}-${winner.name}-${index}`} className={winner.bonus ? "border-t bg-green-50" : "border-t"}><td className="p-3 font-bold text-blue-950">{winner.event}</td><td className="p-3">{winner.division}{winner.bonus && <span className="ml-2 rounded-full bg-green-700 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Bonus</span>}</td><td className="p-3">#{winner.paidPlaceLabel || winner.place || "1"}</td><td className="p-3 font-semibold">{winner.name}</td><td className="p-3 text-right font-black">{winner.score || "-"}</td><td className="p-3 text-right font-black text-green-700">{currencyWithOptionalCents(winner.payoutAmount || winner.payout || 0)}</td></tr>)}
+                      {sortedPublishedWinners.length === 0 && <tr><td colSpan={6} className="p-4 text-blue-700">No finalized payouts were published.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </AppCard>
+        )}
         <AppCard>
           <CardContent className="space-y-4 p-4 md:p-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-2xl font-black text-blue-950">Multi-Event Leaderboards</h2>
+                <h2 className="text-2xl font-black text-blue-950">{isPublicResultsMode ? "Tournament Standings" : "Multi-Event Leaderboards"}</h2>
                 <p className="text-sm font-semibold text-blue-700">View scratch and handicap standings by event, with optional squad filtering.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 md:min-w-[520px]">
@@ -15594,7 +15624,7 @@ function MultiDayEventsTab({
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            {!isPublicResultsMode && <div className="flex flex-wrap gap-2">
               {[
                 { id: "standings", label: "Standings" },
                 { id: "lookup", label: "Bowler Lookup" },
@@ -15609,9 +15639,9 @@ function MultiDayEventsTab({
                   {view.label}
                 </button>
               ))}
-            </div>
+            </div>}
 
-            {multiDayLeaderboardView === "standings" && <div className="flex flex-wrap gap-2">
+            {leaderboardView === "standings" && <div className="flex flex-wrap gap-2">
               {leaderboardConfigs.map((config) => (
                 <button
                   key={config.id}
@@ -15630,12 +15660,12 @@ function MultiDayEventsTab({
               ))}
             </div>}
 
-            {multiDayLeaderboardView === "standings" && <div className="grid gap-4 xl:grid-cols-2">
+            {leaderboardView === "standings" && <div className="grid gap-4 xl:grid-cols-2">
               {scoreTable(`${activeLeaderboardConfig.label} Scratch`, filteredLeaderboardRows, "scratch", "scratch")}
               {scoreTable(`${activeLeaderboardConfig.label} Handicap`, filteredLeaderboardRows, "handicap", "total")}
             </div>}
-            {multiDayLeaderboardView === "lookup" && bowlerLookupTable}
-            {multiDayLeaderboardView === "paid" && (
+            {leaderboardView === "lookup" && bowlerLookupTable}
+            {leaderboardView === "paid" && (
               <div className="space-y-3">
                 <div className="flex flex-col gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 md:flex-row md:items-center md:justify-between">
                   <div>
