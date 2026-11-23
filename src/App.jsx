@@ -1123,6 +1123,25 @@ const numberInputStyles = String.raw`
   .bb-public-all-titles-table .bb-all-titles-type-col { width: 13%; }
   .bb-public-all-titles-table .bb-all-titles-nickname-col { display: none !important; }
 
+  .bb-public-hof-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-public-hof-table th,
+  .bb-public-hof-table td {
+    padding: 0.42rem 0.32rem !important;
+    font-size: 0.72rem !important;
+    line-height: 1.12 !important;
+  }
+
+  .bb-public-hof-table .bb-hof-name-col { width: 70%; }
+  .bb-public-hof-table .bb-hof-year-col {
+    width: 30%;
+    white-space: nowrap !important;
+  }
+  .bb-public-hof-table .bb-hof-nickname-col { display: none !important; }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -22143,20 +22162,20 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
   </div>
 
   <div className="overflow-auto rounded-2xl border border-blue-200">
-    <table className="bb-mobile-table bb-mobile-tight w-full min-w-[520px] text-xs md:text-sm">
+    <table className="bb-mobile-table bb-mobile-tight bb-public-hof-table w-full min-w-[520px] text-xs md:text-sm">
       <thead className="bg-blue-800 text-white">
         <tr>
-          <th className="p-3 text-left">Name</th>
-          <th className="p-3 text-left">Nickname</th>
-          <th className="p-3 text-left">Induction Year</th>
+          <th className="bb-hof-name-col p-3 text-left">Name</th>
+          <th className="bb-hof-nickname-col p-3 text-left">Nickname</th>
+          <th className="bb-hof-year-col p-3 text-left">Induction Year</th>
         </tr>
       </thead>
       <tbody>
         {sortedPublicHofTitles.map((title) => (
           <tr key={`public-hof-${title.id}`} className="border-t">
-            <td className="p-3 font-bold text-blue-950">{publicRealNameFor(title.bowler) || title.bowler}</td>
-            <td className="p-3 font-semibold text-blue-900">{publicRealNameFor(title.bowler) ? title.bowler : " - -"}</td>
-            <td className="p-3 text-blue-900">{title.season || "-"}</td>
+            <td className="bb-hof-name-col p-3 font-bold text-blue-950">{publicRealNameFor(title.bowler) || title.bowler}</td>
+            <td className="bb-hof-nickname-col p-3 font-semibold text-blue-900">{publicRealNameFor(title.bowler) ? title.bowler : " - -"}</td>
+            <td className="bb-hof-year-col p-3 text-blue-900">{title.season || "-"}</td>
           </tr>
         ))}
         {sortedPublicHofTitles.length === 0 && (
