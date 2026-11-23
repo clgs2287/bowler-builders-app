@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const source=fs.readFileSync('src/App.jsx','utf8');
-const names=['isEliminatorFinalsFormat','isDirectEliminatorFinalsFormat','getEliminatorCutCount','isMatchplayTournament','isEliminatorTournamentStyle','winnerFromMatch','finalsGameScore','winnerFromBestOfThreeMatch','winnerFromStepladderMatch','getFinalPlacementRows','getAutoFinalsLineageGames'];
+const names=['isEliminatorFinalsFormat','isDirectEliminatorFinalsFormat','getEliminatorCutCount','isMatchplayTournament','isEliminatorTournamentStyle','winnerFromMatch','finalsGameScore','winnerFromBestOfThreeMatch','winnerFromStepladderMatch','buildStepladderMatches','getFinalPlacementRows','getAutoFinalsLineageGames'];
 const snippets=names.map(name=>{
   const start=source.indexOf(`function ${name}(`);
   const end=source.indexOf('\nfunction ',start+1);

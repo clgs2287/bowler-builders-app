@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test src/bracketPayouts.test.js src/bracketFillSuggestions.test.js src/teamReservations.test.js src/triosScoresheetPdf.test.js && node stepladder-logic-check.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
