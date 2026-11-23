@@ -1058,23 +1058,59 @@ const numberInputStyles = String.raw`
 
   .bb-multi-archive-stats-table th:nth-child(3),
   .bb-multi-archive-stats-table td:nth-child(3),
+  .bb-multi-archive-stats-table th:nth-child(5),
+  .bb-multi-archive-stats-table td:nth-child(5),
   .bb-multi-archive-stats-table th:nth-child(7),
-  .bb-multi-archive-stats-table td:nth-child(7),
-  .bb-multi-archive-stats-table th:nth-child(9),
-  .bb-multi-archive-stats-table td:nth-child(9) {
+  .bb-multi-archive-stats-table td:nth-child(7) {
     width: 15%;
   }
 
   .bb-multi-archive-stats-table th:nth-child(4),
   .bb-multi-archive-stats-table td:nth-child(4),
-  .bb-multi-archive-stats-table th:nth-child(5),
-  .bb-multi-archive-stats-table td:nth-child(5),
   .bb-multi-archive-stats-table th:nth-child(6),
   .bb-multi-archive-stats-table td:nth-child(6),
   .bb-multi-archive-stats-table th:nth-child(8),
-  .bb-multi-archive-stats-table td:nth-child(8) {
+  .bb-multi-archive-stats-table td:nth-child(8),
+  .bb-multi-archive-stats-table th:nth-child(9),
+  .bb-multi-archive-stats-table td:nth-child(9) {
     display: none !important;
   }
+
+  .bb-multi-archive-payout-table,
+  .bb-multi-archive-leaderboard-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-multi-archive-payout-table th,
+  .bb-multi-archive-payout-table td,
+  .bb-multi-archive-leaderboard-table th,
+  .bb-multi-archive-leaderboard-table td {
+    padding: 0.48rem 0.3rem !important;
+    font-size: 0.72rem !important;
+    line-height: 1.12 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-multi-archive-payout-table th:nth-child(1),
+  .bb-multi-archive-payout-table td:nth-child(1) { width: 19%; }
+  .bb-multi-archive-payout-table th:nth-child(2),
+  .bb-multi-archive-payout-table td:nth-child(2) { width: 21%; }
+  .bb-multi-archive-payout-table th:nth-child(3),
+  .bb-multi-archive-payout-table td:nth-child(3) { width: 12%; }
+  .bb-multi-archive-payout-table th:nth-child(4),
+  .bb-multi-archive-payout-table td:nth-child(4) { width: 31%; }
+  .bb-multi-archive-payout-table th:nth-child(6),
+  .bb-multi-archive-payout-table td:nth-child(6) { width: 17%; }
+  .bb-multi-archive-payout-table th:nth-child(5),
+  .bb-multi-archive-payout-table td:nth-child(5) { display: none !important; }
+
+  .bb-multi-archive-leaderboard-table th:nth-child(1),
+  .bb-multi-archive-leaderboard-table td:nth-child(1) { width: 15%; }
+  .bb-multi-archive-leaderboard-table th:nth-child(2),
+  .bb-multi-archive-leaderboard-table td:nth-child(2) { width: 61%; }
+  .bb-multi-archive-leaderboard-table th:nth-child(3),
+  .bb-multi-archive-leaderboard-table td:nth-child(3) { width: 24%; }
 }
 
 @media print {
@@ -15095,7 +15131,7 @@ function MultiDayEventsTab({
                   </div>
                 </div>
               <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                <table className="w-full min-w-[760px] text-sm">
+                <table className="bb-multi-archive-payout-table w-full min-w-[760px] text-sm">
                   <thead className="bg-blue-800 text-white"><tr>
                     <th className="p-3 text-left">{archiveSortButton(`${archive.id}-paid`, "event", "Event")}</th>
                     <th className="p-3 text-left">{archiveSortButton(`${archive.id}-paid`, "division", "Division")}</th>
@@ -15128,7 +15164,7 @@ function MultiDayEventsTab({
                 {archiveLeaderboardSectionsForTab.map((section) => (
                   <div key={`${archive.id}-${section.title}`} className="overflow-auto rounded-2xl border border-blue-200 bg-white">
                     <div className="border-b border-blue-100 bg-blue-50 px-4 py-3"><h4 className="font-black text-blue-950">{section.title}</h4></div>
-                    <table className="w-full min-w-[420px] text-sm">
+                    <table className="bb-multi-archive-leaderboard-table w-full min-w-[420px] text-sm">
                       <thead className="bg-blue-800 text-white">
                         <tr>
                           <th className="p-2 text-left">{archiveSortButton(`${archive.id}-${section.title}`, "place", "Place", "asc")}</th>
