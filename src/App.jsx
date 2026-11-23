@@ -15061,9 +15061,13 @@ function MultiDayEventsTab({
             (archive.paidWinners || []).some((row) => row.event === eventName)
           );
           const paidSearchTerm = normalizeMatchText(paidFilters.search || "");
+          const paidEventFilter = normalizeMatchText(paidFilters.event || "all");
+          const paidDivisionFilter = normalizeMatchText(paidFilters.division || "all");
+          const showAllPaidEvents = ["", "all", "all payouts"].includes(paidEventFilter);
+          const showAllPaidDivisions = ["", "all", "scratch handicap"].includes(paidDivisionFilter);
           const filteredArchivePaidWinners = (archive.paidWinners || []).filter((row) =>
-            (paidFilters.event === "all" || row.event === paidFilters.event) &&
-            (paidFilters.division === "all" || row.division === paidFilters.division) &&
+            (showAllPaidEvents || normalizeMatchText(row.event) === paidEventFilter) &&
+            (showAllPaidDivisions || normalizeMatchText(row.division) === paidDivisionFilter) &&
             (!paidSearchTerm || normalizeMatchText([row.name, row.event, row.division].join(" ")).includes(paidSearchTerm))
           );
           const leaderboardEventTabs = [
