@@ -28455,7 +28455,7 @@ row.matches.push({
                       <span className="shrink-0 text-base font-black text-green-700">{currency(row.total)}</span>
                     </button>
                     <div className="grid grid-cols-2 gap-x-3 border-t border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold">
-                      <span className="text-blue-800">1st {row.bracketFirsts || 0} · 2nd {row.bracketSeconds || 0} · HG {row.highGames || 0}</span>
+                      <span className="text-blue-800">1st: {row.bracketFirsts || 0} · 2nd: {row.bracketSeconds || 0} · HG: {row.highGames || 0}</span>
                       <span className="text-right text-blue-800">Brackets {currency(row.bracket)} · HG {currency(row.highGame)}</span>
                     </div>
                     {isExpanded && <div className="space-y-1 border-t border-blue-100 px-3 py-2">
