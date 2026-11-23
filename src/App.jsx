@@ -1142,6 +1142,30 @@ const numberInputStyles = String.raw`
   }
   .bb-public-hof-table .bb-hof-nickname-col { display: none !important; }
 
+  .bb-public-archive-results-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-public-archive-results-table th,
+  .bb-public-archive-results-table td {
+    padding: 0.38rem 0.24rem !important;
+    font-size: 0.68rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .bb-public-archive-results-table .bb-archive-place-col { width: 12%; }
+  .bb-public-archive-results-table .bb-archive-name-col { width: 52%; }
+  .bb-public-archive-results-table .bb-archive-score-col { width: 18%; }
+  .bb-public-archive-results-table .bb-archive-handicap-col { width: 18%; }
+  .bb-public-archive-results-table .bb-archive-average-col,
+  .bb-public-archive-results-table .bb-archive-note-col { display: none !important; }
+
+  .bb-public-archive-results-table .bb-archive-name-col span {
+    margin-left: 0.2rem !important;
+    font-size: 0.58rem !important;
+  }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -22236,17 +22260,17 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
       {publicArchiveSection === "results" && (
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-          <table className="bb-mobile-table bb-mobile-medium w-full min-w-[820px] text-xs md:text-sm">
+          <table className="bb-mobile-table bb-mobile-medium bb-public-archive-results-table w-full min-w-[820px] text-xs md:text-sm">
             <thead className="bg-blue-800 text-white">
               <tr>
-                <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "place", direction: current.column === "place" && current.direction === "asc" ? "desc" : "asc" }))}>Place</th>
-                <th className="cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "name", direction: current.column === "name" && current.direction === "asc" ? "desc" : "asc" }))}>Bowler</th>
+                <th className="bb-archive-place-col cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "place", direction: current.column === "place" && current.direction === "asc" ? "desc" : "asc" }))}>Place</th>
+                <th className="bb-archive-name-col cursor-pointer p-2 text-left hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "name", direction: current.column === "name" && current.direction === "asc" ? "desc" : "asc" }))}>Bowler</th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3">Games</th>
-                <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "scratch", direction: current.column === "scratch" && current.direction === "asc" ? "desc" : "asc" }))}>{selectedPublicArchiveSnapshot?.useHandicapScores ? "Scratch" : "Total"}</th>
-                {selectedPublicArchiveSnapshot?.useHandicapScores && <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "handicap", direction: current.column === "handicap" && current.direction === "asc" ? "desc" : "asc" }))}>Hdcp</th>}
-                <th className="cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "average", direction: current.column === "average" && current.direction === "asc" ? "desc" : "asc" }))}>Average</th>
+                <th className="bb-archive-score-col cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "scratch", direction: current.column === "scratch" && current.direction === "asc" ? "desc" : "asc" }))}>{selectedPublicArchiveSnapshot?.useHandicapScores ? "Scratch" : "Total"}</th>
+                {selectedPublicArchiveSnapshot?.useHandicapScores && <th className="bb-archive-handicap-col cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "handicap", direction: current.column === "handicap" && current.direction === "asc" ? "desc" : "asc" }))}>Hdcp</th>}
+                <th className="bb-archive-average-col cursor-pointer p-2 text-right hover:bg-blue-700 md:p-3" onClick={() => setPublicArchiveSort((current) => ({ column: "average", direction: current.column === "average" && current.direction === "asc" ? "desc" : "asc" }))}>Average</th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
-                <th className="p-2 text-left md:p-3">Note</th>
+                <th className="bb-archive-note-col p-2 text-left md:p-3">Note</th>
               </tr>
             </thead>
             <tbody>
@@ -22262,17 +22286,17 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                 return (Number(a.place || 0) - Number(b.place || 0)) * dir;
               }).map((result) => (
                 <tr key={selectedPublicArchive.id + "-" + result.bowlerId} className={result.title ? "border-t bg-yellow-50" : result.cashed ? "border-t bg-blue-50" : "border-t"}>
-                  <td className="p-2 font-bold md:p-3">#{result.place}</td>
-                  <td className="p-2 font-semibold md:p-3">
+                  <td className="bb-archive-place-col p-2 font-bold md:p-3">#{result.place}</td>
+                  <td className="bb-archive-name-col p-2 font-semibold md:p-3">
                     {result.name}
                     {selectedPublicArchiveSnapshot?.useHandicapScores && <span className="ml-2 text-xs font-semibold text-blue-700">(+{handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {})})</span>}
                   </td>
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{(result.games || []).join("-")}</td>
-                  <td className="p-2 text-right md:p-3">{result.scratchTotal}</td>
-                  {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0)}</td>}
-                  <td className="p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
+                  <td className="bb-archive-score-col p-2 text-right md:p-3">{result.scratchTotal}</td>
+                  {Boolean(selectedPublicArchiveSnapshot?.useHandicapScores) && <td className="bb-archive-handicap-col p-2 text-right font-semibold text-blue-700 md:p-3">{Number(result.scratchTotal || 0) + handicapPerGame(selectedPublicArchiveSnapshot?.bowlers?.find((bowler) => bowler.name === result.name) || {}) * ((result.games || []).length || 0)}</td>}
+                  <td className="bb-archive-average-col p-2 text-right font-semibold md:p-3">{Number(result.average || 0).toFixed(2)}</td>
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{result.cashed ? "Yes" : "No"}</td>
-                  <td className="p-2 text-sm text-blue-800 md:p-3">{result.adjustmentNote || " - -"}</td>
+                  <td className="bb-archive-note-col p-2 text-sm text-blue-800 md:p-3">{result.adjustmentNote || " - -"}</td>
                 </tr>
               ))}
             </tbody>
