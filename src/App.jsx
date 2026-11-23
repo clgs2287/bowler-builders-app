@@ -21943,7 +21943,30 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                 </tr>
 
                 {isExpanded && (
-                  <tr className="border-t bg-blue-50/70">
+                  <>
+                  <tr className="border-t bg-blue-50/70 sm:hidden">
+                    <td className="p-1.5" colSpan={5}>
+                      <table className="w-full table-fixed overflow-hidden rounded-xl border border-blue-100 bg-white text-xs">
+                        <thead className="bg-blue-800 text-white">
+                          <tr>
+                            <th className="w-[48%] p-2 text-left">Tournament</th>
+                            <th className="w-[27%] p-2 text-left">Date</th>
+                            <th className="w-[25%] p-2 text-left">Type</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {row.titleList.map((title) => (
+                            <tr key={`public-title-mobile-detail-row-${title.id}`} className="border-t border-blue-100">
+                              <td className="p-2 font-semibold text-blue-950">{title.tournament || "Historical Title"}{title.historicalTotal ? ` (${getTitleCount(title)} titles)` : ""}</td>
+                              <td className="bb-standard-mobile-detail-date p-2 text-blue-900">{title.date || "-"}</td>
+                              <td className="p-2 font-semibold text-blue-900">{getTitleCategoryLabel(title)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr className="hidden border-t bg-blue-50/70 sm:table-row">
                     <td className="p-3" colSpan={7}>
                       <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
                         <table className="w-full min-w-[640px] text-xs md:text-sm">
@@ -21971,6 +21994,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                       </div>
                     </td>
                   </tr>
+                  </>
                 )}
               </React.Fragment>
             );
