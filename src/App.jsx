@@ -28441,7 +28441,37 @@ row.matches.push({
         <AppCard>
           <CardContent className="p-3 md:p-5">
             <h2 className="mb-4 text-xl font-semibold text-blue-900">Side Action Payouts</h2>
-            <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+            <div className="space-y-2 sm:hidden">
+              {payoutRows.map((row) => {
+                const isExpanded = Boolean(expandedPayoutRows[row.seed]);
+                return (
+                  <div key={`public-side-payout-mobile-${row.seed}`} className="overflow-hidden rounded-xl border border-blue-200 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+                      onClick={() => setExpandedPayoutRows((current) => ({ ...current, [row.seed]: !current[row.seed] }))}
+                    >
+                      <span className="min-w-0 truncate font-black text-blue-950">{isExpanded ? "- " : "+ "}{row.name}</span>
+                      <span className="shrink-0 text-base font-black text-green-700">{currency(row.total)}</span>
+                    </button>
+                    <div className="grid grid-cols-2 gap-x-3 border-t border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold">
+                      <span className="text-blue-800">1st {row.bracketFirsts || 0} · 2nd {row.bracketSeconds || 0} · HG {row.highGames || 0}</span>
+                      <span className="text-right text-blue-800">Brackets {currency(row.bracket)} · HG {currency(row.highGame)}</span>
+                    </div>
+                    {isExpanded && <div className="space-y-1 border-t border-blue-100 px-3 py-2">
+                      {row.details.map((detail, detailIndex) => (
+                        <div key={`public-side-pay-mobile-detail-${row.seed}-${detailIndex}`} className="flex items-start justify-between gap-3 text-xs font-semibold text-blue-900">
+                          <span>{detail.detail}</span>
+                          <span className="shrink-0 font-black text-green-700">{currency(detail.amount)}</span>
+                        </div>
+                      ))}
+                    </div>}
+                  </div>
+                );
+              })}
+              {payoutRows.length === 0 && <p className="rounded-xl border border-blue-200 bg-white p-4 text-sm text-blue-700">No side-action payouts calculated yet.</p>}
+            </div>
+            <div className="hidden overflow-auto rounded-2xl border border-blue-200 bg-white sm:block">
               <table className="bb-public-side-payout-table w-full min-w-[760px] text-xs md:text-sm">
                 <thead className="bg-blue-800 text-white">
                   <tr>
