@@ -21625,7 +21625,18 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                 {expanded && (
                   <tr className="border-t bg-blue-50/60">
                     <td colSpan={publicStatsColSpan} className="p-3">
-                      <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+                      <div className="divide-y divide-blue-200 overflow-hidden rounded-xl border border-blue-200 bg-white sm:hidden">
+                        {sortedDetails.map((detail) => (
+                          <div key={detail.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-black text-blue-950">{detail.tournament}</p>
+                              <p className="mt-0.5 text-[11px] font-semibold text-blue-700">{detail.date || "-"}</p>
+                            </div>
+                            <span className="shrink-0 text-sm font-black text-blue-950">#{detail.place}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="hidden overflow-auto rounded-2xl border border-blue-200 bg-white sm:block">
                         <table className="bb-mobile-table bb-mobile-wide bb-standard-stats-detail-table w-full min-w-[820px] text-xs md:text-sm">
                           <thead className="bg-blue-800 text-white">
                             <tr>
