@@ -15040,6 +15040,7 @@ function MultiDayEventsTab({
                   scratch,
                   handicap,
                   total,
+                  place: row.place || "",
                 });
               });
             });
@@ -15061,12 +15062,23 @@ function MultiDayEventsTab({
       });
       return [...statsByBowler.values()]
         .filter((stat) => !["singles ae", "doubles ae", "team ae"].includes(normalizeMatchText(stat.name)))
-        .map((stat) => ({
-          ...stat,
-          tournaments: stat.tournamentsSet.size,
-          avg: stat.games ? stat.scratch / stat.games : 0,
-          handicapAvg: stat.games ? stat.total / stat.games : 0,
-        }));
+        .map((stat) => {
+          const details = stat.details || [];
+          const highGame = Math.max(0, ...details.flatMap((detail) => (detail.games || []).map((score) => Number(score || 0))));
+          const highSeries = Math.max(0, ...details.map((detail) => Number(detail.scratch || 0)));
+          const finishes = details
+            .map((detail) => Number.parseInt(String(detail.place || ""), 10))
+            .filter((place) => Number.isFinite(place) && place > 0);
+          return {
+            ...stat,
+            tournaments: stat.tournamentsSet.size,
+            avg: stat.games ? stat.scratch / stat.games : 0,
+            handicapAvg: stat.games ? stat.total / stat.games : 0,
+            highGame,
+            highSeries,
+            bestFinish: finishes.length ? Math.min(...finishes) : 0,
+          };
+        });
     })();
     const archiveStatsSearchTerm = normalizeMatchText(multiDayArchiveStatsSearch);
     const filteredArchivedBowlerStats = archivedBowlerStats.filter((row) =>
@@ -15161,6 +15173,12 @@ function MultiDayEventsTab({
                       {expanded && (
                         <tr className="border-t bg-blue-50/60">
                           <td className="p-3" colSpan={9}>
+                                  <div className="mb-3 grid grid-cols-2 overflow-hidden rounded-xl border border-blue-200 bg-white md:grid-cols-4">
+                                    <div className="border-b border-r border-blue-100 px-3 py-2 md:border-b-0"><span className="block text-[10px] font-black uppercase text-blue-600">High Game</span><span className="text-lg font-black text-blue-950">{row.highGame || "-"}</span></div>
+                                    <div className="border-b border-blue-100 px-3 py-2 md:border-b-0 md:border-r"><span className="block text-[10px] font-black uppercase text-blue-600">High Series</span><span className="text-lg font-black text-blue-950">{row.highSeries || "-"}</span></div>
+                                    <div className="border-r border-blue-100 px-3 py-2"><span className="block text-[10px] font-black uppercase text-blue-600">Best Finish</span><span className="text-lg font-black text-blue-950">{row.bestFinish ? `#${row.bestFinish}` : "-"}</span></div>
+                                    <div className="px-3 py-2"><span className="block text-[10px] font-black uppercase text-blue-600">Cashes</span><span className="text-lg font-black text-green-700">{row.cashes || 0}</span></div>
+                                  </div>
                                   <div className="space-y-2 sm:hidden">
                                     {(row.details || []).map((detail, detailIndex) => <div key={`${rowKey}-mobile-detail-${detailIndex}`} className="overflow-hidden rounded-xl border border-blue-200 bg-white shadow-sm"><div className="flex items-center justify-between gap-2 bg-blue-50 px-3 py-2"><span className="text-sm font-black text-blue-950">{detail.archive}</span><span className="rounded-full bg-blue-700 px-2 py-0.5 text-xs font-black text-white">{detail.event}</span></div><div className="grid grid-cols-4 divide-x divide-blue-100"><div className="px-1 py-2 text-center"><span className="block text-[10px] font-black uppercase text-blue-600">G1</span><span className="text-sm font-black text-blue-950">{detail.games?.[0] || "-"}</span></div><div className="px-1 py-2 text-center"><span className="block text-[10px] font-black uppercase text-blue-600">G2</span><span className="text-sm font-black text-blue-950">{detail.games?.[1] || "-"}</span></div><div className="px-1 py-2 text-center"><span className="block text-[10px] font-black uppercase text-blue-600">G3</span><span className="text-sm font-black text-blue-950">{detail.games?.[2] || "-"}</span></div><div className="bg-green-50 px-1 py-2 text-center"><span className="block text-[10px] font-black uppercase text-green-700">Scratch</span><span className="text-sm font-black text-green-800">{detail.scratch || "-"}</span></div></div></div>)}
                                   </div>
