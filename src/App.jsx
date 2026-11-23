@@ -1032,6 +1032,49 @@ const numberInputStyles = String.raw`
   .bb-public-side-details-col {
     display: none !important;
   }
+
+  .bb-multi-archive-stats-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-multi-archive-stats-table th,
+  .bb-multi-archive-stats-table td {
+    padding: 0.42rem 0.28rem !important;
+    font-size: 0.7rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .bb-multi-archive-stats-table th:nth-child(1),
+  .bb-multi-archive-stats-table td:nth-child(1) {
+    width: 8%;
+  }
+
+  .bb-multi-archive-stats-table th:nth-child(2),
+  .bb-multi-archive-stats-table td:nth-child(2) {
+    width: 47%;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-multi-archive-stats-table th:nth-child(3),
+  .bb-multi-archive-stats-table td:nth-child(3),
+  .bb-multi-archive-stats-table th:nth-child(7),
+  .bb-multi-archive-stats-table td:nth-child(7),
+  .bb-multi-archive-stats-table th:nth-child(9),
+  .bb-multi-archive-stats-table td:nth-child(9) {
+    width: 15%;
+  }
+
+  .bb-multi-archive-stats-table th:nth-child(4),
+  .bb-multi-archive-stats-table td:nth-child(4),
+  .bb-multi-archive-stats-table th:nth-child(5),
+  .bb-multi-archive-stats-table td:nth-child(5),
+  .bb-multi-archive-stats-table th:nth-child(6),
+  .bb-multi-archive-stats-table td:nth-child(6),
+  .bb-multi-archive-stats-table th:nth-child(8),
+  .bb-multi-archive-stats-table td:nth-child(8) {
+    display: none !important;
+  }
 }
 
 @media print {
@@ -9664,6 +9707,7 @@ function buildPublicMultiDayEvent(event = {}) {
     dates: archive.dates,
     center: archive.center,
     leaderboards: archive.leaderboards || [],
+    firstPlaces: archive.firstPlaces || [],
     paidWinners: archive.paidWinners || [],
     sideActionPayouts: archive.sideActionPayouts || [],
     publicSideAction: archive.publicSideAction || [],
@@ -14847,7 +14891,7 @@ function MultiDayEventsTab({
               </div>
             </div>
             <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-              <table className="w-full min-w-[920px] text-sm">
+              <table className="bb-multi-archive-stats-table w-full min-w-[920px] text-sm">
                 <thead className="bg-blue-800 text-white"><tr>
                   <th className="w-14 p-3 text-right">#</th>
                   <th className="p-3 text-left">{archiveSortButton("multi-archive-stats", "name", "Bowler")}</th>
