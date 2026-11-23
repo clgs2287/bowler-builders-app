@@ -1102,6 +1102,12 @@ const numberInputStyles = String.raw`
   .bb-multi-archive-payout-table td:nth-child(4) { width: 31%; }
   .bb-multi-archive-payout-table th:nth-child(6),
   .bb-multi-archive-payout-table td:nth-child(6) { width: 17%; }
+  .bb-multi-archive-payout-table td:nth-child(6) {
+    font-size: 0.66rem !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all;
+  }
   .bb-multi-archive-payout-table th:nth-child(5),
   .bb-multi-archive-payout-table td:nth-child(5) { display: none !important; }
 
@@ -15013,12 +15019,15 @@ function MultiDayEventsTab({
                       {expanded && (
                         <tr className="border-t bg-blue-50/60">
                           <td className="p-3" colSpan={9}>
-                            <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
-                              <table className="bb-multi-archive-stats-detail-table w-full min-w-[760px] text-xs">
-                                <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Tournament</th><th className="p-2 text-left">Event</th><th className="p-2 text-left">Entry</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
-                                <tbody>{(row.details || []).map((detail, detailIndex) => <tr key={`${rowKey}-detail-${detailIndex}`} className="border-t border-blue-100"><td className="p-2 font-semibold text-blue-950">{detail.archive}<span className="block text-[10px] font-bold text-blue-600">{detail.dates}</span></td><td className="p-2">{detail.event}</td><td className="p-2">{detail.entry}</td>{[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-2 text-center">{detail.games?.[gameIndex] || "-"}</td>)}<td className="p-2 text-right font-bold">{detail.scratch || "-"}</td><td className="p-2 text-right font-bold">{detail.handicap || "-"}</td><td className="p-2 text-right font-black">{detail.total || "-"}</td></tr>)}</tbody>
-                              </table>
-                            </div>
+                                  <div className="space-y-2 sm:hidden">
+                                    {(row.details || []).map((detail, detailIndex) => <div key={`${rowKey}-mobile-detail-${detailIndex}`} className="rounded-lg border border-blue-100 bg-white px-2 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-black text-blue-950">{detail.archive}</span><span className="font-bold text-blue-700">{detail.event}</span></div><div className="mt-1 grid grid-cols-4 gap-1 text-center"><span><b>G1</b> {detail.games?.[0] || "-"}</span><span><b>G2</b> {detail.games?.[1] || "-"}</span><span><b>G3</b> {detail.games?.[2] || "-"}</span><span><b>Scr</b> {detail.scratch || "-"}</span></div></div>)}
+                                  </div>
+                                  <div className="hidden overflow-auto rounded-xl border border-blue-100 bg-white sm:block">
+                                    <table className="bb-multi-archive-stats-detail-table w-full min-w-[760px] text-xs">
+                                      <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Tournament</th><th className="p-2 text-left">Event</th><th className="p-2 text-left">Entry</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
+                                      <tbody>{(row.details || []).map((detail, detailIndex) => <tr key={`${rowKey}-detail-${detailIndex}`} className="border-t border-blue-100"><td className="p-2 font-semibold text-blue-950">{detail.archive}<span className="block text-[10px] font-bold text-blue-600">{detail.dates}</span></td><td className="p-2">{detail.event}</td><td className="p-2">{detail.entry}</td>{[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-2 text-center">{detail.games?.[gameIndex] || "-"}</td>)}<td className="p-2 text-right font-bold">{detail.scratch || "-"}</td><td className="p-2 text-right font-bold">{detail.handicap || "-"}</td><td className="p-2 text-right font-black">{detail.total || "-"}</td></tr>)}</tbody>
+                                    </table>
+                                  </div>
                           </td>
                         </tr>
                       )}
