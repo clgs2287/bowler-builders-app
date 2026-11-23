@@ -1028,6 +1028,51 @@ const numberInputStyles = String.raw`
     display: none !important;
   }
 
+  .bb-standard-stats-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-standard-stats-table th,
+  .bb-standard-stats-table td {
+    padding: 0.34rem 0.22rem !important;
+    font-size: 0.66rem !important;
+    line-height: 1.08 !important;
+    white-space: normal !important;
+  }
+
+  .bb-standard-stats-table .bb-standard-name-col { width: 48%; }
+  .bb-standard-stats-table .bb-standard-events-col { width: 10%; }
+  .bb-standard-stats-table .bb-standard-games-col { width: 10%; }
+  .bb-standard-stats-table .bb-standard-average-col { width: 13%; }
+  .bb-standard-stats-table .bb-standard-high-col { width: 11%; }
+  .bb-standard-stats-table .bb-standard-titles-col { width: 8%; }
+  .bb-standard-stats-table .bb-standard-qual-col,
+  .bb-standard-stats-table .bb-standard-cashes-col { display: none !important; }
+
+  .bb-standard-stats-detail-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-standard-stats-detail-table th,
+  .bb-standard-stats-detail-table td {
+    padding: 0.38rem 0.28rem !important;
+    font-size: 0.68rem !important;
+    line-height: 1.12 !important;
+  }
+
+  .bb-standard-stats-detail-table th:nth-child(1),
+  .bb-standard-stats-detail-table td:nth-child(1) { width: 48%; }
+  .bb-standard-stats-detail-table th:nth-child(2),
+  .bb-standard-stats-detail-table td:nth-child(2) {
+    width: 30%;
+    white-space: nowrap !important;
+  }
+  .bb-standard-stats-detail-table th:nth-child(4),
+  .bb-standard-stats-detail-table td:nth-child(4) { width: 22%; }
+  .bb-standard-stats-detail-table .bb-standard-stats-detail-extra { display: none !important; }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -21519,23 +21564,23 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
       </button>
     </div>
     <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-      <table className="bb-mobile-table bb-mobile-wide bb-public-stats-table w-full min-w-[960px] text-xs md:text-sm">
+      <table className="bb-mobile-table bb-mobile-wide bb-public-stats-table bb-standard-stats-table w-full min-w-[960px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
-            <th className="p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("tournaments")} className="font-bold">Events{sortLabel("tournaments")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("games")} className="font-bold">Games{sortLabel("games")}</button></th>
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("average")} className="font-bold">Overall Avg{sortLabel("average")}</button></th>
+            <th className="bb-standard-name-col p-2 text-left md:p-3"><button type="button" onClick={() => toggleStatsSort("name")} className="font-bold">Bowler{sortLabel("name")}</button></th>
+            <th className="bb-standard-events-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("tournaments")} className="font-bold"><span className="sm:hidden">Evts</span><span className="hidden sm:inline">Events</span>{sortLabel("tournaments")}</button></th>
+            <th className="bb-standard-games-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("games")} className="font-bold"><span className="sm:hidden">Gms</span><span className="hidden sm:inline">Games</span>{sortLabel("games")}</button></th>
+            <th className="bb-standard-average-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("average")} className="font-bold"><span className="sm:hidden">Avg</span><span className="hidden sm:inline">Overall Avg</span>{sortLabel("average")}</button></th>
             {statsMode === "scratch" && (
               <>
-                <th className="bb-public-qual-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("qualifyingAverage")} className="font-bold">Qual Avg{sortLabel("qualifyingAverage")}</button></th>
+                <th className="bb-public-qual-col bb-standard-qual-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("qualifyingAverage")} className="font-bold">Qual Avg{sortLabel("qualifyingAverage")}</button></th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsAverage")} className="font-bold">Finals Avg{sortLabel("finalsAverage")}</button></th>
                 <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("finalsGames")} className="font-bold">Finals Gms{sortLabel("finalsGames")}</button></th>
               </>
             )}
-            <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold">High Game{sortLabel("highGame")}</button></th>
-            {statsMode === "scratch" && <th className="p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>}
-            <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
+            <th className="bb-standard-high-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("highGame")} className="font-bold"><span className="sm:hidden">High</span><span className="hidden sm:inline">High Game</span>{sortLabel("highGame")}</button></th>
+            {statsMode === "scratch" && <th className="bb-standard-titles-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("titles")} className="font-bold">Titles{sortLabel("titles")}</button></th>}
+            <th className="bb-mobile-hide bb-standard-cashes-col p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("cashes")} className="font-bold">Cuts Made{sortLabel("cashes")}</button></th>
             <th className="bb-mobile-hide p-2 text-right md:p-3"><button type="button" onClick={() => toggleStatsSort("bestFinish")} className="font-bold">Best Finish{sortLabel("bestFinish")}</button></th>
           </tr>
         </thead>
@@ -21550,7 +21595,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             return (
               <React.Fragment key={`public-stats-${p.name}`}>
                 <tr className={expanded ? "border-t bg-blue-50" : "border-t"}>
-                  <td className="p-2 font-semibold md:p-3">
+                  <td className="bb-standard-name-col p-2 font-semibold md:p-3">
                     <button
                       type="button"
                       className="text-left font-bold text-blue-950 underline-offset-2 hover:underline"
@@ -21562,42 +21607,42 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                       {p.name}
                     </button>
                   </td>
-                  <td className="p-2 text-right md:p-3">{p.tournaments}</td>
-                  <td className="p-2 text-right md:p-3">{p.games}</td>
-                  <td className="p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
+                  <td className="bb-standard-events-col p-2 text-right md:p-3">{p.tournaments}</td>
+                  <td className="bb-standard-games-col p-2 text-right md:p-3">{p.games}</td>
+                  <td className="bb-standard-average-col p-2 text-right font-bold md:p-3">{p.average.toFixed(2)}</td>
                   {statsMode === "scratch" && (
                     <>
-                      <td className="bb-public-qual-col p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
+                      <td className="bb-public-qual-col bb-standard-qual-col p-2 text-right md:p-3">{p.qualifyingAverage.toFixed(2)}</td>
                       <td className="bb-mobile-hide p-2 text-right md:p-3">{p.finalsGames > 0 ? p.finalsAverage.toFixed(2) : "-"}</td>
                       <td className="bb-mobile-hide p-2 text-right md:p-3">{p.finalsGames}</td>
                     </>
                   )}
-                  <td className="p-2 text-right md:p-3">{p.highGame || "-"}</td>
-                  {statsMode === "scratch" && <td className="p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>}
-                  <td className="bb-mobile-hide p-2 text-right md:p-3">{p.cashes}</td>
+                  <td className="bb-standard-high-col p-2 text-right md:p-3">{p.highGame || "-"}</td>
+                  {statsMode === "scratch" && <td className="bb-standard-titles-col p-2 text-right font-bold text-yellow-700 md:p-3">{p.titles}</td>}
+                  <td className="bb-mobile-hide bb-standard-cashes-col p-2 text-right md:p-3">{p.cashes}</td>
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
                 </tr>
                 {expanded && (
                   <tr className="border-t bg-blue-50/60">
                     <td colSpan={publicStatsColSpan} className="p-3">
                       <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-                        <table className="bb-mobile-table bb-mobile-wide w-full min-w-[820px] text-xs md:text-sm">
+                        <table className="bb-mobile-table bb-mobile-wide bb-standard-stats-detail-table w-full min-w-[820px] text-xs md:text-sm">
                           <thead className="bg-blue-800 text-white">
                             <tr>
                               <th className="p-2 text-left md:p-3">Tournament</th>
                               <th className="p-2 text-left md:p-3">Date</th>
                               <th className="bb-mobile-hide p-2 text-left md:p-3">Center</th>
                               <th className="p-2 text-right md:p-3">Place</th>
-                              <th className="p-2 text-right md:p-3">Games</th>
-                              <th className="p-2 text-right md:p-3">Total</th>
-                              <th className="p-2 text-right md:p-3">Average</th>
+                              <th className="bb-standard-stats-detail-extra p-2 text-right md:p-3">Games</th>
+                              <th className="bb-standard-stats-detail-extra p-2 text-right md:p-3">Total</th>
+                              <th className="bb-standard-stats-detail-extra p-2 text-right md:p-3">Average</th>
                               {statsMode === "scratch" && (
                                 <>
-                                  <th className="p-2 text-right md:p-3">Qual Avg</th>
+                                  <th className="bb-standard-stats-detail-extra p-2 text-right md:p-3">Qual Avg</th>
                                   <th className="bb-mobile-hide p-2 text-right md:p-3">Finals Avg</th>
                                 </>
                               )}
-                              <th className="p-2 text-right md:p-3">High</th>
+                              <th className="bb-standard-stats-detail-extra p-2 text-right md:p-3">High</th>
                               <th className="bb-mobile-hide p-2 text-right md:p-3">Cashed</th>
                               {statsMode === "scratch" && <th className="bb-mobile-hide p-2 text-right md:p-3">Title</th>}
                             </tr>
@@ -21609,16 +21654,16 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                                 <td className="p-2 text-blue-900 md:p-3">{detail.date || "-"}</td>
                                 <td className="bb-mobile-hide p-2 text-blue-900 md:p-3">{detail.center || "-"}</td>
                                 <td className="p-2 text-right font-bold md:p-3">#{detail.place}</td>
-                                <td className="p-2 text-right md:p-3">{detail.games}</td>
-                                <td className="p-2 text-right md:p-3">{detail.total || "-"}</td>
-                                <td className="p-2 text-right font-semibold md:p-3">{detail.average ? detail.average.toFixed(2) : "-"}</td>
+                                <td className="bb-standard-stats-detail-extra p-2 text-right md:p-3">{detail.games}</td>
+                                <td className="bb-standard-stats-detail-extra p-2 text-right md:p-3">{detail.total || "-"}</td>
+                                <td className="bb-standard-stats-detail-extra p-2 text-right font-semibold md:p-3">{detail.average ? detail.average.toFixed(2) : "-"}</td>
                                 {statsMode === "scratch" && (
                                   <>
-                                    <td className="p-2 text-right md:p-3">{detail.qualifyingAverage ? detail.qualifyingAverage.toFixed(2) : "-"}</td>
+                                    <td className="bb-standard-stats-detail-extra p-2 text-right md:p-3">{detail.qualifyingAverage ? detail.qualifyingAverage.toFixed(2) : "-"}</td>
                                     <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.finalsAverage ? detail.finalsAverage.toFixed(2) : "-"}</td>
                                   </>
                                 )}
-                                <td className="p-2 text-right md:p-3">{detail.highGame || "-"}</td>
+                                <td className="bb-standard-stats-detail-extra p-2 text-right md:p-3">{detail.highGame || "-"}</td>
                                 <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.cashed ? "Yes" : "No"}</td>
                                 {statsMode === "scratch" && <td className="bb-mobile-hide p-2 text-right md:p-3">{detail.title ? "Yes" : "No"}</td>}
                               </tr>
@@ -25052,10 +25097,10 @@ current.results.push(result);
   </button>
 </div>
           <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
-            <table className="bb-mobile-table bb-mobile-wide bb-public-stats-table w-full min-w-[1040px] text-xs md:text-sm">
+            <table className="bb-mobile-table bb-mobile-wide bb-public-stats-table bb-standard-stats-table w-full min-w-[1040px] text-xs md:text-sm">
 <thead className="bg-blue-800 text-white">
   <tr>
-    <th className="p-2 text-left md:p-3">
+    <th className="bb-standard-name-col p-2 text-left md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("name")}
@@ -25065,39 +25110,39 @@ current.results.push(result);
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-standard-events-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("tournaments")}
         className="font-bold"
       >
-        Events{sortLabel("tournaments")}
+        <span className="sm:hidden">Evts</span><span className="hidden sm:inline">Events</span>{sortLabel("tournaments")}
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-standard-games-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("games")}
         className="font-bold"
       >
-        Games{sortLabel("games")}
+        <span className="sm:hidden">Gms</span><span className="hidden sm:inline">Games</span>{sortLabel("games")}
       </button>
     </th>
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-standard-average-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("average")}
         className="font-bold"
       >
-        Overall Avg{sortLabel("average")}
+        <span className="sm:hidden">Avg</span><span className="hidden sm:inline">Overall Avg</span>{sortLabel("average")}
       </button>
     </th>
 
    {statsMode === "scratch" && (
   <>
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-standard-qual-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("qualifyingAverage")}
@@ -25129,17 +25174,17 @@ current.results.push(result);
   </>
 )}
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-standard-high-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("highGame")}
         className="font-bold"
       >
-        High Game{sortLabel("highGame")}
+        <span className="sm:hidden">High</span><span className="hidden sm:inline">High Game</span>{sortLabel("highGame")}
       </button>
     </th>
 
-    {statsMode === "scratch" && <th className="p-2 text-right md:p-3">
+    {statsMode === "scratch" && <th className="bb-standard-titles-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("titles")}
@@ -25149,7 +25194,7 @@ current.results.push(result);
       </button>
     </th>}
 
-    <th className="p-2 text-right md:p-3">
+    <th className="bb-standard-cashes-col p-2 text-right md:p-3">
       <button
         type="button"
         onClick={() => toggleStatsSort("cashes")}
@@ -25183,25 +25228,25 @@ current.results.push(result);
               <tbody>
                 {playerRows.map((p) => (
 <tr key={`stats-${p.name}`} className="border-t">
-  <td className="p-2 font-semibold md:p-3">
+  <td className="bb-standard-name-col p-2 font-semibold md:p-3">
     {p.name}
   </td>
 
-  <td className="p-2 text-right md:p-3">
+  <td className="bb-standard-events-col p-2 text-right md:p-3">
     {p.tournaments}
   </td>
 
-  <td className="p-2 text-right md:p-3">
+  <td className="bb-standard-games-col p-2 text-right md:p-3">
     {p.games}
   </td>
 
-  <td className="p-2 text-right font-bold md:p-3">
+  <td className="bb-standard-average-col p-2 text-right font-bold md:p-3">
     {p.average.toFixed(2)}
   </td>
 
  {statsMode === "scratch" && (
   <>
-    <td className="p-2 text-right md:p-3">
+    <td className="bb-standard-qual-col p-2 text-right md:p-3">
       {p.qualifyingAverage.toFixed(2)}
     </td>
 
@@ -25217,15 +25262,15 @@ current.results.push(result);
   </>
 )}
 
-  <td className="p-2 text-right md:p-3">
+  <td className="bb-standard-high-col p-2 text-right md:p-3">
     {p.highGame || " - -"}
   </td>
 
-  {statsMode === "scratch" && <td className="p-2 text-right font-bold text-yellow-700 md:p-3">
+  {statsMode === "scratch" && <td className="bb-standard-titles-col p-2 text-right font-bold text-yellow-700 md:p-3">
     {p.titles}
   </td>}
 
-  <td className="p-2 text-right md:p-3">
+  <td className="bb-standard-cashes-col p-2 text-right md:p-3">
     {p.cashes}
   </td>
 
