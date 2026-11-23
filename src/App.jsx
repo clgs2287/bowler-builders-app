@@ -12004,30 +12004,34 @@ function MultiDayEventsTab({
               </div>
             </div>
           </div>
-          <div className="grid gap-4 p-4 md:p-6 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-4">
+          <div className="grid min-w-0 gap-4 p-4 md:p-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="min-w-0 space-y-4">
               <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
                 <h3 className="text-lg font-black text-blue-950">Entry Information</h3>
-                <p className="mt-2 text-sm font-semibold text-blue-800">
+                <p className="mt-2 break-words text-sm font-semibold text-blue-800">
                   Entries are submitted by paper form. Drop off or mail entries with payment before the entry deadline.
                 </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl bg-white p-3 text-sm font-bold text-blue-900">
+                  <div className="min-w-0 rounded-xl bg-white p-3 text-sm font-bold text-blue-900">
                     <span className="block text-xs uppercase text-blue-600">Mail / Drop-Off</span>
-                    <span className="whitespace-pre-wrap">{multiDayEvent.mailDropOffInfo || "Bowler Builders Pro Shops"}</span>
+                    <span className="whitespace-pre-wrap break-words">{multiDayEvent.mailDropOffInfo || "Bowler Builders Pro Shops"}</span>
                   </div>
-                  <div className="rounded-xl bg-white p-3 text-sm font-bold text-blue-900">
+                  <div className="min-w-0 rounded-xl bg-white p-3 text-sm font-bold text-blue-900">
                     <span className="block text-xs uppercase text-blue-600">Questions</span>
-                    Contact the tournament director listed on the entry form.
+                    <span className="break-words">Contact the tournament director listed on the entry form.</span>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-200 bg-white">
+              <div className="min-w-0 rounded-2xl border border-blue-200 bg-white">
                 <div className="border-b border-blue-100 bg-blue-50 px-4 py-3">
                   <h3 className="font-black text-blue-950">Squad Schedule</h3>
                 </div>
-                <div className="overflow-auto">
+                <div className="space-y-2 p-3 sm:hidden">
+                  {publicSquadRosters.map(({ squad, bowlers }) => <div key={`multi-info-squad-mobile-${squad.id}`} className="rounded-xl border border-blue-100 bg-blue-50 p-3"><p className="font-black text-blue-950">{squad.date || "Date TBD"}{squad.time ? ` - ${formatStartTime(squad.time)}` : ""}</p><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-blue-800"><span>{squad.competition || "Mixed"}</span><span>Lanes {squad.lanes || "TBD"}</span><span>{bowlers.length}/{squad.capacity || multiDayEvent.maxBowlersPerSquad || "TBD"} registered</span></div><Button variant="outline" className="mt-3 h-8 rounded-xl px-3 text-xs" onClick={() => setMultiDayPublicRosterSquadId((current) => current === squad.id ? "" : squad.id)}>{multiDayPublicRosterSquadId === squad.id ? "Hide Roster" : "View Roster"}</Button></div>)}
+                  {squads.length === 0 && <p className="p-1 text-sm font-semibold text-blue-700">Squads will be posted here.</p>}
+                </div>
+                <div className="hidden overflow-auto sm:block">
                   <table className="w-full min-w-[690px] text-sm">
                     <thead className="bg-blue-800 text-white"><tr><th className="p-3 text-left">Squad</th><th className="p-3 text-left">Event</th><th className="p-3 text-left">Lanes</th><th className="p-3 text-right">Registered</th><th className="p-3 text-right">Capacity</th><th className="p-3 text-right">Roster</th></tr></thead>
                     <tbody>
@@ -12054,8 +12058,8 @@ function MultiDayEventsTab({
               )}
             </div>
 
-            <aside className="space-y-4">
-              <div className="rounded-2xl border border-blue-200 bg-white p-4">
+            <aside className="min-w-0 space-y-4">
+              <div className="min-w-0 rounded-2xl border border-blue-200 bg-white p-4">
                 <h3 className="font-black text-blue-950">Events &amp; Entry Fees</h3>
                 <div className="mt-3 grid gap-2">
                   {eventFeeRows.map((row) => {
@@ -12065,12 +12069,12 @@ function MultiDayEventsTab({
                   {eventFeeRows.length === 0 && <p className="text-sm font-semibold text-blue-700">Events and fees will be posted here.</p>}
                 </div>
               </div>
-              <div className="rounded-2xl border border-blue-200 bg-white p-4">
+              <div className="min-w-0 rounded-2xl border border-blue-200 bg-white p-4">
                 <h3 className="font-black text-blue-950">Scoring</h3>
                 <div className="mt-3 space-y-2 text-sm font-semibold text-blue-800">
-                  <p><span className="font-black text-blue-950">Divisions:</span> {divisionList.join(", ") || "TBD"}</p>
-                  <p><span className="font-black text-blue-950">Handicap:</span> {multiDayEvent.handicapPercent || 100}% of {multiDayEvent.handicapBase || 240}</p>
-                  <p><span className="font-black text-blue-950">All Events:</span> {multiDayEvent.allEventsRule || "First eligible Singles, Doubles, and Team series count."}</p>
+                  <p className="break-words"><span className="font-black text-blue-950">Divisions:</span> {divisionList.join(", ") || "TBD"}</p>
+                  <p className="break-words"><span className="font-black text-blue-950">Handicap:</span> {multiDayEvent.handicapPercent || 100}% of {multiDayEvent.handicapBase || 240}</p>
+                  <p className="break-words"><span className="font-black text-blue-950">All Events:</span> {multiDayEvent.allEventsRule || "First eligible Singles, Doubles, and Team series count."}</p>
                 </div>
               </div>
             </aside>
