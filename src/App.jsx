@@ -1099,6 +1099,30 @@ const numberInputStyles = String.raw`
   .bb-public-title-leaderboard .bb-title-nickname-col,
   .bb-public-title-leaderboard .bb-title-latest-col { display: none !important; }
 
+  .bb-public-all-titles-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-public-all-titles-table th,
+  .bb-public-all-titles-table td {
+    padding: 0.38rem 0.24rem !important;
+    font-size: 0.66rem !important;
+    line-height: 1.1 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-public-all-titles-table .bb-all-titles-name-col { width: 25%; }
+  .bb-public-all-titles-table .bb-all-titles-tournament-col { width: 34%; }
+  .bb-public-all-titles-table .bb-all-titles-date-col {
+    width: 19%;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+  }
+  .bb-public-all-titles-table .bb-all-titles-count-col { width: 9%; }
+  .bb-public-all-titles-table .bb-all-titles-type-col { width: 13%; }
+  .bb-public-all-titles-table .bb-all-titles-nickname-col { display: none !important; }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -22021,30 +22045,30 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         <h3 className="text-lg font-black text-blue-950 md:text-xl">All Titles</h3>
 
         <div className="overflow-auto rounded-2xl border border-blue-200">
-      <table className="w-full min-w-[760px] text-xs md:text-sm">
+      <table className="bb-public-all-titles-table w-full min-w-[760px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
-            <th className="p-3 text-left">
+            <th className="bb-all-titles-name-col p-3 text-left">
               Name
             </th>
 
-            <th className="p-3 text-left">
+            <th className="bb-all-titles-nickname-col p-3 text-left">
               Nickname
             </th>
 
-            <th className="p-3 text-left">
-              Tournament
+            <th className="bb-all-titles-tournament-col p-3 text-left">
+              <span className="sm:hidden">Tourn.</span><span className="hidden sm:inline">Tournament</span>
             </th>
 
-            <th className="p-3 text-left">
+            <th className="bb-all-titles-date-col p-3 text-left">
               Date
             </th>
 
-            <th className="p-3 text-right">
+            <th className="bb-all-titles-count-col p-3 text-right">
               Count
             </th>
 
-            <th className="p-3 text-left">
+            <th className="bb-all-titles-type-col p-3 text-left">
               Type
             </th>
           </tr>
@@ -22056,27 +22080,27 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               key={`public-title-detail-${title.id}`}
               className="border-t"
             >
-              <td className="p-3 font-bold text-blue-950">
+              <td className="bb-all-titles-name-col p-3 font-bold text-blue-950">
                 {publicRealNameFor(title.bowler) || title.bowler}
               </td>
 
-              <td className="p-3 font-semibold text-blue-900">
+              <td className="bb-all-titles-nickname-col p-3 font-semibold text-blue-900">
                 {publicRealNameFor(title.bowler) ? title.bowler : " - -"}
               </td>
 
-              <td className="p-3">
+              <td className="bb-all-titles-tournament-col p-3">
                 {title.tournament}
               </td>
 
-              <td className="p-3">
+              <td className="bb-all-titles-date-col p-3">
                 {title.date || "-"}
               </td>
 
-              <td className="p-3 text-right font-black text-blue-900">
+              <td className="bb-all-titles-count-col p-3 text-right font-black text-blue-900">
                 {getTitleCount(title)}
               </td>
 
-              <td className="p-3 font-bold">
+              <td className="bb-all-titles-type-col p-3 font-bold">
                 {getTitleCategoryLabel(title)}
               </td>
             </tr>
