@@ -21431,12 +21431,12 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               <option value="All">All Seasons</option>
               {availableSeasons.map((season) => <option key={season} value={season}>{season}</option>)}
             </select>
-            <Input
+            {(publicStatsTab !== "titles" || publicTitleView !== "leaderboard") && <Input
               className="w-full md:w-72"
-              placeholder={publicStatsTab === "titles" ? "Search title holder..." : "Search bowler..."}
+              placeholder="Search bowler..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-            />
+            />}
           </div>
         </div>
 
@@ -21825,7 +21825,15 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 
     {publicTitleView === "leaderboard" && (
       <>
-        <h3 className="text-lg font-black text-blue-950 md:text-xl">Title Leaderboard</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="shrink-0 whitespace-nowrap text-lg font-black text-blue-950 md:text-xl">Title Leaderboard</h3>
+          <Input
+            className="min-w-0 flex-1"
+            placeholder="Bowler search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
         <div className="overflow-auto rounded-2xl border border-blue-200">
       <table className="bb-public-title-leaderboard w-full min-w-[760px] text-xs md:text-sm">
