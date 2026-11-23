@@ -21735,7 +21735,33 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
 )}
       {publicStatsTab === "archives" && (
   <div className="space-y-3 md:space-y-4">
-    <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+    <div className="space-y-2 sm:hidden">
+      {publicArchiveHistory.map((tournament) => {
+        const championName = getArchivedWinnerName(tournament);
+        return (
+          <button
+            key={`mobile-archive-${tournament.id}`}
+            type="button"
+            onClick={() => { setSelectedPublicArchiveId(tournament.id); setPublicArchiveSection("results"); }}
+            className="w-full rounded-xl border border-blue-200 bg-white p-3 text-left shadow-sm transition-colors hover:bg-blue-50"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-black text-blue-950">{tournament.name}</p>
+                <p className="mt-0.5 text-xs font-semibold text-blue-700">{tournament.date || "-"} · Season {tournament.season || "Unassigned"}</p>
+              </div>
+              <span className="shrink-0 text-xs font-black text-blue-700">View</span>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-3 border-t border-blue-100 pt-2 text-xs">
+              <span className="font-semibold text-blue-700">Entries <strong className="ml-1 text-blue-950">{tournament.entries || 0}</strong></span>
+              <span className="truncate text-right font-semibold text-green-700">Winner <strong className="ml-1 text-green-800">{championName || "-"}</strong></span>
+            </div>
+          </button>
+        );
+      })}
+      {publicArchiveHistory.length === 0 && <p className="rounded-xl border border-blue-200 bg-white p-4 text-sm text-blue-700">No tournaments archived for this season filter yet.</p>}
+    </div>
+    <div className="hidden overflow-auto rounded-2xl border border-blue-200 bg-white sm:block">
       <table className="bb-mobile-table bb-mobile-medium w-full min-w-[760px] text-xs md:min-w-[840px] md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
