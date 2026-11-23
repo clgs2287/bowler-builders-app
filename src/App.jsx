@@ -21623,20 +21623,32 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                   <td className="bb-mobile-hide p-2 text-right md:p-3">{p.bestFinish ? `#${p.bestFinish}` : "-"}</td>
                 </tr>
                 {expanded && (
-                  <tr className="border-t bg-blue-50/60">
-                    <td colSpan={publicStatsColSpan} className="p-3">
-                      <div className="divide-y divide-blue-200 overflow-hidden rounded-xl border border-blue-200 bg-white sm:hidden">
-                        {sortedDetails.map((detail) => (
-                          <div key={detail.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-black text-blue-950">{detail.tournament}</p>
-                              <p className="mt-0.5 text-[11px] font-semibold text-blue-700">{detail.date || "-"}</p>
-                            </div>
-                            <span className="shrink-0 text-sm font-black text-blue-950">#{detail.place}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="hidden overflow-auto rounded-2xl border border-blue-200 bg-white sm:block">
+                  <>
+                    <tr className="border-t bg-blue-50/60 sm:hidden">
+                      <td colSpan={statsMode === "scratch" ? 6 : 5} className="p-1.5">
+                        <table className="w-full table-fixed overflow-hidden rounded-xl border border-blue-200 bg-white text-xs">
+                          <thead className="bg-blue-800 text-white">
+                            <tr>
+                              <th className="w-[50%] p-2 text-left">Tournament</th>
+                              <th className="w-[30%] p-2 text-left">Date</th>
+                              <th className="w-[20%] p-2 text-right">Place</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedDetails.map((detail) => (
+                              <tr key={detail.id} className="border-t border-blue-200">
+                                <td className="p-2 font-semibold text-blue-950">{detail.tournament}</td>
+                                <td className="whitespace-nowrap p-2 text-blue-900">{detail.date || "-"}</td>
+                                <td className="p-2 text-right font-black text-blue-950">#{detail.place}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                    <tr className="hidden border-t bg-blue-50/60 sm:table-row">
+                      <td colSpan={publicStatsColSpan} className="p-3">
+                      <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
                         <table className="bb-mobile-table bb-mobile-wide bb-standard-stats-detail-table w-full min-w-[820px] text-xs md:text-sm">
                           <thead className="bg-blue-800 text-white">
                             <tr>
@@ -21683,7 +21695,8 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                         </table>
                       </div>
                     </td>
-                  </tr>
+                    </tr>
+                  </>
                 )}
               </React.Fragment>
             );
