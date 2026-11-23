@@ -1111,6 +1111,57 @@ const numberInputStyles = String.raw`
   .bb-multi-archive-leaderboard-table td:nth-child(2) { width: 61%; }
   .bb-multi-archive-leaderboard-table th:nth-child(3),
   .bb-multi-archive-leaderboard-table td:nth-child(3) { width: 24%; }
+
+  .bb-multi-archive-stats-detail-table,
+  .bb-multi-archive-leaderboard-detail-table {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-multi-archive-stats-detail-table th,
+  .bb-multi-archive-stats-detail-table td,
+  .bb-multi-archive-leaderboard-detail-table th,
+  .bb-multi-archive-leaderboard-detail-table td {
+    padding: 0.38rem 0.22rem !important;
+    font-size: 0.67rem !important;
+    line-height: 1.08 !important;
+    overflow-wrap: anywhere;
+  }
+
+  .bb-multi-archive-stats-detail-table th:nth-child(1),
+  .bb-multi-archive-stats-detail-table td:nth-child(1) { width: 29%; }
+  .bb-multi-archive-stats-detail-table th:nth-child(2),
+  .bb-multi-archive-stats-detail-table td:nth-child(2) { width: 19%; }
+  .bb-multi-archive-stats-detail-table th:nth-child(4),
+  .bb-multi-archive-stats-detail-table td:nth-child(4),
+  .bb-multi-archive-stats-detail-table th:nth-child(5),
+  .bb-multi-archive-stats-detail-table td:nth-child(5),
+  .bb-multi-archive-stats-detail-table th:nth-child(6),
+  .bb-multi-archive-stats-detail-table td:nth-child(6),
+  .bb-multi-archive-stats-detail-table th:nth-child(7),
+  .bb-multi-archive-stats-detail-table td:nth-child(7) { width: 13%; }
+  .bb-multi-archive-stats-detail-table th:nth-child(3),
+  .bb-multi-archive-stats-detail-table td:nth-child(3),
+  .bb-multi-archive-stats-detail-table th:nth-child(8),
+  .bb-multi-archive-stats-detail-table td:nth-child(8),
+  .bb-multi-archive-stats-detail-table th:nth-child(9),
+  .bb-multi-archive-stats-detail-table td:nth-child(9) { display: none !important; }
+  .bb-multi-archive-stats-detail-table td:first-child span { display: none; }
+
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(1),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(1) { width: 38%; }
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(2),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(2),
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(3),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(3),
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(4),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(4) { width: 13%; }
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(5),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(5) { width: 23%; }
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(6),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(6),
+  .bb-multi-archive-leaderboard-detail-table th:nth-child(7),
+  .bb-multi-archive-leaderboard-detail-table td:nth-child(7) { display: none !important; }
 }
 
 @media print {
@@ -14963,7 +15014,7 @@ function MultiDayEventsTab({
                         <tr className="border-t bg-blue-50/60">
                           <td className="p-3" colSpan={9}>
                             <div className="overflow-auto rounded-xl border border-blue-100 bg-white">
-                              <table className="w-full min-w-[760px] text-xs">
+                              <table className="bb-multi-archive-stats-detail-table w-full min-w-[760px] text-xs">
                                 <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Tournament</th><th className="p-2 text-left">Event</th><th className="p-2 text-left">Entry</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
                                 <tbody>{(row.details || []).map((detail, detailIndex) => <tr key={`${rowKey}-detail-${detailIndex}`} className="border-t border-blue-100"><td className="p-2 font-semibold text-blue-950">{detail.archive}<span className="block text-[10px] font-bold text-blue-600">{detail.dates}</span></td><td className="p-2">{detail.event}</td><td className="p-2">{detail.entry}</td>{[0, 1, 2].map((gameIndex) => <td key={gameIndex} className="p-2 text-center">{detail.games?.[gameIndex] || "-"}</td>)}<td className="p-2 text-right font-bold">{detail.scratch || "-"}</td><td className="p-2 text-right font-bold">{detail.handicap || "-"}</td><td className="p-2 text-right font-black">{detail.total || "-"}</td></tr>)}</tbody>
                               </table>
@@ -15190,7 +15241,7 @@ function MultiDayEventsTab({
                               <tr className="border-t bg-blue-50/60">
                                 <td className="p-3" colSpan={3}>
                                   {(row.details || []).length > 0 ? (
-                                    <table className="w-full text-xs">
+                                    <table className="bb-multi-archive-leaderboard-detail-table w-full text-xs">
                                       <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left">Bowler/Event</th><th className="p-2 text-center">G1</th><th className="p-2 text-center">G2</th><th className="p-2 text-center">G3</th><th className="p-2 text-right">Scratch</th><th className="p-2 text-right">HDCP</th><th className="p-2 text-right">Total</th></tr></thead>
                                       <tbody>{(row.details || []).map((detail, detailIndex) => <tr key={`${rowKey}-detail-${detailIndex}`} className="border-t border-blue-100"><td className="p-2 font-semibold text-blue-950">{detail.name}</td>{(detail.games || [0, 0, 0]).map((score, gameIndex) => <td key={gameIndex} className="p-2 text-center">{score || "-"}</td>)}<td className="p-2 text-right font-bold">{detail.scratch || "-"}</td><td className="p-2 text-right font-bold">{detail.handicap || "-"}</td><td className="p-2 text-right font-black">{detail.total || "-"}</td></tr>)}</tbody>
                                     </table>
