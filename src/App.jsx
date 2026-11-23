@@ -9640,6 +9640,75 @@ function createDefaultMultiDayEvent() {
   };
 }
 
+function buildPublicMultiDayEvent(event = {}) {
+  const publicEntries = (entries = []) => entries.map((entry) => ({
+    id: entry.id,
+    name: entry.name || "",
+    competition: entry.competition || "",
+    members: (entry.members || []).map((name) => formatEntryBowlerName(name)),
+    memberDetails: (entry.memberDetails || []).map((member) => ({
+      name: formatEntryBowlerName(member.name || ""),
+      lastSeasonAverage: member.lastSeasonAverage || "",
+      average: member.average || "",
+      youth: Boolean(member.youth),
+      allEvents: Boolean(member.allEvents),
+    })),
+    memberScores: entry.memberScores || [],
+    scores: entry.scores || [],
+  }));
+  const publicArchives = (event.archives || []).map(({ restoreSnapshot, ...archive }) => ({
+    id: archive.id,
+    archivedAt: archive.archivedAt,
+    name: archive.name,
+    season: archive.season,
+    dates: archive.dates,
+    center: archive.center,
+    leaderboards: archive.leaderboards || [],
+    paidWinners: archive.paidWinners || [],
+    sideActionPayouts: archive.sideActionPayouts || [],
+    publicSideAction: archive.publicSideAction || [],
+  }));
+
+  return {
+    name: event.name || "",
+    publicVisible: Boolean(event.publicVisible),
+    season: event.season || "",
+    startDate: event.startDate || "",
+    endDate: event.endDate || "",
+    center: event.center || "",
+    address: event.address || "",
+    teamSize: event.teamSize || 3,
+    squadMode: event.squadMode || "mixed",
+    singlesPrice: event.singlesPrice || 0,
+    doublesPrice: event.doublesPrice || 0,
+    teamPrice: event.teamPrice || 0,
+    allEventsPrice: event.allEventsPrice || 0,
+    maxBowlersPerSquad: event.maxBowlersPerSquad || 0,
+    entriesCloseDate: event.entriesCloseDate || "",
+    handicapBase: event.handicapBase || 0,
+    handicapPercent: event.handicapPercent || 0,
+    handicapMax: event.handicapMax || "",
+    scoringDivisions: event.scoringDivisions || {},
+    highGameEnabled: event.highGameEnabled !== false,
+    allEventsRule: event.allEventsRule || "",
+    notes: event.notes || "",
+    eventDefinitions: event.eventDefinitions || [],
+    dailySeriesBonus: event.dailySeriesBonus || {},
+    publishedPayouts: event.publishedPayouts || null,
+    squads: (event.squads || []).map((squad) => ({
+      id: squad.id,
+      date: squad.date || "",
+      time: squad.time || "",
+      competition: squad.competition || "",
+      lanes: squad.lanes || "",
+      capacity: squad.capacity || "",
+      entries: publicEntries(squad.entries),
+    })),
+    sideActionBySquad: event.sideActionBySquad || {},
+    archives: publicArchives,
+  };
+}
+
 function createStrikefest26RosterEvent() {
   const base = createStrikefestMultiDayEvent();
   const squadDefinitions = [
@@ -29138,12 +29207,20 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 
     setSupabaseSaveStatus("Saving multi-event workspace...");
     await withTimeout(
-      supabaseRestRequest("app_settings", "?on_conflict=id", {
-        method: "POST",
-        body: { id: MULTI_DAY_EVENT_SETTINGS_ID, value: multiDayEvent },
-        accessToken,
-        prefer: "resolution=merge-duplicates,return=minimal",
-      }),
+      Promise.all([
+        supabaseRestRequest("app_settings", "?on_conflict=id", {
+          method: "POST",
+          body: { id: MULTI_DAY_EVENT_SETTINGS_ID, value: multiDayEvent },
+          accessToken,
+          prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+        supabaseRestRequest("public_app_settings", "?on_conflict=id", {
+          method: "POST",
+          body: { id: MULTI_DAY_EVENT_SETTINGS_ID, value: buildPublicMultiDayEvent(multiDayEvent) },
+          accessToken,
+          prefer: "resolution=merge-duplicates,return=minimal",
+        }),
+      ]),
       "Saving multi-event workspace",
       20000
     );
@@ -29268,6 +29345,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         const multiDayEventRead = adminAccessToken
           ? loadSupabaseRestRows("app_settings", `?select=id,value&id=eq.${MULTI_DAY_EVENT_SETTINGS_ID}`, controller.signal, adminAccessToken)
           : Promise.resolve([]);
+        const publicMultiDayEventRead = loadSupabaseRestRows("public_app_settings", `?select=id,value&id=eq.${MULTI_DAY_EVENT_SETTINGS_ID}`, controller.signal);
         const archiveRead = shouldLoadArchiveData
           ? loadSupabaseRestRows("archived_tournaments", "?select=id,data,event_date&order=event_date.desc", controller.signal)
           : Promise.resolve([]);
@@ -29287,13 +29365,14 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
           draftRead,
           latestArchiveRead,
           multiDayEventRead,
+          publicMultiDayEventRead,
         ]);
 
-        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "public roster", "archive", "active snapshot", "draft", "latest archive", "multi-event workspace"];
+        const readNames = ["schedule", "settings", "title/HOF", "name", "reservation", "reservation count", "public roster", "archive", "active snapshot", "draft", "latest archive", "multi-event workspace", "public multi-event workspace"];
         const failedReads = reads
           .map((result, index) => result.status === "rejected" ? `${readNames[index]}: ${result.reason?.message || "failed"}` : "")
           .filter(Boolean);
-        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, reservationRosterRows, archiveRows, activeSnapshotRows, draftRows, latestArchiveRows, multiDayEventRows] = reads.map((result) =>
+        const [scheduleRows, settingsRows, titleRows, identityRows, reservationRows, reservationCountRows, reservationRosterRows, archiveRows, activeSnapshotRows, draftRows, latestArchiveRows, multiDayEventRows, publicMultiDayEventRows] = reads.map((result) =>
           result.status === "fulfilled" ? result.value : []
         );
 
@@ -29328,6 +29407,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         const nextActiveSnapshot = dataFromRow((activeSnapshotRows || [])[0] || {});
         const nextDrafts = (draftRows || []).map((row) => ({ id: row.id, ...dataFromRow(row) }));
         const nextMultiDayEvent = (multiDayEventRows || []).find((row) => row.id === MULTI_DAY_EVENT_SETTINGS_ID)?.value;
+        const nextPublicMultiDayEvent = (publicMultiDayEventRows || []).find((row) => row.id === MULTI_DAY_EVENT_SETTINGS_ID)?.value;
 
         if (nextSchedule.length) setScheduleItems(nextSchedule);
         if (typeof scheduleSettings?.value?.locked === "boolean") setScheduleLocked(scheduleSettings.value.locked);
@@ -29336,8 +29416,9 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         if (nextArchives.length) setTournamentHistory(nextArchives);
         if (nextLatestArchive) setPublicLatestArchive(nextLatestArchive);
         if (adminAccessToken) setSavedTournamentDrafts(nextDrafts);
-        if (nextMultiDayEvent && typeof nextMultiDayEvent === "object") {
-          const restoredMultiDayEvent = { ...createDefaultMultiDayEvent(), ...nextMultiDayEvent };
+        const availableMultiDayEvent = nextMultiDayEvent || nextPublicMultiDayEvent;
+        if (availableMultiDayEvent && typeof availableMultiDayEvent === "object") {
+          const restoredMultiDayEvent = { ...createDefaultMultiDayEvent(), ...availableMultiDayEvent };
           supabaseLastMultiDaySignatureRef.current = JSON.stringify(restoredMultiDayEvent);
           setMultiDayEvent(restoredMultiDayEvent);
         }
