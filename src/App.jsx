@@ -1079,6 +1079,26 @@ const numberInputStyles = String.raw`
     word-break: keep-all;
   }
 
+  .bb-public-title-leaderboard {
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
+  .bb-public-title-leaderboard th,
+  .bb-public-title-leaderboard td {
+    padding: 0.38rem 0.24rem !important;
+    font-size: 0.66rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .bb-public-title-leaderboard .bb-title-name-col { width: 48%; }
+  .bb-public-title-leaderboard .bb-title-count-col { width: 13%; }
+  .bb-public-title-leaderboard .bb-title-major-col,
+  .bb-public-title-leaderboard .bb-title-fkm-col,
+  .bb-public-title-leaderboard .bb-title-non-fkm-col { width: 13%; }
+  .bb-public-title-leaderboard .bb-title-nickname-col,
+  .bb-public-title-leaderboard .bb-title-latest-col { display: none !important; }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -21808,38 +21828,38 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
         <h3 className="text-lg font-black text-blue-950 md:text-xl">Title Leaderboard</h3>
 
         <div className="overflow-auto rounded-2xl border border-blue-200">
-      <table className="w-full min-w-[760px] text-xs md:text-sm">
+      <table className="bb-public-title-leaderboard w-full min-w-[760px] text-xs md:text-sm">
         <thead className="bg-blue-800 text-white">
           <tr>
-            <th className="p-3 text-left">
+            <th className="bb-title-name-col p-3 text-left">
               Name
             </th>
 
-            <th className="p-3 text-left">
+            <th className="bb-title-nickname-col p-3 text-left">
               Nickname
             </th>
 
-            <th className="p-3 text-right">
+            <th className="bb-title-count-col p-3 text-right">
               <button
                 type="button"
                 onClick={() => changePublicTitleSort("titles")}
                 className="font-black text-white underline-offset-2 hover:underline"
               >
-                Titles{publicTitleSortLabel("titles")}
+                <span className="sm:hidden">Ttl</span><span className="hidden sm:inline">Titles</span>{publicTitleSortLabel("titles")}
               </button>
             </th>
 
-            <th className="p-3 text-right">
+            <th className="bb-title-major-col p-3 text-right">
               <button
                 type="button"
                 onClick={() => changePublicTitleSort("majors")}
                 className="font-black text-white underline-offset-2 hover:underline"
               >
-                Majors{publicTitleSortLabel("majors")}
+                <span className="sm:hidden">Maj</span><span className="hidden sm:inline">Majors</span>{publicTitleSortLabel("majors")}
               </button>
             </th>
 
-            <th className="p-3 text-right">
+            <th className="bb-title-fkm-col p-3 text-right">
               <button
                 type="button"
                 onClick={() => changePublicTitleSort("fkmTitles")}
@@ -21849,17 +21869,17 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
               </button>
             </th>
 
-            <th className="p-3 text-right">
+            <th className="bb-title-non-fkm-col p-3 text-right">
               <button
                 type="button"
                 onClick={() => changePublicTitleSort("nonFkmTitles")}
                 className="font-black text-white underline-offset-2 hover:underline"
               >
-                Non-FKM{publicTitleSortLabel("nonFkmTitles")}
+                <span className="sm:hidden">NFKM</span><span className="hidden sm:inline">Non-FKM</span>{publicTitleSortLabel("nonFkmTitles")}
               </button>
             </th>
 
-            <th className="p-3 text-left">
+            <th className="bb-title-latest-col p-3 text-left">
               <button
                 type="button"
                 onClick={() => changePublicTitleSort("latest")}
@@ -21878,7 +21898,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
             return (
               <React.Fragment key={`public-title-row-${row.bowler}`}>
                 <tr className="border-t">
-                  <td className="p-3 font-bold text-blue-950">
+                  <td className="bb-title-name-col p-3 font-bold text-blue-950">
                     <button
                       type="button"
                       onClick={() => setExpandedPublicTitleBowler((current) => current === row.bowler ? null : row.bowler)}
@@ -21889,27 +21909,27 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                     </button>
                   </td>
 
-                  <td className="p-3 font-semibold text-blue-900">
+                  <td className="bb-title-nickname-col p-3 font-semibold text-blue-900">
                     {row.nickname}
                   </td>
 
-                  <td className="p-3 text-right font-black text-yellow-700">
+                  <td className="bb-title-count-col p-3 text-right font-black text-yellow-700">
                     {row.titles}
                   </td>
 
-                  <td className="p-3 text-right font-bold text-red-700">
+                  <td className="bb-title-major-col p-3 text-right font-bold text-red-700">
                     {row.majors}
                   </td>
 
-                  <td className="p-3 text-right font-bold text-green-700">
+                  <td className="bb-title-fkm-col p-3 text-right font-bold text-green-700">
                     {row.fkmTitles}
                   </td>
 
-                  <td className="p-3 text-right font-bold text-slate-700">
+                  <td className="bb-title-non-fkm-col p-3 text-right font-bold text-slate-700">
                     {row.nonFkmTitles}
                   </td>
 
-                  <td className="p-3">
+                  <td className="bb-title-latest-col p-3">
                     {row.latest || "-"}
                   </td>
                 </tr>
