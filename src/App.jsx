@@ -7,7 +7,6 @@ import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTe
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
 import fbetLogo from "./assets/fbet-logo-new.jpg";
 import { hasSupabaseConfig, supabase, supabasePublishableKey, supabaseUrl } from "./supabaseClient";
-import { STRIKEFEST_26_ROSTER } from "./strikefest26Roster";
 function Card({ className = "", children }) {
   return <div className={className}>{children}</div>;
 }
@@ -9846,7 +9845,7 @@ function buildPublicMultiDayEvent(event = {}) {
   };
 }
 
-function createStrikefest26RosterEvent() {
+function createStrikefest26RosterEvent(roster = []) {
   const base = createStrikefestMultiDayEvent();
   const squadDefinitions = [
     ["2026-01-31", "08:00"], ["2026-01-31", "10:00"], ["2026-01-31", "13:00"], ["2026-01-31", "15:00"],
@@ -9862,7 +9861,7 @@ function createStrikefest26RosterEvent() {
   }));
   const squadByKey = new Map(squads.map((squad) => [`${squad.date}|${squad.time}`, squad]));
   const groupedEntries = new Map();
-  STRIKEFEST_26_ROSTER.forEach((row, index) => {
+  roster.forEach((row, index) => {
     const key = `${row.competition}|${row.date}|${row.time}|${row.group}`;
     const group = groupedEntries.get(key) || { ...row, members: [], sourceIndex: index };
     group.members.push({ name: row.name, usbc: row.usbc, average: row.average });
@@ -12247,10 +12246,15 @@ function MultiDayEventsTab({
               <Button
                 variant="outline"
                 className="rounded-2xl border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
-                onClick={() => {
+                onClick={async () => {
                   if (typeof window !== "undefined" && !window.confirm("Load the 2026 historical roster into staging? This replaces the current multi-event workspace only.")) return;
-                  setMultiDayEvent(createStrikefest26RosterEvent());
-                  setTestDraftNotice("Loaded the 2026 historical roster: 100 Singles entries, 57 Doubles entries, and 29 Trios entries.");
+                  try {
+                    const { STRIKEFEST_26_ROSTER } = await import("./strikefest26Roster");
+                    setMultiDayEvent(createStrikefest26RosterEvent(STRIKEFEST_26_ROSTER));
+                    setTestDraftNotice("Loaded the 2026 historical roster: 100 Singles entries, 57 Doubles entries, and 29 Trios entries.");
+                  } catch (error) {
+                    setTestDraftNotice(`Could not load the 2026 roster. ${error.message || "Try again."}`);
+                  }
                 }}
               >
                 Load 2026 Historical Roster
