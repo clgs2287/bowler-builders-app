@@ -1073,6 +1073,12 @@ const numberInputStyles = String.raw`
   .bb-standard-stats-detail-table td:nth-child(4) { width: 22%; }
   .bb-standard-stats-detail-table .bb-standard-stats-detail-extra { display: none !important; }
 
+  .bb-standard-mobile-detail-date {
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all;
+  }
+
   .bb-public-side-details-col {
     display: none !important;
   }
@@ -21638,7 +21644,7 @@ const publicTitleLeaderRows = Object.values(publicTitleCounts)
                             {sortedDetails.map((detail) => (
                               <tr key={detail.id} className="border-t border-blue-200">
                                 <td className="p-2 font-semibold text-blue-950">{detail.tournament}</td>
-                                <td className="whitespace-nowrap p-2 text-blue-900">{detail.date || "-"}</td>
+                                <td className="bb-standard-mobile-detail-date p-2 text-blue-900">{detail.date || "-"}</td>
                                 <td className="p-2 text-right font-black text-blue-950">#{detail.place}</td>
                               </tr>
                             ))}
