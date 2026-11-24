@@ -1,6 +1,41 @@
 const MAILJET_ENDPOINT = "https://api.mailjet.com/v3.1/send";
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
+const EMAIL_DELIVERY_BLOCKED_REASON = "Email delivery is disabled outside verified production.";
+
+const projectRefFromSupabaseUrl = (value = "") => {
+  try {
+    const hostname = new URL(String(value || "")).hostname.toLowerCase();
+    const suffix = ".supabase.co";
+    return hostname.endsWith(suffix) ? hostname.slice(0, -suffix.length) : "";
+  } catch {
+    return "";
+  }
+};
+
+// Provider credentials are never sufficient by themselves. Every email path must
+// fail closed unless Vercel, the configured project, and an explicit enable flag
+// all identify this as the verified production deployment.
+export const getEmailDeliveryPolicy = (environment = process.env) => {
+  const configuredProjectRef = projectRefFromSupabaseUrl(
+    environment.SUPABASE_URL || environment.VITE_SUPABASE_URL || ""
+  );
+  const expectedProductionProjectRef = String(
+    environment.BOWLER_BUILDERS_PRODUCTION_SUPABASE_PROJECT_REF || ""
+  ).trim().toLowerCase();
+  const isVerifiedProduction =
+    environment.VERCEL_ENV === "production" &&
+    environment.EMAIL_DELIVERY_ENABLED === "true" &&
+    Boolean(expectedProductionProjectRef) &&
+    configuredProjectRef === expectedProductionProjectRef;
+
+  return {
+    allowed: isVerifiedProduction,
+    configuredProjectRef,
+    reason: isVerifiedProduction ? "" : EMAIL_DELIVERY_BLOCKED_REASON,
+  };
+};
+
 export const splitEmails = (value = "") =>
   String(value)
     .split(",")
@@ -96,6 +131,16 @@ const sendResendEmail = async ({ from, to, subject, html, replyTo }) => {
 export const sendEmail = async ({ from, to, subject, html, replyTo }) => {
   const recipients = splitEmails(Array.isArray(to) ? to.join(",") : to);
   if (!recipients.length) throw new Error("No email recipients were provided.");
+
+  const policy = getEmailDeliveryPolicy();
+  if (!policy.allowed) {
+    return {
+      provider: "blocked",
+      skipped: true,
+      blocked: true,
+      reason: policy.reason,
+    };
+  }
 
   const mailjet = await sendMailjetEmail({ from, to: recipients, subject, html, replyTo });
   if (mailjet) return mailjet;

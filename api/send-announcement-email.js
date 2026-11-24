@@ -263,6 +263,18 @@ export default async function handler(request, response) {
     }
 
     if (failed.length) {
+      const allBlocked = !sent.length && failed.every((item) => item.provider === "blocked");
+      if (allBlocked) {
+        return response.status(200).json({
+          sent: 0,
+          skipped: true,
+          blocked: true,
+          skippedUnsubscribed,
+          skippedSuppressed,
+          failed,
+          provider: "blocked",
+        });
+      }
       return response.status(sent.length ? 207 : 500).json({ sent: sent.length, skippedUnsubscribed, skippedSuppressed, failed, provider: sent[0]?.provider || failed[0]?.provider || "none" });
     }
 

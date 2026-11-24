@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test src/bracketPayouts.test.js src/bracketFillSuggestions.test.js src/teamReservations.test.js src/triosScoresheetPdf.test.js src/tournamentLogic.test.js src/finalsLogic.test.js src/multiEventLogic.test.js && node stepladder-logic-check.mjs",
+    "test": "node --test api/email-provider.test.js src/bracketPayouts.test.js src/bracketFillSuggestions.test.js src/teamReservations.test.js src/triosScoresheetPdf.test.js src/tournamentLogic.test.js src/finalsLogic.test.js src/multiEventLogic.test.js && node stepladder-logic-check.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
