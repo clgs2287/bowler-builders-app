@@ -43,6 +43,15 @@ is a separate app-setting workspace and must be captured before testing.
    identity, reservation, draft, and archive counts. If any differs, stop: do
    not use the normal full-save path because it could treat unseen rows as stale.
 
+Use the operations script below for the inventory. It creates only a local,
+hashed report and runs all remote selects in one `BEGIN TRANSACTION READ ONLY`
+session:
+
+```powershell
+& 'C:\Projects\bowler-builders-db-operations-prep\scripts\Get-StagingActiveWorkspacePreflight.ps1' `
+  -SslRootCertPath 'C:/Users/coryl/Tools/BowlerBuilders/staging-supabase-ca.crt'
+```
+
 ## Phase B: fixture preparation, after separate write approval
 
 1. Create only the four saved drafts and schedule records documented in
@@ -82,7 +91,23 @@ is a separate app-setting workspace and must be captured before testing.
    side-action rows, drafts, and schedule rows. Never use a name, date, or email
    wildcard. Do not delete archives, titles, identities, or any pre-existing row.
 3. Restore the original active workspace from the Phase A administrator export.
-   This is the only permitted active-snapshot restoration source.
+   Use the Phase A preflight's `active-snapshot.csv` and `app-settings.csv` as
+   the canonical remote source; the administrator export is the independent
+   human-readable backup. The prepared restore runner changes only that active
+   snapshot plus `schedule_locked`, `reservation_state`, and `multi_day_event`.
+   It deletes nothing:
+
+```powershell
+& 'C:\Projects\bowler-builders-db-operations-prep\scripts\Restore-StagingActiveWorkspace.ps1' `
+  -PreflightDirectory 'C:\Users\coryl\BowlerBuilders-StagingActiveWorkspacePreflights\<verified-preflight-folder>' `
+  -ConfirmProjectRef 'evgyzbgixhaiykxznqez' `
+  -SslRootCertPath 'C:/Users/coryl/Tools/BowlerBuilders/staging-supabase-ca.crt' `
+  -Execute
+```
+
+   Run it only after exact-ID fixture cleanup and a separate restoration
+   approval. Reload the staging page afterwards; do not press Save during the
+   reload.
 4. Run the read-only inventory again. Verify every preflight ID/count/hash is
    identical, the active export hash matches the Phase A source, no synthetic
    ID remains, and no `bb-synth-20261124-v1/` Storage key remains.
