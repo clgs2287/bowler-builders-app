@@ -92,7 +92,7 @@ export function createRegistrationHarness() {
 
 export function createMultiEventAverageHarness() {
   const start = source.indexOf("  const tournamentAverageForMember =");
-  const end = source.indexOf("  const memberGameScore =", start);
+  const end = source.indexOf("  const memberGameScoreValue =", start);
   if (start < 0 || end < 0) throw new Error("Could not locate multi-event average helpers in App.jsx");
   const helpers = source.slice(start, end);
 
@@ -129,12 +129,15 @@ export function createMultiEventCalculationHarness() {
   const financeSource = source.slice(financeStart, financeEnd);
   const archiveSource = source.slice(archiveStart, archiveEnd);
   const bracketSource = source.slice(bracketStart, bracketEnd);
+  const scoreValueStart = source.indexOf("  const memberGameScoreValue =");
+  const scoreValueEnd = source.indexOf("  const memberGameScore =", scoreValueStart);
+  const scoreValueSource = source.slice(scoreValueStart, scoreValueEnd);
 
   return {
     allEvents: new Function(
-      "squadEntries", "entryMembers", "getEntryCompetition", "normalizeMatchText", "formatStartTime", "memberGameScore", "handicapPerGame", "seriesValue",
+      "readBracketScore", "squadEntries", "entryMembers", "getEntryCompetition", "normalizeMatchText", "formatStartTime", "memberGameScoreValue", "handicapPerGame", "seriesValue",
       `${allEventsSource}\nreturn allEventsRows;`
-    ),
+    ).bind(null, readBracketScore),
     dailyBonuses: new Function(
       "multiDayEvent", "squads", "singlesRows",
       `${dailyBonusSource}\nreturn multiDayDailySeriesBonusRows;`
@@ -158,7 +161,7 @@ export function createMultiEventCalculationHarness() {
     advanceBracketPlayers: new Function(
       "advanceSideActionPlayers", "readBracketScore", "selectedCheckInPlayerByKey", "handicapPerGame",
       "getEntryMemberCount", "activeSquad", "players", "roundIndex", "setKey",
-      `${bracketSource}\nreturn multiDayAdvancePlayers(players, roundIndex, setKey);`
+      `${scoreValueSource}\n${bracketSource}\nreturn multiDayAdvancePlayers(players, roundIndex, setKey);`
     ).bind(null, advanceSideActionPlayers, readBracketScore),
   };
 }

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRegistrationHarness, createTournamentLogicHarness } from "./appLogicTestHarness.js";
+import { getTeamHandicapHighGame, isCompleteSideActionTeam, usesSideActionBracketHandicap } from "./teamSideAction.js";
 import { advanceSideActionPlayers, bracketScoreText, buildSideActionRounds, regularSideActionScore } from "./sideActionBracket.js";
 
 const logic = createTournamentLogicHarness();
@@ -248,4 +249,85 @@ test("registration shares its configured lane datalist and schedules the roster 
   assert.equal(registration.match(/<datalist id=\{laneListId\}>/g)?.length, 1);
   assert.match(registration, /<LaneSelector[^>]+sharedListId=\{allLanePositions\.length \? laneListId : undefined\}/);
   assert.match(registration, /startLaneAssignment\(\(\) => \{\s*setBowlers/);
+});
+
+
+test("team handicap uses individual adjustments, accepts entered zeroes, and skips incomplete games", () => {
+  const makeTeam = (teamNumber, size, score, handicap) => ({
+    teamNumber, seed: "team-" + teamNumber, name: "Team " + teamNumber, isTeam: true,
+    members: Array.from({ length: size }, (_, index) => ({
+      name: "Member " + index, games: [score, index ? "" : 200], handicap,
+    })),
+  });
+  for (const teamSize of [2, 3]) {
+    const scratchOnly = makeTeam(1, teamSize, 250, 50);
+    const handicapOnly = makeTeam(2, teamSize, 200, 5);
+    const both = makeTeam(3, teamSize, "0", 210);
+    const state = {
+      teamHighGameEntries: { 1: true, 3: true },
+      teamHandicapHighGameEntries: { 2: true, 3: true },
+      teamHandicapHighGamePrice: 12,
+    };
+    const teams = [scratchOnly, handicapOnly, both];
+    const handicapFor = (member) => member.handicap;
+    assert.equal(getTeamHandicapHighGame(teams, state, 2, false, handicapFor, teamSize), null);
+    const contest = getTeamHandicapHighGame(teams, state, 2, true, handicapFor, teamSize);
+    assert.equal(contest.pot, 24);
+    assert.deepEqual(contest.results[0].scores.map(({ bowler, score }) => [bowler.seed, score]), [
+      ["team-3", 210 * teamSize], ["team-2", 205 * teamSize],
+    ]);
+    assert.deepEqual(contest.results[0].winners, [both]);
+    assert.equal(contest.results[0].payoutEach, 12);
+    assert.deepEqual(contest.results[1].winners, []);
+    assert.equal(regularSideActionScore(handicapOnly, 0, handicapFor), 205 * teamSize);
+    assert.equal(regularSideActionScore(handicapOnly, 0), 200 * teamSize);
+    assert.equal(isCompleteSideActionTeam({ members: [handicapOnly.members[0]] }, teamSize), false);
+  }
+});
+
+test("team handicap high-game ties split a team award", () => {
+  const first = { teamNumber: 1, name: "First", isTeam: true, members: [{ name: "A", games: [200], lane: "7A" }, { name: "B", games: [180], lane: "7B" }] };
+  const second = { ...first, teamNumber: 2, name: "Second" };
+  const contest = getTeamHandicapHighGame([first, second], { teamHandicapHighGameEntries: { 1: true, 2: true } }, 1, true, () => 10, 2);
+  assert.deepEqual(contest.results[0].winners, [first, second]);
+  assert.equal(contest.results[0].payoutEach, 10);
+});
+
+test("locked historical bracket scoring retains its previous interpretation", () => {
+  assert.equal(usesSideActionBracketHandicap("team", { payout: { first: 25, second: 10 } }, true), true);
+  assert.equal(usesSideActionBracketHandicap("team", { teamScoring: "scratch" }, true), false);
+  assert.equal(usesSideActionBracketHandicap("teamHandicap", { teamScoring: "handicap" }, true), true);
+  assert.equal(usesSideActionBracketHandicap("early", {}, false), false);
+});
+
+test("registration separates responsive team controls from the individual roster and payout labels distinguish winners from payment", () => {
+  const source = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const registration = source.slice(source.indexOf("function RegistrationTab("), source.indexOf("function LockedScoreCell("));
+  const teamOptions = registration.slice(registration.indexOf("const teamSideActionOptions"), registration.indexOf("const showIndividualSideAction"));
+  for (const key of ["teamBracketEntries", "teamHandicapBracketEntries", "teamHighGameEntries", "teamHandicapHighGameEntries"]) {
+    assert.ok(teamOptions.includes('key: "' + key + '"'));
+  }
+  assert.match(teamOptions, /useHandicapScores \? \[/);
+  assert.ok(registration.indexOf('aria-label="Team side action"') < registration.indexOf('<table className={'));
+  assert.match(registration, /Show individual side action in the roster/);
+  const payouts = source.slice(source.indexOf("function SideActionPayoutsTab("), source.indexOf("export default function BowlingPayoutApp("));
+  assert.doesNotMatch(payouts, /label="Paid Bowlers"/);
+  assert.match(payouts, /label="Winning Teams"/);
+  assert.match(payouts, /game4Lane: laneAssignmentForGame\(livePlayer, 3, tournamentInfo\)/);
+  assert.match(source, /player\.members\s*\.map\(\(member\) => laneAssignmentForGame\(member, gameIndex, tournamentInfo\)\)/);
+  assert.match(payouts, /getTournamentPaidKey\(tournamentInfo, row.seed\)/);
+});
+
+test("cash-sheet printing keeps one summary, repeats headers, and retains the amounts and paid tracking", () => {
+  const source = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
+  const start = source.indexOf("function SummaryCashSheetTab(");
+  const cashSheet = source.slice(start, source.indexOf("\nfunction ", start + 1));
+  assert.match(cashSheet, /<AppCard className="print:hidden">/);
+  assert.equal(cashSheet.match(/className="bb-cash-sheet-heading/g)?.length, 1);
+  assert.match(cashSheet, /"Prize \/ Team" : "Prize"/);
+  assert.match(cashSheet, /getTournamentPaidKey\(tournamentInfo, row.seed\)/);
+  assert.match(cashSheet, /currency\(row.payoutAmount\)/);
+  assert.match(source, /\.bb-cash-sheet-table thead \{ display: table-header-group; \}/);
+  assert.match(source, /\.bb-cash-sheet-table tr \{ break-inside: avoid; \}/);
+  assert.match(source, /\.bb-cash-sheet-table \{\s*overflow: visible !important/);
 });

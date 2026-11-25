@@ -2,6 +2,8 @@ import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, us
 import { createPortal } from "react-dom";
 import { getBracketFillSuggestions } from "./bracketFillSuggestions";
 import { getBracketPayout } from "./bracketPayouts";
+import { buildBracketTicketPlans, drawBracketPlayers, getBracketPlanAmounts, placeBracketTickets } from "./sideActionBracketPlans";
+import { getTeamHandicapHighGame, isCompleteSideActionTeam, usesSideActionBracketHandicap } from "./teamSideAction";
 import { selectMultiEventPayoutDivisions } from "./multiEventPayouts";
 import { advanceSideActionPlayers, buildSideActionRounds, bracketScoreText, readBracketScore, regularSideActionScore } from "./sideActionBracket";
 import { createTriosScoresheetPdf } from "./triosScoresheetPdf";
@@ -287,6 +289,55 @@ const numberInputStyles = String.raw`
     font-weight: 400 !important;
     text-shadow: none !important;
   }
+
+
+  .bb-cash-sheet,
+  .bb-cash-sheet-table {
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .bb-cash-sheet-heading {
+    color: #111827;
+    break-after: avoid;
+  }
+
+  .bb-cash-sheet-heading h1 {
+    margin: 0.1in 0;
+    font-size: 17pt;
+    font-weight: 700 !important;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+  }
+
+  .bb-cash-sheet-table table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse;
+    font-size: 9pt !important;
+  }
+
+  .bb-cash-sheet-table thead { display: table-header-group; }
+  .bb-cash-sheet-table tfoot { display: table-row-group; }
+  .bb-cash-sheet-table tr { break-inside: avoid; }
+
+  .bb-cash-sheet-table th,
+  .bb-cash-sheet-table td {
+    color: #111827 !important;
+    padding: 0.07in 0.06in !important;
+  }
+
+  .bb-cash-sheet-table th {
+    border-block: 1px solid #111827;
+    color: #111827 !important;
+    background: #e5e7eb !important;
+    font-weight: 700 !important;
+  }
+
+  .bb-cash-sheet-table td:not(.bb-cash-sheet-name) { white-space: nowrap; }
+  .bb-cash-sheet-name { overflow-wrap: anywhere; }
 
   .bb-score-entry-print,
   .bb-score-entry-print * {
@@ -7684,6 +7735,7 @@ function RosterSizeInput({ entries, onSave }) {
 }
 
 function RegistrationTab({ qualifyingGames, entries, bowlers, setBowlers, useHandicapScores, setUseHandicapScores, sidePotState, setSidePotState, tournamentHistory = [], tournamentInfo = {}, bowlerIdentities = [], setReservationState = null }) {
+  const [showTeamRosterSideAction, setShowTeamRosterSideAction] = useState(false);
   const [registrationSort, setRegistrationSort] = useState({ key: "entry", direction: "asc" });
   const [isAssigningLanes, startLaneAssignment] = useTransition();
   const laneListId = useId();
@@ -8058,29 +8110,26 @@ const updateBowler = (index, field, value) => {
   const updateBracketPrice = (value) => setSidePotState((current) => ({ ...current, bracketPrice: Number(value || 0) }));
   const updateHighGamePrice = (value) => setSidePotState((current) => ({ ...current, highGamePrice: Number(value || 0) }));
   const updateHandicapHighGamePrice = (value) => setSidePotState((current) => ({ ...current, handicapHighGamePrice: Number(value || 0) }));
-  const updateTeamBracketEntries = (teamNumber, value) => setSidePotState((current) => ({
+  const updateTeamSideAction = (key, teamNumber, value) => setSidePotState((current) => ({
     ...current,
-    teamBracketEntries: { ...(current.teamBracketEntries || {}), [teamNumber]: Math.max(0, Number(value || 0)) },
+    [key]: { ...current[key], [teamNumber]: value },
   }));
-  const updateTeamHighGame = (teamNumber, value) => setSidePotState((current) => ({
-    ...current,
-    teamHighGameEntries: { ...(current.teamHighGameEntries || {}), [teamNumber]: value },
-  }));
-  const updateTeamBracketPrice = (value) => setSidePotState((current) => ({ ...current, teamBracketPrice: Number(value || 0) }));
-  const updateTeamHighGamePrice = (value) => setSidePotState((current) => ({ ...current, teamHighGamePrice: Number(value || 0) }));
+  const teamSideActionOptions = [
+    { key: "teamBracketEntries", priceKey: "teamBracketPrice", label: "Scratch brackets", defaultPrice: Number(sidePotState.bracketPrice || DEFAULT_BRACKET_PRICE), bracket: true },
+    { key: "teamHighGameEntries", priceKey: "teamHighGamePrice", label: "Scratch high game", defaultPrice: Number(sidePotState.highGamePrice ?? 10) },
+    ...(useHandicapScores ? [
+      { key: "teamHandicapBracketEntries", priceKey: "teamHandicapBracketPrice", label: "Handicap brackets", defaultPrice: DEFAULT_BRACKET_PRICE, bracket: true },
+      { key: "teamHandicapHighGameEntries", priceKey: "teamHandicapHighGamePrice", label: "Handicap high game", defaultPrice: 10 },
+    ] : []),
+  ];
+  const showIndividualSideAction = teamSize <= 1 || showTeamRosterSideAction;
   const bracketSets = sidePotState.bracketSets || { early: {}, handicapEarly: {}, middle: {}, late: {} };
   const enabledBracketSets = sidePotState.enabledBracketSets || { early: true, handicapEarly: false, middle: false, late: false };
   const bracketPrice = Number(sidePotState.bracketPrice || DEFAULT_BRACKET_PRICE);
-  const teamBracketPrice = Number(sidePotState.teamBracketPrice || bracketPrice || DEFAULT_BRACKET_PRICE);
   const highGamePrice = Number(sidePotState.highGamePrice ?? 10);
   const handicapHighGamePrice = Number(sidePotState.handicapHighGamePrice ?? 10);
-  const teamHighGamePrice = Number(sidePotState.teamHighGamePrice ?? highGamePrice ?? 10);
   const highGameEntries = bowlers.filter((b) => Boolean(b.sidePots?.scratchHighGame)).length;
   const handicapHighGameEntries = bowlers.filter((b) => Boolean(b.sidePots?.handicapHighGame)).length;
-  const teamBracketEntries = sidePotState.teamBracketEntries || {};
-  const teamHighGameEntries = sidePotState.teamHighGameEntries || {};
-  const totalTeamBracketEntries = Object.values(teamBracketEntries).reduce((sum, value) => sum + Number(value || 0), 0);
-  const totalTeamHighGameEntries = Object.values(teamHighGameEntries).filter(Boolean).length;
   const totalBracketEntries = Object.values(bracketSets).flatMap((set) => Object.values(set || {})).reduce((sum, value) => sum + Number(value || 0), 0);
   const previousBowlerMap = {};
   tournamentHistory.forEach((t) => {
@@ -8171,25 +8220,16 @@ averageSource: archivedData?.eligible
   };
   const registrationSortLabel = (key) =>
     "";
-  const registrationColumnCount =
-    1 +
-    1 +
-    (useHandicapScores ? 2 : 0) +
-    1 +
-    1 +
-    1 +
-    (useHandicapScores ? 1 : 0) +
-    (enabledBracketSets.middle ? 1 : 0) +
-    (enabledBracketSets.late ? 1 : 0) +
-    1 +
-    (useHandicapScores ? 1 : 0) +
-    (showRegistrationPhones ? 1 : 0) +
-    (showRegistrationEmails ? 1 : 0) +
-    1;
+  const sideActionColumnCount = showIndividualSideAction
+    ? 2 + (useHandicapScores ? 2 : 0) + Number(Boolean(enabledBracketSets.middle)) + Number(Boolean(enabledBracketSets.late))
+    : 0;
+  const registrationColumnCount = 5 + (useHandicapScores ? 2 : 0) + sideActionColumnCount +
+    Number(showRegistrationPhones) + Number(showRegistrationEmails);
   const contactColumnCount =
     (showRegistrationPhones ? 1 : 0) + (showRegistrationEmails ? 1 : 0);
-  const registrationTableMinWidth =
-    contactColumnCount === 2
+  const registrationTableMinWidth = !showIndividualSideAction
+    ? ["min-w-[530px]", "min-w-[650px]", "min-w-[770px]"][contactColumnCount]
+    : contactColumnCount === 2
       ? "min-w-[1180px] md:min-w-[1380px]"
       : contactColumnCount === 1
         ? "min-w-[1060px] md:min-w-[1240px]"
@@ -8392,13 +8432,66 @@ averageSource: archivedData?.eligible
           <StatCard label="Scratch HG Pot" value={currency(highGameEntries * highGamePrice)} />
           {useHandicapScores && <div className="space-y-2"><Label>Hdcp HG Price</Label><Input type="number" value={handicapHighGamePrice} onChange={(e) => updateHandicapHighGamePrice(e.target.value)} /></div>}
           {useHandicapScores && <StatCard label="Hdcp HG Pot" value={currency(handicapHighGameEntries * handicapHighGamePrice)} />}
-          {teamSize > 1 && <div className="space-y-2"><Label>Team Bracket Price</Label><Input type="number" value={teamBracketPrice} onChange={(e) => updateTeamBracketPrice(e.target.value)} /></div>}
-          {teamSize > 1 && <StatCard label="Team Bracket Money" value={currency(totalTeamBracketEntries * teamBracketPrice)} />}
-          {teamSize > 1 && <div className="space-y-2"><Label>Team HG Price</Label><Input type="number" value={teamHighGamePrice} onChange={(e) => updateTeamHighGamePrice(e.target.value)} /></div>}
-          {teamSize > 1 && <StatCard label="Team HG Pot" value={currency(totalTeamHighGameEntries * teamHighGamePrice)} />}
-
         </div>
 
+        {teamSize > 1 && (
+          <section aria-label="Team side action" className="mb-4 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-3">
+            <h3 className="text-base font-bold text-blue-950">Team side action</h3>
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+              {teamSideActionOptions.map(({ key, priceKey, label, bracket, defaultPrice }) => {
+                const price = Number(sidePotState[priceKey] ?? defaultPrice);
+                const count = Object.values(sidePotState[key] || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+                return (
+                  <div key={key} className="min-w-0 space-y-1 rounded-xl bg-white p-2">
+                    <label className="block text-xs font-semibold text-blue-900">
+                      {label} price
+                      <Input className="mt-1 w-full" type="number" min={bracket ? "0.01" : "0"} step="0.01" value={price}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setSidePotState((current) => ({ ...current, [priceKey]: bracket && value <= 0 ? defaultPrice : Math.max(0, value) }));
+                        }} />
+                    </label>
+                    <p className="text-xs text-blue-800">{count} {bracket ? "tickets" : "teams"} · {currency(count * price)}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {sortedRegistrationRows.filter(({ index }) => index % teamSize === 0).map(({ index }) => {
+                const teamNumber = getTeamNumber(index, teamSize);
+                const members = bowlers.slice(index, index + teamSize);
+                if (!members.some((member) => member.name?.trim())) return null;
+                return (
+                  <fieldset key={teamNumber} className="min-w-0 rounded-xl border border-blue-200 bg-white px-3 pb-3">
+                    <legend className="px-1 text-sm font-bold text-blue-950">Team {teamNumber}</legend>
+                    <p className="mb-2 break-words text-xs text-blue-800">{formatNameList(members.map((member) => member.name))}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {teamSideActionOptions.map(({ key, label, bracket }) => (
+                        <label key={key} className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-semibold text-blue-900">
+                          {bracket ? (
+                            <Input type="number" min="0" step="1" className="w-16" value={Number(sidePotState[key]?.[teamNumber] || 0)}
+                              onChange={(event) => updateTeamSideAction(key, teamNumber, Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
+                          ) : (
+                            <input type="checkbox" checked={Boolean(sidePotState[key]?.[teamNumber])}
+                              onChange={(event) => updateTeamSideAction(key, teamNumber, event.target.checked)} />
+                          )}
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {teamSize > 1 && (
+          <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-blue-900">
+            <input type="checkbox" checked={showTeamRosterSideAction} onChange={(event) => setShowTeamRosterSideAction(event.target.checked)} />
+            Show individual side action in the roster
+          </label>
+        )}
         <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
           {allLanePositions.length > 0 && (
             <datalist id={laneListId}>
@@ -8430,12 +8523,14 @@ averageSource: archivedData?.eligible
                     Paid{registrationSortLabel("paid")}
                   </button>
                 </th>
-                <th className="p-2 text-center md:p-2.5">Scratch</th>
-                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp</th>}
+                {showIndividualSideAction && <>
+                <th className="p-2 text-center md:p-2.5">Ind. Scratch Brackets</th>
+                {useHandicapScores && <th className="p-2 text-center md:p-2.5">Ind. Hdcp Brackets</th>}
                 {enabledBracketSets.middle && <th className="p-2 text-center md:p-2.5">2-4</th>}
                 {enabledBracketSets.late && <th className="p-2 text-center md:p-2.5">4-6</th>}
                 <th className="p-2 text-center md:p-2.5">Scratch HG</th>
                 {useHandicapScores && <th className="p-2 text-center md:p-2.5">Hdcp HG</th>}
+                </>}
                 {showRegistrationPhones && <th className="p-2 text-left md:p-2.5">Phone</th>}
                 {showRegistrationEmails && <th className="p-2 text-left md:p-2.5">Email</th>}
                 <th className="sticky right-0 z-10 border-l border-blue-700 bg-blue-800 p-2 text-right md:p-2.5">Delete</th>
@@ -8452,14 +8547,14 @@ averageSource: archivedData?.eligible
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
                 const laneNavProps = registrationNavProps(displayIndex, registrationNavCol++);
-                const scratchBracketNavProps = registrationNavProps(displayIndex, registrationNavCol++);
-                const handicapBracketNavProps = useHandicapScores
+                const scratchBracketNavProps = showIndividualSideAction ? registrationNavProps(displayIndex, registrationNavCol++) : null;
+                const handicapBracketNavProps = showIndividualSideAction && useHandicapScores
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
-                const middleBracketNavProps = enabledBracketSets.middle
+                const middleBracketNavProps = showIndividualSideAction && enabledBracketSets.middle
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
-                const lateBracketNavProps = enabledBracketSets.late
+                const lateBracketNavProps = showIndividualSideAction && enabledBracketSets.late
                   ? registrationNavProps(displayIndex, registrationNavCol++)
                   : null;
                 const phoneNavProps = showRegistrationPhones ? registrationNavProps(displayIndex, registrationNavCol++) : {};
@@ -8479,12 +8574,7 @@ averageSource: archivedData?.eligible
                             {bowlers.slice(index, index + teamSize).filter((member) => member.paid).length}/{teamSize} paid
                           </span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 normal-case tracking-normal">
-                          <span className="font-bold text-blue-100">Team Brackets</span>
-                          <LockedCellNumberInput value={Number(teamBracketEntries[getTeamNumber(index, teamSize)] || 0)} onChange={(value) => updateTeamBracketEntries(getTeamNumber(index, teamSize), value)} width="w-10 md:w-12" />
-                          <span className="font-bold text-blue-100">Team HG</span>
-                          <Switch compact checked={Boolean(teamHighGameEntries[getTeamNumber(index, teamSize)])} onCheckedChange={(v) => updateTeamHighGame(getTeamNumber(index, teamSize), v)} />
-                        </div>
+
                       </div>
                     </td>
                   </tr>
@@ -8529,12 +8619,14 @@ averageSource: archivedData?.eligible
 )}
                   <td className="p-1.5 text-center"><LaneSelector value={b.lane || ""} sharedListId={allLanePositions.length ? laneListId : undefined} tournamentStyle={tournamentStyle} onChange={(value) => updateBowler(index, "lane", value)} inputProps={laneNavProps} /></td>
                   <td className="p-2 text-center"><Switch compact checked={Boolean(b.paid)} onCheckedChange={(v) => updateBowler(index, "paid", v)} /></td>
+                  {showIndividualSideAction && <>
                   <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.early?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "early", value)} width="w-10 md:w-12" inputProps={scratchBracketNavProps} /></td>
                   {useHandicapScores && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.handicapEarly?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "handicapEarly", value)} width="w-10 md:w-12" inputProps={handicapBracketNavProps} /></td>}
                   {enabledBracketSets.middle && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.middle?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "middle", value)} width="w-10 md:w-12" inputProps={middleBracketNavProps} /></td>}
                   {enabledBracketSets.late && <td className="p-1.5 text-center"><LockedCellNumberInput value={Number(bracketSets.late?.[b.seed] || 0)} onChange={(value) => updateBracketEntries(b.seed, "late", value)} width="w-10 md:w-12" inputProps={lateBracketNavProps} /></td>}
                   <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.scratchHighGame)} onCheckedChange={(v) => updateSidePot(index, "scratchHighGame", v)} /></td>
                   {useHandicapScores && <td className="p-2 text-center"><Switch compact checked={Boolean(b.sidePots?.handicapHighGame)} onCheckedChange={(v) => updateSidePot(index, "handicapHighGame", v)} /></td>}
+                  </>}
                   {showRegistrationPhones && <td className="p-1.5"><LockedCellInput className="min-w-[85px] md:min-w-[100px]" value={b.phone || ""} onChange={(value) => updateBowler(index, "phone", formatPhoneNumber(value))} inputProps={phoneNavProps} /></td>}
                   {showRegistrationEmails && <td className="p-1.5"><LockedCellInput className="min-w-[100px] md:min-w-[130px]" value={b.email || ""} onChange={(value) => updateBowler(index, "email", value)} inputProps={emailNavProps} /></td>}
                   <td className="sticky right-0 border-l border-blue-100 bg-white p-2 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.8)]">
@@ -9979,6 +10071,17 @@ function makeMultiDaySquad(overrides = {}) {
   };
 }
 
+const MULTI_DAY_ALL_EVENTS_RULE = "The first completed series in Singles, Doubles, and Trios counts toward All Events.";
+
+function multiDayAllEventsRuleText(savedRule, useDefault = true) {
+  const rule = String(savedRule || "");
+  if ([
+    "First singles, first doubles, and first team appearance count toward All Events.",
+    "First singles, first doubles, and first team/trios appearance count toward All Events.",
+  ].includes(rule) || (useDefault && !rule.trim())) return MULTI_DAY_ALL_EVENTS_RULE;
+  return rule;
+}
+
 function createStrikefestMultiDayEvent() {
   const base = createDefaultMultiDayEvent();
   return {
@@ -10006,7 +10109,7 @@ function createStrikefestMultiDayEvent() {
     handicapMax: "",
     scoringDivisions: { scratch: true, handicap: true, youthScratch: true, youthHandicap: true },
     highGameEnabled: true,
-    allEventsRule: "First singles, first doubles, and first team/trios appearance count toward All Events.",
+    allEventsRule: MULTI_DAY_ALL_EVENTS_RULE,
     notes: "Bowl any event on any squad time. Re-entries allowed at tournament manager discretion and lane availability.",
     eventDefinitions: [
       { id: "trios", label: "Trios", competition: "Team", teamSize: 3, games: 3, enabled: true },
@@ -10054,7 +10157,7 @@ function createDefaultMultiDayEvent() {
     handicapMax: "",
     scoringDivisions: { scratch: true, handicap: true, youthScratch: false, youthHandicap: false },
     highGameEnabled: true,
-    allEventsRule: "First singles, first doubles, and first team appearance count toward All Events.",
+    allEventsRule: MULTI_DAY_ALL_EVENTS_RULE,
     notes: "",
     eventDefinitions: DEFAULT_MULTI_EVENT_DEFINITIONS,
     squads: [],
@@ -10591,10 +10694,14 @@ function MultiDayEventsTab({
     const max = Number(multiDayEvent.handicapMax || 0);
     return max ? Math.min(raw, max) : raw;
   };
+  const memberGameScoreValue = (entry, memberIndex, gameIndex) => {
+    if (Array.isArray(entry.memberScores?.[memberIndex])) return entry.memberScores[memberIndex][gameIndex];
+    if (getEntryMemberCount(entry, entry.squad || activeSquad) === 1) return entry.scores?.[gameIndex];
+    return undefined;
+  };
   const memberGameScore = (entry, memberIndex, gameIndex) => {
-    if (Array.isArray(entry.memberScores)) return Number(entry.memberScores?.[memberIndex]?.[gameIndex] || 0);
-    if (getEntryMemberCount(entry, entry.squad || activeSquad) === 1) return Number(entry.scores?.[gameIndex] || 0);
-    return 0;
+    if (Array.isArray(entry.memberScores)) return Number(entry.memberScores[memberIndex]?.[gameIndex] || 0);
+    return Number(memberGameScoreValue(entry, memberIndex, gameIndex) || 0);
   };
   const memberScratchSeries = (entry, memberIndex) =>
     [0, 1, 2].reduce((sum, gameIndex) => sum + memberGameScore(entry, memberIndex, gameIndex), 0);
@@ -10667,15 +10774,16 @@ function MultiDayEventsTab({
     });
     return names;
   }, new Set());
-  const allEventsByBowler = squadEntries.reduce((totals, entry) => {
+  const chronologicalAllEventsEntries = [...squadEntries].sort((a, b) =>
+    String(a.squad?.date || "").localeCompare(String(b.squad?.date || "")) ||
+    String(a.squad?.time || "").localeCompare(String(b.squad?.time || "")));
+  const allEventsByBowler = chronologicalAllEventsEntries.reduce((totals, entry) => {
     const competition = getEntryCompetition(entry);
-    const members = entryMembers(entry, entry.squad);
-    members
-      .map((member, memberIndex) => ({ member, memberIndex }))
-      .filter(({ member }) => member.name && allEventsEligibleNames.has(normalizeMatchText(member.name)))
-      .forEach(({ member, memberIndex }) => {
+    entryMembers(entry, entry.squad).forEach((member, memberIndex) => {
       const name = member.name;
-      totals[name] = totals[name] || { detailKey: `all-events-${normalizeMatchText(name) || name}`, name, members: [name], singles: null, doubles: null, team: null, handicap: 0, squadIds: [], squadLabels: [], countedSquadLabels: [], details: [], aeSeen: {} };
+      const nameKey = normalizeMatchText(name);
+      if (!allEventsEligibleNames.has(nameKey)) return;
+      const row = totals[nameKey] ||= { detailKey: "all-events-" + nameKey, name, members: [name], singles: null, doubles: null, team: null, handicap: 0, squadIds: [], squadLabels: [], countedSquadLabels: [], details: [] };
       const key = competition === "Singles" ? "singles" : competition === "Doubles" ? "doubles" : "team";
       const squadEventLabel = entry.squad
         ? [
@@ -10684,36 +10792,27 @@ function MultiDayEventsTab({
           competition === "Team" ? "Trios" : competition,
         ].filter(Boolean).join(" - ")
         : "";
-      if (!totals[name].aeSeen[key]) {
-        totals[name].aeSeen[key] = true;
-        if (squadEventLabel && !totals[name].countedSquadLabels.includes(squadEventLabel)) totals[name].countedSquadLabels.push(squadEventLabel);
-        const games = [0, 1, 2].map((gameIndex) => memberGameScore(entry, memberIndex, gameIndex));
-        const scratch = games.reduce((sum, score) => sum + Number(score || 0), 0);
-        const hasScore = games.some((score) => Number(score || 0) > 0);
-        const scoredGames = games.filter((score) => Number(score || 0) > 0).length;
-        const handicap = handicapPerGame(member) * scoredGames;
-        totals[name][key] = hasScore ? scratch : null;
-        totals[name].details.push({
-          name: `${competition} AE`,
-          games,
-          scratch: hasScore ? scratch : 0,
-          handicap: hasScore ? handicap : 0,
-          total: hasScore ? scratch + handicap : 0,
-          counted: hasScore,
-        });
-      }
-      if (entry.squad?.id && !totals[name].squadIds.includes(entry.squad.id)) totals[name].squadIds.push(entry.squad.id);
-      if (squadEventLabel && !totals[name].squadLabels.includes(squadEventLabel)) totals[name].squadLabels.push(squadEventLabel);
+      if (entry.squad?.id && !row.squadIds.includes(entry.squad.id)) row.squadIds.push(entry.squad.id);
+      if (squadEventLabel && !row.squadLabels.includes(squadEventLabel)) row.squadLabels.push(squadEventLabel);
+      if (row[key] !== null) return;
+
+      const games = [0, 1, 2].map((gameIndex) => readBracketScore(memberGameScoreValue(entry, memberIndex, gameIndex)));
+      if (games.some((score) => score === null || score > 300)) return;
+      const scratch = games.reduce((sum, score) => sum + score, 0);
+      const handicap = handicapPerGame(member) * games.length;
+      row[key] = scratch;
+      if (squadEventLabel && !row.countedSquadLabels.includes(squadEventLabel)) row.countedSquadLabels.push(squadEventLabel);
+      row.details.push({ name: competition + " AE", games, scratch, handicap, total: scratch + handicap, counted: true });
     });
     return totals;
-  }, {});
+  }, Object.create(null));
   const allEventsRows = Object.values(allEventsByBowler)
+    .filter((row) => row.details.length > 0)
     .map((row) => {
       const scratch = seriesValue(row.singles) + seriesValue(row.doubles) + seriesValue(row.team);
-      const handicap = (row.details || []).reduce((sum, detail) => sum + Number(detail.handicap || 0), 0);
-      return { ...row, scratch, handicap, total: scratch + handicap, squadLabel: (row.squadLabels || []).join(", ") };
+      const handicap = row.details.reduce((sum, detail) => sum + detail.handicap, 0);
+      return { ...row, scratch, handicap, total: scratch + handicap, squadLabel: row.squadLabels.join(", ") };
     })
-    .filter((row) => row.scratch > 0)
     .sort((a, b) => b.total - a.total || b.scratch - a.scratch);
   const bowlerIdentityKey = (value) => normalizeMatchText(value).replace(/\s+/g, " ");
   const knownBowlerProfiles = squads.reduce((profiles, squad) => {
@@ -11076,6 +11175,7 @@ function MultiDayEventsTab({
   const selectedSquadLeftovers = selectedSquadSideAction.leftoversBySet || {};
   const selectedSquadPlanIds = selectedSquadSideAction.selectedPlanIds || {};
   const multiDayBracketPrice = Number(multiDayEvent.bracketPrice || DEFAULT_BRACKET_PRICE);
+  const multiDayRefundAmount = (refund) => refund.amount ?? Number(refund.unusedEntries || 0) * multiDayBracketPrice;
   const multiDayHighGamePrice = Number(multiDayEvent.highGamePrice ?? 10);
   const multiDayBracketSetLabel = (setKey) => setKey === "handicap" ? "Handicap" : "Scratch";
   const multiDayPlayerKey = (row) => `${row.squad.id}::${row.entry.id}::${row.memberIndex}`;
@@ -11096,8 +11196,7 @@ function MultiDayEventsTab({
     if (row.entry.memberBracketForfeits?.[row.memberIndex + ":" + gameIndex]) {
       return { scratch: null, handicap: 0, total: -1 };
     }
-    const memberScores = row.entry.memberScores?.[row.memberIndex];
-    const raw = memberScores?.[gameIndex] ?? (getEntryMemberCount(row.entry, row.entry.squad || activeSquad) === 1 ? row.entry.scores?.[gameIndex] : undefined);
+    const raw = memberGameScoreValue(row.entry, row.memberIndex, gameIndex);
     const scratch = readBracketScore(raw);
     const handicap = scratch !== null && setKey === "handicap" ? handicapPerGame(row.member) : 0;
     return { scratch, handicap, total: scratch === null ? null : scratch + handicap };
@@ -11109,55 +11208,25 @@ function MultiDayEventsTab({
     advanceSideActionPlayers(players, (player) => multiDayPlayerScore(player, roundIndex, setKey));
   const multiDayBracketRounds = (bracket, setKey) =>
     buildSideActionRounds(bracket.players || [], (player, round) => multiDayPlayerScore(player, round, setKey));
-  const multiDayShuffle = (items) => {
-    const copy = [...items];
-    for (let index = copy.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(Math.random() * (index + 1));
-      [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
-    }
-    return copy;
-  };
-  const multiDayBracketPairKey = (a, b) => [String(a?.player?.key || ""), String(b?.player?.key || "")].sort().join("-");
-  const getMultiDayBracketPlans = (entryCount) => {
-    const totalEntries = Number(entryCount || 0);
-    const fullBrackets = Math.floor(totalEntries / 8);
-    const leftoverEntries = totalEntries % 8;
-    const plans = [{
-      id: "full-only",
-      label: `${fullBrackets} full bracket${fullBrackets === 1 ? "" : "s"}, no byes`,
-      brackets: fullBrackets,
-      byes: 0,
-      usedEntries: fullBrackets * 8,
-      leftoverEntries,
-      fullPayoutBrackets: fullBrackets,
-      byePayoutBrackets: 0,
-    }];
-
-    for (let byes = 1; byes <= 7; byes += 1) {
-      const totalSlotsNeeded = totalEntries + byes;
-      if (totalSlotsNeeded % 8 !== 0) continue;
-      const bracketCount = totalSlotsNeeded / 8;
-      if (bracketCount <= fullBrackets) continue;
-      if (totalEntries < bracketCount) continue;
-      if (byes > bracketCount) continue;
-      plans.push({
-        id: `with-${byes}-byes`,
-        label: `${bracketCount} brackets with ${byes} bye${byes === 1 ? "" : "s"}`,
-        brackets: bracketCount,
-        byes,
-        usedEntries: totalEntries,
-        leftoverEntries: 0,
-        fullPayoutBrackets: bracketCount - byes,
-        byePayoutBrackets: byes,
-      });
-    }
-
-    return plans.sort((a, b) => b.usedEntries - a.usedEntries || a.byes - b.byes);
-  };
-  const getMultiDaySelectedPlan = (setKey, entryCount) => {
-    const plans = getMultiDayBracketPlans(entryCount);
-    const selectedId = selectedSquadPlanIds[setKey];
-    return selectedId ? plans.find((plan) => plan.id === selectedId) || plans[0] : plans[0];
+  const multiDayTickets = (setKey) => (selectedCheckInGroup?.rows || []).flatMap((row) => {
+    const count = Number(setKey === "handicap" ? row.member.handicapBrackets || 0 : row.member.scratchBrackets || 0);
+    const player = { key: multiDayPlayerKey(row), name: row.name, entryName: row.entryName };
+    return player.name?.trim() ? Array.from({ length: count }, () => player) : [];
+  });
+  const multiDayBracketPayout = (byes) => byes === 2
+    ? getBracketPayout(multiDayBracketPrice, byes)
+    : { first: byes ? 20 : 25, second: 10 };
+  const getMultiDayBracketPlanOptions = (setKey, tickets) => {
+    const bracketPlans = buildBracketTicketPlans(tickets, (player) => player.key, multiDayBracketPrice).map((plan) => {
+      if (!plan.feasible) return plan;
+      const amounts = getBracketPlanAmounts(plan, multiDayBracketPrice, multiDayBracketPayout);
+      return amounts.underfunded
+        ? { ...plan, feasible: false, issue: "The entry price does not cover the configured Strikefest prizes for this plan." }
+        : { ...plan, amounts };
+    });
+    const selectedPlan = bracketPlans.find((plan) => plan.id === selectedSquadPlanIds[setKey]) ||
+      bracketPlans.find((plan) => plan.feasible) || bracketPlans[0];
+    return { bracketPlans, selectedPlan };
   };
   const setMultiDaySideActionPlan = (setKey, planId) => {
     if (!selectedCheckInGroup) return;
@@ -11175,167 +11244,45 @@ function MultiDayEventsTab({
       },
     }));
   };
-  const getMultiDayPreviewRows = (setKey, entryCount) => {
-    if (!selectedCheckInGroup) return { rows: [], refunds: [], refundTotal: 0, selectedPlan: null, bracketPlans: [] };
-    const tickets = selectedCheckInGroup.rows.flatMap((row) => {
-      const count = Number(setKey === "handicap" ? row.member.handicapBrackets || 0 : row.member.scratchBrackets || 0);
-      const player = { key: multiDayPlayerKey(row), name: row.name, entryName: row.entryName };
-      return Array.from({ length: count }, (_, index) => ({ id: `${player.key}-${setKey}-${index}`, player }));
-    });
-    const bracketPlans = getMultiDayBracketPlans(entryCount);
-    const selectedPlan = getMultiDaySelectedPlan(setKey, entryCount);
-    if (!selectedPlan || !tickets.length || selectedPlan.brackets <= 0) return { rows: [], refunds: [], refundTotal: 0, selectedPlan, bracketPlans };
-    const byPlayer = tickets.reduce((map, ticket) => {
-      const key = ticket.player.key;
-      map[key] = map[key] || { key, name: ticket.player.name, purchased: 0, used: 0, refunded: 0 };
-      map[key].purchased += 1;
-      return map;
-    }, {});
-    const previewRows = Object.values(byPlayer).map((player) => ({ ...player, used: Math.min(player.purchased, selectedPlan.brackets) }));
-    let surplus = Math.max(0, previewRows.reduce((sum, row) => sum + row.used, 0) - selectedPlan.usedEntries);
-    while (surplus > 0) {
-      const candidates = previewRows
-        .filter((row) => row.used > 0)
-        .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
-      if (!candidates.length) break;
-      for (const row of candidates) {
-        if (surplus <= 0) break;
-        row.used -= 1;
-        surplus -= 1;
-      }
-    }
-    const rows = Object.values(byPlayer)
-      .map((player) => {
-        const used = Number(previewRows.find((row) => row.key === player.key)?.used || 0);
-        const refunded = Math.max(0, player.purchased - used);
-        return { ...player, used, refunded, refundAmount: refunded * multiDayBracketPrice };
-      })
-      .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
+  const getMultiDayPreviewRows = (setKey) => {
+    const tickets = multiDayTickets(setKey);
+    const { bracketPlans, selectedPlan } = getMultiDayBracketPlanOptions(setKey, tickets);
+    const rows = selectedPlan?.entryRows || [];
     const refunds = rows.filter((row) => row.refunded > 0).sort((a, b) => b.refunded - a.refunded || a.name.localeCompare(b.name));
     const refundTotal = refunds.reduce((sum, row) => sum + row.refundAmount, 0);
     return { rows, refunds, refundTotal, selectedPlan, bracketPlans };
   };
   const generateMultiDaySquadBrackets = (setKey) => {
     if (!selectedCheckInGroup) return;
-    const existing = selectedSquadBracketGroups[setKey] || [];
-    if (existing.length) {
+    if (selectedSquadBracketGroups[setKey]?.length) {
       window.alert("Brackets are already generated and locked. Clear brackets first if you need to regenerate.");
       return;
     }
-    const tickets = selectedCheckInGroup.rows.flatMap((row) => {
-      const entryCount = Number(setKey === "handicap" ? row.member.handicapBrackets || 0 : row.member.scratchBrackets || 0);
-      const player = {
-        key: multiDayPlayerKey(row),
-        name: row.name,
-        entryName: row.entryName,
-      };
-      return Array.from({ length: entryCount }, (_, index) => ({ id: `${player.key}-${setKey}-${index}`, player }));
-    });
-    const totalEntries = tickets.length;
-    const selectedPlan = getMultiDaySelectedPlan(setKey, totalEntries);
-    if (!selectedPlan || selectedPlan.brackets <= 0) {
-      setTestDraftNotice(`Add enough ${multiDayBracketSetLabel(setKey).toLowerCase()} bracket entries before generating.`);
+    const tickets = multiDayTickets(setKey);
+    const { selectedPlan } = getMultiDayBracketPlanOptions(setKey, tickets);
+    if (!selectedPlan?.feasible) {
+      setTestDraftNotice(selectedPlan?.issue || "At least six unique entrants are needed per bracket.");
       return;
     }
-
-    const allByPlayer = tickets.reduce((map, ticket) => {
-      const key = ticket.player.key;
-      map[key] = [...(map[key] || []), ticket];
-      return map;
-    }, {});
-    const leftoverTickets = [];
-    const usageRows = Object.values(allByPlayer).map((queue) => ({
-      key: queue[0].player.key,
-      name: queue[0].player.name,
-      queue: multiDayShuffle(queue),
-      purchased: queue.length,
-      used: Math.min(queue.length, selectedPlan.brackets),
-    }));
-
-    let surplus = Math.max(0, usageRows.reduce((sum, row) => sum + row.used, 0) - selectedPlan.usedEntries);
-    while (surplus > 0) {
-      const candidates = usageRows
-        .filter((row) => row.used > 0)
-        .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
-      if (!candidates.length) break;
-      for (const row of candidates) {
-        if (surplus <= 0) break;
-        row.used -= 1;
-        surplus -= 1;
-      }
+    const placement = placeBracketTickets(tickets, (player) => player.key, selectedPlan);
+    if (!placement) {
+      setTestDraftNotice("The selected bracket plan cannot place its entries exactly.");
+      return;
     }
-
-    const ticketsToUse = [];
-    usageRows.forEach((row) => {
-      ticketsToUse.push(...row.queue.slice(0, row.used));
-      leftoverTickets.push(...row.queue.slice(row.used));
-    });
-
-    const buckets = ticketsToUse.reduce((map, ticket) => {
-      const key = ticket.player.key;
-      map[key] = [...(map[key] || []), ticket];
-      return map;
-    }, {});
-    const bracketTicketGroups = Array.from({ length: selectedPlan.brackets }, () => []);
-    const maxSlotsByBracket = Array.from({ length: selectedPlan.brackets }, (_, index) => 8 - (index < selectedPlan.byes ? 1 : 0));
-    Object.values(buckets)
-      .sort((a, b) => b.length - a.length)
-      .forEach((queue) => {
-        queue.forEach((ticket) => {
-          let bestIndex = -1;
-          let smallestSize = Infinity;
-          bracketTicketGroups.forEach((group, index) => {
-            const hasThisBowler = group.some((item) => item.player.key === ticket.player.key);
-            const hasRoom = group.length < maxSlotsByBracket[index];
-            if (!hasThisBowler && hasRoom && group.length < smallestSize) {
-              bestIndex = index;
-              smallestSize = group.length;
-            }
-          });
-          if (bestIndex >= 0) bracketTicketGroups[bestIndex].push(ticket);
-          else leftoverTickets.push(ticket);
-        });
-      });
-
     const usedPairs = new Set();
-    const generated = [];
-    bracketTicketGroups.forEach((group, index) => {
-      if (!group.length) return;
-      if (group.length < 7) {
-        leftoverTickets.push(...group);
-        return;
-      }
-      const byesForThisBracket = 8 - group.length;
-      const byeTickets = Array.from({ length: byesForThisBracket }, (_, byeIndex) => ({
-        id: `bye-${index + 1}-${byeIndex}`,
-        player: { key: `BYE-${index + 1}-${byeIndex}`, name: "BYE", entryName: "" },
-      }));
-      let bestOrder = group;
-      let bestDuplicateCount = Infinity;
-      for (let attempt = 0; attempt < 300; attempt += 1) {
-        const candidate = multiDayShuffle(group);
-        const candidateSlots = [...candidate, ...byeTickets];
-        const pairs = [[candidateSlots[0], candidateSlots[1]], [candidateSlots[2], candidateSlots[3]], [candidateSlots[4], candidateSlots[5]], [candidateSlots[6], candidateSlots[7]]];
-        const duplicateCount = pairs.filter(([a, b]) => a?.player?.name !== "BYE" && b?.player?.name !== "BYE" && usedPairs.has(multiDayBracketPairKey(a, b))).length;
-        if (duplicateCount < bestDuplicateCount) {
-          bestDuplicateCount = duplicateCount;
-          bestOrder = candidate;
-        }
-        if (duplicateCount === 0) break;
-      }
-      const finalTickets = [...bestOrder, ...byeTickets];
-      [[finalTickets[0], finalTickets[1]], [finalTickets[2], finalTickets[3]], [finalTickets[4], finalTickets[5]], [finalTickets[6], finalTickets[7]]].forEach(([a, b]) => {
-        if (a?.player?.name !== "BYE" && b?.player?.name !== "BYE") usedPairs.add(multiDayBracketPairKey(a, b));
-      });
-      generated.push({
-        id: `multi-day-side-bracket-${Date.now()}-${setKey}-${index + 1}`,
+    const generated = placement.groups.map((group, index) => {
+      const byes = 8 - group.length;
+      return {
+        id: "multi-day-side-bracket-" + Date.now() + "-" + setKey + "-" + (index + 1),
         number: index + 1,
         locked: true,
-        players: finalTickets.map((ticket) => ticket.player),
-        byes: byesForThisBracket,
-        payout: byesForThisBracket > 0 ? { first: 20, second: 10 } : { first: 25, second: 10 },
-      });
+        players: drawBracketPlayers(group, (player) => player.key, (bye) => ({ key: "BYE-" + index + "-" + bye, name: "BYE", entryName: "" }), usedPairs),
+        byes,
+        entryPrice: multiDayBracketPrice,
+        payout: multiDayBracketPayout(byes),
+      };
     });
+    const leftoverTickets = placement.leftovers.map((player) => ({ player }));
     const refunds = leftoverTickets.reduce((map, ticket) => {
       if (ticket.player.name === "BYE") return map;
       const current = map[ticket.player.key] || { key: ticket.player.key, name: ticket.player.name, unusedEntries: 0 };
@@ -11355,7 +11302,7 @@ function MultiDayEventsTab({
           },
           refundsBySet: {
             ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).refundsBySet || {}),
-            [setKey]: Object.values(refunds),
+            [setKey]: Object.values(refunds).map((refund) => ({ ...refund, amount: Math.round(refund.unusedEntries * multiDayBracketPrice * 100) / 100 })),
           },
           leftoversBySet: {
             ...(((current.sideActionBySquad || {})[selectedCheckInGroup.squad.id] || {}).leftoversBySet || {}),
@@ -11480,7 +11427,7 @@ function MultiDayEventsTab({
       ...refund,
       setKey,
       setLabel: multiDayBracketSetLabel(setKey),
-      amount: Number(refund.unusedEntries || 0) * multiDayBracketPrice,
+      amount: multiDayRefundAmount(refund),
     }))
   );
   const selectedSquadRefundTotal = selectedSquadRefundSummary.reduce((sum, refund) => sum + refund.amount, 0);
@@ -12482,7 +12429,7 @@ function MultiDayEventsTab({
                 <div className="mt-3 space-y-2 text-sm font-semibold text-blue-800">
                   <p className="break-words"><span className="font-black text-blue-950">Divisions:</span> {divisionList.join(", ") || "TBD"}</p>
                   <p className="break-words"><span className="font-black text-blue-950">Handicap:</span> {multiDayEvent.handicapPercent || 100}% of {multiDayEvent.handicapBase || 240}</p>
-                  <p className="break-words"><span className="font-black text-blue-950">All Events:</span> {multiDayEvent.allEventsRule || "First eligible Singles, Doubles, and Team series count."}</p>
+                  <p className="break-words"><span className="font-black text-blue-950">All Events:</span> {multiDayAllEventsRuleText(multiDayEvent.allEventsRule)}</p>
                 </div>
               </div>
             </aside>
@@ -12566,7 +12513,7 @@ function MultiDayEventsTab({
                   scoringDivisions.youthScratch ? "Youth Scratch" : "",
                   scoringDivisions.youthHandicap ? "Youth Handicap" : "",
                 ].filter(Boolean).join(", ") || "None selected"}</div>
-                <div className="rounded-xl border border-blue-100 bg-white p-3"><span className="font-black">All Events:</span> {multiDayEvent.allEventsRule || "Not configured"}</div>
+                <div className="rounded-xl border border-blue-100 bg-white p-3"><span className="font-black">All Events:</span> {multiDayAllEventsRuleText(multiDayEvent.allEventsRule)}</div>
               </div>
             </div>
           </div>
@@ -12637,7 +12584,7 @@ function MultiDayEventsTab({
           <div className="rounded-2xl border border-blue-200 bg-white p-4">
             <h3 className="mb-3 text-lg font-black text-blue-950">All Events Rule and Notes</h3>
             <div className="grid gap-4 md:grid-cols-2">
-              <div><Label>All Events Rule</Label><textarea className="min-h-[96px] w-full rounded-2xl border border-blue-200 p-3 text-sm font-semibold text-blue-950" value={multiDayEvent.allEventsRule || ""} onChange={(e) => updateEvent("allEventsRule", e.target.value)} /></div>
+              <div><Label>All Events Rule</Label><textarea className="min-h-[96px] w-full rounded-2xl border border-blue-200 p-3 text-sm font-semibold text-blue-950" placeholder={MULTI_DAY_ALL_EVENTS_RULE} value={multiDayAllEventsRuleText(multiDayEvent.allEventsRule, false)} onChange={(e) => updateEvent("allEventsRule", e.target.value)} /></div>
               <div><Label>Tournament Notes</Label><textarea className="min-h-[96px] w-full rounded-2xl border border-blue-200 p-3 text-sm font-semibold text-blue-950" value={multiDayEvent.notes || ""} onChange={(e) => updateEvent("notes", e.target.value)} /></div>
             </div>
           </div>
@@ -13634,9 +13581,9 @@ function MultiDayEventsTab({
               {[multiDayAdminSideTab].map((setKey) => {
                 const brackets = selectedSquadBracketGroups[setKey] || [];
                 const refunds = selectedSquadRefunds[setKey] || [];
-                const totalRefunds = refunds.reduce((sum, refund) => sum + Number(refund.unusedEntries || 0) * multiDayBracketPrice, 0);
+                const totalRefunds = refunds.reduce((sum, refund) => sum + multiDayRefundAmount(refund), 0);
                 const entryCount = setKey === "handicap" ? selectedCheckInGroup.handicapBrackets : selectedCheckInGroup.scratchBrackets;
-                const { rows: previewRows, refunds: previewRefunds, refundTotal: previewRefundTotal, selectedPlan, bracketPlans } = getMultiDayPreviewRows(setKey, entryCount);
+                const { rows: previewRows, refunds: previewRefunds, refundTotal: previewRefundTotal, selectedPlan, bracketPlans } = getMultiDayPreviewRows(setKey);
                 const hasGeneratedBrackets = brackets.length > 0;
                 return (
                   <div key={`multi-day-side-action-${setKey}`} className="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm">
@@ -13648,7 +13595,7 @@ function MultiDayEventsTab({
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => generateMultiDaySquadBrackets(setKey)} disabled={hasGeneratedBrackets}>
+                        <Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-60" onClick={() => generateMultiDaySquadBrackets(setKey)} disabled={hasGeneratedBrackets || !selectedPlan?.feasible}>
                           {hasGeneratedBrackets ? 'Brackets Locked' : 'Generate'}
                         </Button>
                         <Button variant="outline" className="rounded-2xl bg-white" onClick={() => clearMultiDaySquadBrackets(setKey)}>
@@ -13676,9 +13623,11 @@ function MultiDayEventsTab({
                                   <p><strong>Entries used:</strong> {plan.usedEntries}</p>
                                   <p><strong>Leftover:</strong> {plan.leftoverEntries}</p>
                                   <p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p>
-                                  <p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p>
+                                  <p><strong>One bye:</strong> {plan.byePayoutBrackets} · <strong>Two byes:</strong> {plan.twoByePayoutBrackets}</p>
                                 </div>
-                                <p className="mt-2 text-[11px] text-blue-600">Full: {currency(25)} / {currency(10)} - With bye: {currency(20)} / {currency(10)}</p>
+                                {plan.issue && <p className="mt-2 text-red-800">{plan.issue}</p>}
+                                {plan.amounts && <p className="mt-2">Payouts {currency(plan.amounts.first + plan.amounts.second)} · Retained {currency(plan.amounts.retained)}</p>}
+                                <p className="mt-2 text-[11px] text-blue-600">Full: {currency(25)} / {currency(10)} · One bye: {currency(20)} / {currency(10)}{multiDayBracketPayout(2) ? " · Two byes: $15 / $10" : " · Two byes require a $5 entry price."}</p>
                               </button>
                             ))}
                           </div>
@@ -24973,13 +24922,15 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
   }));
 
   const totalCashPaid = cashRows.reduce((sum, row) => sum + row.payoutAmount, 0);
-  const csvRows = [["Place", "Bowler", "Scratch", "Handicap Total", "Payout Label", "Payout Amount"], ...cashRows.map((row) => [row.finalPlace || row.rank, row.name, row.scratch, row.handicap, row.payoutLabel, row.payoutAmount])];
+  const isTeamCashSheet = getTournamentTeamSize(tournamentInfo.tournamentStyle) > 1;
+  const entrantLabel = isTeamCashSheet ? "Team" : "Bowler";
+  const csvRows = [["Place", entrantLabel, "Scratch", "Handicap Total", "Payout Label", "Payout Amount"], ...cashRows.map((row) => [row.finalPlace || row.rank, row.name, row.scratch, row.handicap, row.payoutLabel, row.payoutAmount])];
 
   const dashboardPrizeFund = financials.prizeFund;
 
   return (
     <div className="space-y-3 md:space-y-4">
-      <AppCard>
+      <AppCard className="print:hidden">
         <CardContent className="p-3 md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
@@ -24997,26 +24948,25 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
         </CardContent>
       </AppCard>
 
-      <AppCard className="print:border-0 print:shadow-none">
+      <AppCard className="bb-cash-sheet print:border-0 print:shadow-none">
         <CardContent className="p-5 print:p-0">
-          <div className="mb-4 hidden print:block">
-            <h1 className="text-2xl font-bold">{tournamentInfo.name || "Tournament"} Cash Sheet</h1>
-            <p>{tournamentInfo.center} {tournamentInfo.date ? ` - ${tournamentInfo.date}` : ""}</p>
-            <p>
-  Prize Fund: {currency(dashboardPrizeFund)} - Cashers: {financials.cashers}
-</p>
+          <div className="bb-cash-sheet-heading mb-4 hidden print:block">
+            <p>Cash Sheet</p>
+            <h1>{tournamentInfo.name || "Tournament"}</h1>
+            <p>{[tournamentInfo.center, tournamentInfo.date].filter(Boolean).join(" · ")}</p>
+            <p>Prize Fund {currency(dashboardPrizeFund)} · {financials.cashers} {isTeamCashSheet ? "team cashing spots" : "cashing spots"}</p>
           </div>
-          <h2 className="mb-4 text-xl font-semibold text-blue-900 print:text-black">Cashers</h2>
-          <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
+          <h2 className="mb-4 text-xl font-semibold text-blue-900 print:hidden">{isTeamCashSheet ? "Cashing Teams" : "Cashing Bowlers"}</h2>
+          <div className="bb-cash-sheet-table overflow-auto rounded-2xl border border-blue-200 bg-white">
             <table className="w-full min-w-[680px] text-xs md:min-w-[780px] md:text-sm">
               <thead className="bg-blue-800 text-white">
                 <tr>
                   <th className="p-2 text-left md:p-2.5">Place</th>
-                  <th className="p-2 text-left md:p-2.5">Bowler</th>
+                  <th className="p-2 text-left md:p-2.5">{entrantLabel}</th>
                   <th className="p-2 text-right md:p-2.5">Scratch</th>
-                  {useHandicapScores && <th className="hidden p-2 text-right md:table-cell md:p-3">Hdcp Total</th>}
+                  {useHandicapScores && <th className="p-2 text-right md:p-3">Hdcp Total</th>}
                   <th className="p-2 text-left md:p-2.5">Payout</th>
-                  <th className="p-2 text-right md:p-2.5">Amount</th>
+                  <th className="p-2 text-right md:p-2.5">{isTeamCashSheet ? "Prize / Team" : "Prize"}</th>
                   <th className="p-2 text-left md:p-2.5">Paid?</th>
                 </tr>
               </thead>
@@ -25027,7 +24977,7 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
                   return (
                   <tr key={`cash-${row.seed}`} className="border-t">
                     <td className="p-3 font-bold">{row.finalPlace || row.rank}</td>
-                    <td className="p-3 font-semibold">{row.name}</td>
+                    <td className="bb-cash-sheet-name p-3 font-semibold">{row.name}</td>
                     <td className="p-3 text-right">{row.scratch}</td>
                     {useHandicapScores && <td className="p-3 text-right">{row.handicap}</td>}
                     <td className="p-3">{row.payoutLabel}</td>
@@ -25049,7 +24999,7 @@ function SummaryCashSheetTab({ entries, bowlers, payoutRows, financials, useHand
   >
     {isPaid ? "PAID" : "UNPAID"}
   </button>
-  <span className="hidden print:inline">________</span>
+  <span className="hidden print:inline">_______</span>
 </td>
                   </tr>
                 );
@@ -27169,32 +27119,41 @@ function FinanceTab({ entries, entryFees, lineageEntries, payoutState, financial
 }
 
 function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePotState, tournamentInfo = {} }) {
-  const activeBracketSet = sidePotState.activeBracketSet || "early";
+  const requestedSet = sidePotState.activeBracketSet || "early";
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const teamEntries = getTournamentTeamEntries(bowlers, tournamentStyle);
-  const isTeamBracketSet = activeBracketSet === "team";
+  const activeBracketSet = requestedSet === "teamHandicap" && (!useHandicapScores || !teamEntries.length) ? "early" : requestedSet;
+  const isTeamBracketSet = activeBracketSet === "team" || activeBracketSet === "teamHandicap";
   const bracketSetMeta = {
     early: { label: "Scratch Games 1-3", offset: 0, scoring: "scratch" },
     handicapEarly: { label: "Handicap Games 1-3", offset: 0, scoring: "handicap" },
     middle: { label: "Scratch Games 2-4", offset: 1, scoring: "scratch" },
     late: { label: "Scratch Games 4-6", offset: 3, scoring: "scratch" },
-    team: { label: "Team Games 1-3", offset: 0, scoring: "scratch" },
+    team: { label: "Team Scratch Games 1-3", offset: 0, scoring: "scratch" },
+    teamHandicap: { label: "Team Handicap Games 1-3", offset: 0, scoring: "handicap" },
   };
   const gameOffset = bracketSetMeta[activeBracketSet]?.offset || 0;
   const bracketSets = sidePotState.bracketSets || { early: sidePotState.entries || {}, handicapEarly: {}, middle: {}, late: {}, team: sidePotState.teamBracketEntries || {} };
-  const bracketEntries = isTeamBracketSet ? (sidePotState.teamBracketEntries || {}) : (bracketSets[activeBracketSet] || {});
+  const bracketEntries = activeBracketSet === "teamHandicap"
+    ? sidePotState.teamHandicapBracketEntries || {}
+    : isTeamBracketSet ? sidePotState.teamBracketEntries || {} : bracketSets[activeBracketSet] || {};
   const allBracketGroups = sidePotState.bracketGroups || { early: sidePotState.brackets || [], handicapEarly: [], middle: [], late: [], team: [] };
   const rawBrackets = Array.isArray(allBracketGroups[activeBracketSet]) ? allBracketGroups[activeBracketSet] : [];
   const selectedPlanId = ((sidePotState.selectedPlanIds || {})[activeBracketSet]) || sidePotState.selectedPlanId || "full-only";
-  const bracketPrice = isTeamBracketSet
+  const bracketPrice = activeBracketSet === "teamHandicap"
+    ? Number(sidePotState.teamHandicapBracketPrice || DEFAULT_BRACKET_PRICE)
+    : isTeamBracketSet
     ? Number(sidePotState.teamBracketPrice || sidePotState.bracketPrice || DEFAULT_BRACKET_PRICE)
     : Number(sidePotState.bracketPrice || DEFAULT_BRACKET_PRICE);
   const fullBracketPayout = getBracketPayout(bracketPrice);
   const byeBracketPayout = getBracketPayout(bracketPrice, 1);
+  const twoByeBracketPayout = getBracketPayout(bracketPrice, 2);
   const [expandedSidePotSeed, setExpandedSidePotSeed] = useState(null);
   const [fillSearch, setFillSearch] = useState("");
 
-  const bracketPlayers = isTeamBracketSet ? teamEntries : bowlers;
+  const bracketPlayers = activeBracketSet === "teamHandicap"
+    ? teamEntries.filter((team) => isCompleteSideActionTeam(team, getTournamentTeamSize(tournamentStyle)))
+    : isTeamBracketSet ? teamEntries : bowlers;
   const bowlerBySeed = Object.fromEntries([...bowlers, ...teamEntries].map((bowler) => [String(bowler.seed), bowler]));
   const byePlayer = { seed: "BYE", name: "BYE", games: [0, 0, 0, 0], handicapPerGame: 0 };
   const resolvePlayer = (player) => {
@@ -27221,224 +27180,19 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
   const advancePlayers = (players, roundIndex, offset = 0) =>
     advanceSideActionPlayers(players, (player) => playerScore(player, roundIndex, offset));
 
-  const shuffle = (items) => {
-    const copy = [...items];
-    for (let i = copy.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-  };
-
-  const pairKey = (a, b) => [String(a?.bowler?.seed || a?.seed || ""), String(b?.bowler?.seed || b?.seed || "")].sort().join("-");
-  const tickets = bracketPlayers.flatMap((bowler) => {
-    const entryKey = isTeamBracketSet ? bowler.teamNumber : bowler.seed;
-    return Array.from({ length: Number(bracketEntries[entryKey] || bracketEntries[bowler.seed] || 0) }, (_, index) => ({ id: `${bowler.seed}-${index}`, bowler }));
+  const tickets = bracketPlayers.filter((player) => String(player.name || "").trim() && player.name !== "BYE").flatMap((player) => {
+    const entryKey = isTeamBracketSet ? player.teamNumber : player.seed;
+    return Array.from({ length: Number(bracketEntries[entryKey] ?? bracketEntries[player.seed] ?? 0) }, () => player);
   });
   const totalEntries = tickets.length;
-  const fullBrackets = Math.floor(totalEntries / 8);
-  const leftoverEntries = totalEntries % 8;
-
-  const bracketPlanBaseRows = (() => {
-    const byBowler = tickets.reduce((map, ticket) => {
-      const key = ticket.bowler.seed;
-      map[key] = map[key] || { seed: ticket.bowler.seed, name: ticket.bowler.name, purchased: 0, used: 0, refunded: 0, forcedRefunds: 0 };
-      map[key].purchased += 1;
-      return map;
-    }, {});
-    return Object.values(byBowler);
-  })();
-
-  const placeBracketTicketsExactly = (usageRows = [], bracketCount = 0, byes = 0) => {
-    const groups = Array.from({ length: bracketCount }, () => []);
-    const capacities = Array.from({ length: bracketCount }, (_, index) => 8 - (index < byes ? 1 : 0));
-    const leftovers = [];
-    const rows = [...usageRows].sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
-
-    rows.forEach((row) => {
-      const queue = [...(row.queue || [])];
-      for (let ticketIndex = 0; ticketIndex < Number(row.used || 0); ticketIndex += 1) {
-        const ticket = queue[ticketIndex];
-        if (!ticket) continue;
-        const availableIndexes = groups
-          .map((group, index) => ({ group, index, room: capacities[index] - group.length }))
-          .filter(({ group, room }) => room > 0 && !group.some((item) => String(item.bowler.seed) === String(ticket.bowler.seed)))
-          .sort((a, b) => a.group.length - b.group.length || b.room - a.room || a.index - b.index);
-        const target = availableIndexes[0];
-        if (target) groups[target.index].push(ticket);
-        else leftovers.push(ticket);
-      }
-      leftovers.push(...queue.slice(Number(row.used || 0)));
-    });
-
-    const placementByes = groups.reduce((sum, group, index) => sum + Math.max(0, capacities[index] - group.length), 0);
-    const emptyBrackets = groups.filter((group) => group.length === 0).length;
-    return { groups, capacities, leftovers, placementByes, emptyBrackets };
-  };
-
-  const buildBracketPlan = (bracketCount, byes, { id = "", label = "" } = {}) => {
-    const safeBracketCount = Math.max(0, Number(bracketCount || 0));
-    const safeByes = Math.max(0, Number(byes || 0));
-    const usedSlots = Math.max(0, safeBracketCount * 8 - safeByes);
-    const cappedRows = bracketPlanBaseRows.map((bowler) => ({
-      ...bowler,
-      used: Math.min(bowler.purchased, safeBracketCount),
-      forcedRefunds: Math.max(0, bowler.purchased - safeBracketCount),
-    }));
-    const cappedUsableEntries = cappedRows.reduce((sum, row) => sum + row.used, 0);
-    const shortage = Math.max(0, usedSlots - cappedUsableEntries);
-    const tooManyByes = safeByes > safeBracketCount;
-    const feasible = safeBracketCount > 0 && !tooManyByes && shortage === 0;
-    let surplus = feasible ? Math.max(0, cappedUsableEntries - usedSlots) : 0;
-    while (surplus > 0) {
-      const candidates = cappedRows
-        .filter((row) => row.used > 0)
-        .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
-      if (!candidates.length) break;
-      for (const row of candidates) {
-        if (surplus <= 0) break;
-        row.used -= 1;
-        surplus -= 1;
-      }
-    }
-    const entryRows = cappedRows
-      .map((bowler) => {
-        const refunded = Math.max(0, bowler.purchased - bowler.used);
-        return { ...bowler, refunded, refundAmount: refunded * bracketPrice };
-      })
-      .sort((a, b) => b.used - a.used || b.purchased - a.purchased || a.name.localeCompare(b.name));
-    const forcedRefundEntries = entryRows.reduce((sum, row) => sum + row.forcedRefunds, 0);
-    const placement = feasible
-      ? placeBracketTicketsExactly(
-          entryRows.map((row) => ({
-            ...row,
-            queue: Array.from({ length: Number(row.used || 0) }, (_, index) => ({
-              id: `preview-${row.seed}-${index}`,
-              bowler: { seed: row.seed, name: row.name },
-            })),
-          })),
-          safeBracketCount,
-          safeByes
-        )
-      : null;
-    const exactPlacement = Boolean(feasible && placement && placement.leftovers.length === 0 && placement.placementByes === safeByes && placement.emptyBrackets === 0);
-    const totalRefundEntries = Math.max(0, totalEntries - (exactPlacement ? usedSlots : cappedUsableEntries));
-    const regularLeftoverEntries = Math.max(0, totalRefundEntries - forcedRefundEntries);
-    return {
-      id: id || `${safeBracketCount}-brackets-${safeByes}-byes`,
-      label: label || `${safeBracketCount} bracket${safeBracketCount === 1 ? "" : "s"}${safeByes ? ` with ${safeByes} bye${safeByes === 1 ? "" : "s"}` : ", no byes"}`,
-      brackets: safeBracketCount,
-      byes: safeByes,
-      requestedEntries: usedSlots,
-      usedEntries: exactPlacement ? usedSlots : cappedUsableEntries,
-      cappedUsableEntries,
-      shortage,
-      feasible: exactPlacement,
-      tooManyByes,
-      placementByes: placement?.placementByes ?? 0,
-      forcedRefundEntries,
-      regularLeftoverEntries,
-      leftoverEntries: totalRefundEntries,
-      fullPayoutBrackets: safeBracketCount - safeByes,
-      byePayoutBrackets: safeByes,
-      entryRows,
-      issue: tooManyByes
-        ? "More byes than brackets."
-        : shortage > 0
-          ? `Short ${shortage} usable entr${shortage === 1 ? "y" : "ies"} because bowlers can only appear once per bracket.`
-          : feasible && !exactPlacement
-            ? "Cannot place this option exactly without creating extra byes."
-          : "",
-    };
-  };
-
-  const bracketPlanTargets = [];
-  const bracketPlans = (() => {
-    const plansById = new Map();
-    const planSignature = (plan) => [
-      plan.brackets,
-      plan.byes,
-      plan.usedEntries,
-      plan.leftoverEntries,
-      plan.shortage,
-      Boolean(plan.targetOnly),
-    ].join("|");
-    const addPlan = (plan) => {
-      if (!plan || plan.brackets <= 0) return;
-      const signature = planSignature(plan);
-      if (plansById.has(signature)) return;
-      plansById.set(signature, plan);
-    };
-
-    const naturalFullPlan = buildBracketPlan(fullBrackets, 0, {
-      id: "full-only",
-      label: `${fullBrackets} full bracket${fullBrackets === 1 ? "" : "s"}, no byes`,
-    });
-    const nextFullPlan = buildBracketPlan(fullBrackets + 1, 0, {
-      id: "next-full-target",
-      label: `${fullBrackets + 1} full brackets, no byes`,
-    });
-    bracketPlanTargets.push(naturalFullPlan, nextFullPlan);
-
-    const candidates = [];
-    const collectPlan = (plan) => {
-      if (!plan || plan.brackets <= 0) return;
-      const signature = planSignature(plan);
-      if (!candidates.some((candidate) => planSignature(candidate) === signature)) candidates.push(plan);
-    };
-
-    collectPlan(naturalFullPlan);
-
-    for (let byes = 1; byes <= 7; byes += 1) {
-      const totalSlotsNeeded = totalEntries + byes;
-      if (totalSlotsNeeded % 8 !== 0) continue;
-      const bracketCount = totalSlotsNeeded / 8;
-      if (bracketCount <= fullBrackets) continue;
-      if (totalEntries < bracketCount) continue;
-      collectPlan(buildBracketPlan(bracketCount, byes, {
-        id: `with-${byes}-byes`,
-        label: `${bracketCount} brackets with ${byes} bye${byes === 1 ? "" : "s"}`,
-      }));
-    }
-
-    const maxBracketsToConsider = Math.min(Math.ceil(totalEntries / 8) + 1, Math.max(1, totalEntries));
-    const minBracketsToConsider = Math.max(1, fullBrackets - 3);
-    for (let bracketCount = maxBracketsToConsider; bracketCount >= minBracketsToConsider; bracketCount -= 1) {
-      for (let byes = 0; byes <= Math.min(7, bracketCount); byes += 1) {
-        const requestedEntries = bracketCount * 8 - byes;
-        if (requestedEntries <= 0 || requestedEntries > totalEntries) continue;
-        collectPlan(buildBracketPlan(bracketCount, byes));
-      }
-    }
-
-    const validPool = candidates.filter((plan) => plan.feasible);
-    const maxValidBrackets = Math.max(0, ...validPool.map((plan) => plan.brackets));
-    const maxValidEntries = Math.max(0, ...validPool.map((plan) => plan.usedEntries));
-
-    validPool
-      .filter((plan) => plan.brackets === maxValidBrackets || plan.usedEntries === maxValidEntries)
-      .sort((a, b) => b.brackets - a.brackets || a.byes - b.byes || b.usedEntries - a.usedEntries)
-      .slice(0, 5)
-      .forEach(addPlan);
-
-    [naturalFullPlan, nextFullPlan].forEach((plan) => {
-      if (!plan.feasible) addPlan({ ...plan, targetOnly: true });
-    });
-
-    return Array.from(plansById.values()).sort((a, b) =>
-      Number(a.targetOnly) - Number(b.targetOnly) ||
-      Number(b.feasible) - Number(a.feasible) ||
-      b.brackets - a.brackets ||
-      b.usedEntries - a.usedEntries ||
-      a.byes - b.byes
-    );
-  })();
+  const bracketPlans = buildBracketTicketPlans(tickets, (player) => player.seed, bracketPrice)
+    .map((plan) => plan.feasible ? { ...plan, amounts: getBracketPlanAmounts(plan, bracketPrice) } : plan);
 
   const selectedPlan = bracketPlans.find((plan) => plan.id === selectedPlanId) || bracketPlans[0];
   const fillSuggestions = getBracketFillSuggestions(bracketPlayers, bracketEntries, selectedPlan, isTeamBracketSet)
     .filter((player) => player.name.toLowerCase().includes(fillSearch.trim().toLowerCase()));
   const hasGeneratedBrackets = brackets.length > 0;
-  const planCanGenerate = (plan) => Boolean(plan?.feasible && !plan?.targetOnly);
+  const planCanGenerate = (plan) => Boolean(plan?.feasible);
   const selectedPlanCanGenerate = planCanGenerate(selectedPlan);
   const planStatusLabel = (plan) => plan.targetOnly ? "TARGET" : planCanGenerate(plan) ? "VALID" : "ISSUE";
   const planStatusClass = (plan) => plan.targetOnly
@@ -27474,57 +27228,27 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
       return;
     }
 
-    const allByBowler = tickets.reduce((map, ticket) => {
-      const key = ticket.bowler.seed;
-      map[key] = [...(map[key] || []), ticket];
-      return map;
-    }, {});
-
-    const leftoverTickets = [];
-    const usedBySeed = Object.fromEntries((selectedPlan.entryRows || []).map((row) => [row.seed, Number(row.used || 0)]));
-    const usageRows = Object.values(allByBowler).map((queue) => ({
-      seed: queue[0].bowler.seed,
-      name: queue[0].bowler.name,
-      queue: shuffle(queue),
-      purchased: queue.length,
-      used: Math.min(queue.length, Number(usedBySeed[queue[0].bowler.seed] || 0)),
-    }));
-
-    const placement = placeBracketTicketsExactly(usageRows, selectedPlan.brackets, selectedPlan.byes);
-    const bracketTicketGroups = placement.groups;
-    leftoverTickets.push(...placement.leftovers);
-
-    if (leftoverTickets.length > selectedPlan.leftoverEntries || placement.placementByes !== selectedPlan.byes || placement.emptyBrackets > 0) {
-      window.alert("This plan could not be placed exactly without creating extra byes. Select a lower bracket option or adjust bracket entries before generating.");
+    const placement = placeBracketTickets(tickets, (player) => player.seed, selectedPlan);
+    if (!placement) {
+      window.alert("The selected bracket plan cannot place its entries exactly.");
       return;
     }
-
-    const generated = [];
     const usedPairs = new Set();
-    bracketTicketGroups.forEach((group, index) => {
-      if (!group.length) return;
-      const byesForThisBracket = 8 - group.length;
-      const byeTickets = Array.from({ length: byesForThisBracket }, (_, byeIndex) => ({ id: `bye-${index + 1}-${byeIndex}`, bowler: { seed: `BYE-${index + 1}-${byeIndex}`, name: "BYE", games: [0, 0, 0, 0], handicapPerGame: 0 } }));
-      let bestOrder = group;
-      let bestDuplicateCount = Infinity;
-      for (let attempt = 0; attempt < 300; attempt += 1) {
-        const candidate = shuffle(group);
-        const candidateSlots = [...candidate, ...byeTickets];
-        const pairs = [[candidateSlots[0], candidateSlots[1]], [candidateSlots[2], candidateSlots[3]], [candidateSlots[4], candidateSlots[5]], [candidateSlots[6], candidateSlots[7]]];
-        const duplicateCount = pairs.filter(([a, b]) => a?.bowler?.name !== "BYE" && b?.bowler?.name !== "BYE" && usedPairs.has(pairKey(a, b))).length;
-        if (duplicateCount < bestDuplicateCount) {
-          bestDuplicateCount = duplicateCount;
-          bestOrder = candidate;
-        }
-        if (duplicateCount === 0) break;
-      }
-      const finalTickets = [...bestOrder, ...byeTickets];
-      [[finalTickets[0], finalTickets[1]], [finalTickets[2], finalTickets[3]], [finalTickets[4], finalTickets[5]], [finalTickets[6], finalTickets[7]]].forEach(([a, b]) => {
-        if (a?.bowler?.name !== "BYE" && b?.bowler?.name !== "BYE") usedPairs.add(pairKey(a, b));
-      });
-      generated.push({ id: `side-bracket-${Date.now()}-${index + 1}`, number: index + 1, locked: true, players: finalTickets.map((ticket) => ({ seed: ticket.bowler.seed, name: ticket.bowler.name })), byes: byesForThisBracket, entryPrice: bracketPrice, payout: getBracketPayout(bracketPrice, byesForThisBracket) });
+    const generated = placement.groups.map((group, index) => {
+      const byes = 8 - group.length;
+      return {
+        id: "side-bracket-" + Date.now() + "-" + (index + 1),
+        number: index + 1,
+        locked: true,
+        players: drawBracketPlayers(group, (player) => player.seed, (bye) => ({ seed: "BYE-" + index + "-" + bye, name: "BYE" }), usedPairs)
+          .map(({ seed, name }) => ({ seed, name })),
+        byes,
+        entryPrice: bracketPrice,
+        ...(isTeamBracketSet ? { teamScoring: bracketSetMeta[activeBracketSet].scoring } : {}),
+        payout: getBracketPayout(bracketPrice, byes),
+      };
     });
-
+    const leftoverTickets = placement.leftovers.map((bowler) => ({ bowler }));
     const refunds = leftoverTickets.reduce((map, ticket) => {
       if (ticket.bowler.name === "BYE") return map;
       const key = ticket.bowler.seed;
@@ -27559,8 +27283,9 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
   };
 
   const refunds = (sidePotState.refundsBySet || {})[activeBracketSet] || (activeBracketSet === "early" ? sidePotState.refunds || [] : []);
-  const totalRefunds = refunds.reduce((sum, refund) => sum + refund.unusedEntries * bracketPrice, 0);
-  const refundCsv = [["Bowler", "Unused Entries", "Bracket Price", "Refund Amount"], ...refunds.map((refund) => [refund.name, refund.unusedEntries, bracketPrice, refund.unusedEntries * bracketPrice])];
+  const refundAmount = (refund) => refund.amount ?? refund.unusedEntries * bracketPrice;
+  const totalRefunds = refunds.reduce((sum, refund) => sum + refundAmount(refund), 0);
+  const refundCsv = [[isTeamBracketSet ? "Team" : "Bowler", "Unused Entries", "Bracket Price", "Refund Amount"], ...refunds.map((refund) => [refund.name, refund.unusedEntries, refund.entryPrice ?? bracketPrice, refundAmount(refund)])];
 
   const getBracketRounds = (bracket) => {
     const p = Array.from({ length: 8 }, (_, index) => resolvePlayer(bracket.players[index]));
@@ -27590,7 +27315,7 @@ function SidePotBracketTab({ bowlers, useHandicapScores, sidePotState, setSidePo
   const scratch = Number(player.games?.[gameIndex] || 0);
   const handicap =
     bracketSetMeta[activeBracketSet]?.scoring === "handicap"
-      ? handicapPerGame(player)
+      ? (player.isTeam ? player.members.reduce((sum, member) => sum + handicapPerGame(member), 0) : handicapPerGame(player))
       : 0;
 
   const advanced = player.name !== "BYE" && winners.some((w) => w.seed === player.seed);
@@ -27709,7 +27434,7 @@ row.matches.push({
     return Object.values(playerMap).sort((a, b) => b.alive - a.alive || a.name.localeCompare(b.name));
   })();
 
-  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-400" onClick={generateBrackets} disabled={hasGeneratedBrackets || !selectedPlanCanGenerate}>{hasGeneratedBrackets ? "Brackets Locked" : selectedPlanCanGenerate ? "Generate Brackets" : "Select Valid Plan"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Total Refunds" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div>{selectedPlan && !selectedPlanCanGenerate && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">{planNote(selectedPlan)}</div>}<div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? planCanGenerate(plan) ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : plan.targetOnly ? "rounded-2xl border-2 border-amber-500 bg-amber-50 p-4 text-left shadow-md" : "rounded-2xl border-2 border-red-500 bg-red-50 p-4 text-left shadow-md" : planCanGenerate(plan) ? "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50" : plan.targetOnly ? "rounded-2xl border border-amber-200 bg-white p-4 text-left shadow-sm hover:bg-amber-50" : "rounded-2xl border border-red-200 bg-white p-4 text-left shadow-sm hover:bg-red-50"}><div className="flex items-start justify-between gap-2"><h3 className="font-bold text-blue-950">{plan.label}</h3><div className="flex flex-col items-end gap-1">{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}<span className={planStatusClass(plan)}>{planStatusLabel(plan)}</span></div></div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Requested:</strong> {plan.requestedEntries}</p><p><strong>Usable:</strong> {plan.cappedUsableEntries}</p><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Total refunds:</strong> {plan.leftoverEntries}</p><p><strong>Forced refunds:</strong> {plan.forcedRefundEntries}</p><p><strong>Regular leftover:</strong> {plan.regularLeftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>Bye payout:</strong> {plan.byePayoutBrackets}</p></div>{planNote(plan) && <p className={plan.targetOnly ? "mt-3 rounded-xl bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800" : planCanGenerate(plan) ? "mt-3 rounded-xl bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800" : "mt-3 rounded-xl bg-red-100 px-3 py-2 text-xs font-bold text-red-800"}>{planNote(plan)}</p>}<p className="mt-2 text-xs text-blue-600">Full: {currency(fullBracketPayout.first)} / {currency(fullBracketPayout.second)} - With bye: {currency(byeBracketPayout.first)} / {currency(byeBracketPayout.second)}</p></button>)}</div></CardContent></AppCard>}
+  return <div className="space-y-3 md:space-y-4"><AppCard><CardContent className="p-3 md:p-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-xl font-semibold text-blue-900">Side Pot Brackets</h2><p className="text-sm text-blue-700">Generate once to lock each bracket set for the tournament. Scores update from the Score Entry page.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-brackets.csv", bracketCsv)}>Export CSV</Button><Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-pot-refunds.csv", refundCsv)}>Export Refunds</Button><Button variant="outline" className="rounded-2xl" onClick={clearBrackets}>Clear Brackets</Button><Button className="rounded-2xl bg-blue-800 hover:bg-blue-900 disabled:cursor-not-allowed disabled:bg-slate-400" onClick={generateBrackets} disabled={hasGeneratedBrackets || !selectedPlanCanGenerate}>{hasGeneratedBrackets ? "Brackets Locked" : selectedPlanCanGenerate ? "Generate Brackets" : "Select Valid Plan"}</Button></div></div><div className="mt-4 flex flex-wrap gap-2"><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "early" }))} className={activeBracketSet === "early" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Scratch</button>{useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "handicapEarly" }))} className={activeBracketSet === "handicapEarly" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Handicap 1-3</button>}<button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "middle" }))} className={activeBracketSet === "middle" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 2-4</button><button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "late" }))} className={activeBracketSet === "late" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Games 4-6</button>{teamEntries.length > 0 && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "team" }))} className={activeBracketSet === "team" ? "rounded-2xl bg-blue-800 px-4 py-2 text-sm font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-900"}>Team Scratch</button>}{teamEntries.length > 0 && useHandicapScores && <button type="button" onClick={() => setSidePotState((current) => ({ ...current, activeBracketSet: "teamHandicap" }))} className={activeBracketSet === "teamHandicap" ? "rounded-2xl bg-blue-800 px-4 py-2 text-xs font-bold text-white" : "rounded-2xl border border-blue-200 bg-white px-4 py-2 text-xs font-bold text-blue-900"}>Team Handicap</button>}</div><div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5"><StatCard label={`${bracketSetMeta[activeBracketSet]?.label || "Bracket"} Entries`} value={totalEntries} /><StatCard label="Selected Brackets" value={selectedPlan?.brackets || 0} /><StatCard label="Selected Byes" value={selectedPlan?.byes || 0} /><StatCard label="Total Refunds" value={selectedPlan?.leftoverEntries || 0} /><StatCard label="Refunds" value={currency(totalRefunds)} /></div>{selectedPlan && !selectedPlanCanGenerate && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">{planNote(selectedPlan)}</div>}<div className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 text-sm text-blue-700 shadow-sm">Current bracket set: <span className="font-bold text-blue-950">{bracketSetMeta[activeBracketSet]?.label}</span>. Select the set above, then generate brackets for that set.</div></CardContent></AppCard>{!hasGeneratedBrackets && <AppCard><CardContent className="p-3 md:p-5"><h2 className="mb-4 text-xl font-semibold text-blue-900">Bracket Plan Options</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{bracketPlans.map((plan) => <button key={plan.id} type="button" onClick={() => setSidePotState((current) => ({ ...current, selectedPlanId: plan.id, selectedPlanIds: { ...(current.selectedPlanIds || {}), [activeBracketSet]: plan.id } }))} className={selectedPlan?.id === plan.id ? planCanGenerate(plan) ? "rounded-2xl border-2 border-blue-700 bg-blue-50 p-4 text-left shadow-md" : plan.targetOnly ? "rounded-2xl border-2 border-amber-500 bg-amber-50 p-4 text-left shadow-md" : "rounded-2xl border-2 border-red-500 bg-red-50 p-4 text-left shadow-md" : planCanGenerate(plan) ? "rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm hover:bg-blue-50" : plan.targetOnly ? "rounded-2xl border border-amber-200 bg-white p-4 text-left shadow-sm hover:bg-amber-50" : "rounded-2xl border border-red-200 bg-white p-4 text-left shadow-sm hover:bg-red-50"}><div className="flex items-start justify-between gap-2"><h3 className="font-bold text-blue-950">{plan.label}</h3><div className="flex flex-col items-end gap-1">{selectedPlan?.id === plan.id && <span className="rounded-full bg-blue-800 px-2 py-1 text-xs font-bold text-white">SELECTED</span>}<span className={planStatusClass(plan)}>{planStatusLabel(plan)}</span></div></div><div className="mt-3 grid grid-cols-2 gap-2 text-sm text-blue-800"><p><strong>Requested:</strong> {plan.requestedEntries}</p><p><strong>Usable:</strong> {plan.cappedUsableEntries}</p><p><strong>Entries used:</strong> {plan.usedEntries}</p><p><strong>Total refunds:</strong> {plan.leftoverEntries}</p><p><strong>Forced refunds:</strong> {plan.forcedRefundEntries}</p><p><strong>Regular leftover:</strong> {plan.regularLeftoverEntries}</p><p><strong>Full payout:</strong> {plan.fullPayoutBrackets}</p><p><strong>One bye:</strong> {plan.byePayoutBrackets} · <strong>Two byes:</strong> {plan.twoByePayoutBrackets}</p></div>{planNote(plan) && <p className={plan.targetOnly ? "mt-3 rounded-xl bg-amber-100 px-3 py-2 text-xs font-bold text-amber-800" : planCanGenerate(plan) ? "mt-3 rounded-xl bg-blue-100 px-3 py-2 text-xs font-bold text-blue-800" : "mt-3 rounded-xl bg-red-100 px-3 py-2 text-xs font-bold text-red-800"}>{planNote(plan)}</p>}<p className="mt-2 text-xs text-blue-600">Full: {currency(fullBracketPayout.first)} / {currency(fullBracketPayout.second)} · One bye: {currency(byeBracketPayout.first)} / {currency(byeBracketPayout.second)}{twoByeBracketPayout ? " · Two byes: " + currency(twoByeBracketPayout.first) + " / " + currency(twoByeBracketPayout.second) : " · Two byes require a $5 entry price."}</p>{plan.amounts && <p className="mt-1 text-xs text-blue-800">Payouts {currency(plan.amounts.first + plan.amounts.second)} · Retained {currency(plan.amounts.retained)}</p>}</button>)}</div></CardContent></AppCard>}
       {!hasGeneratedBrackets && selectedPlan?.shortage > 0 && (
         <AppCard>
           <CardContent className="space-y-3 p-3 md:p-5">
@@ -27761,7 +27486,7 @@ row.matches.push({
                 <table className="w-full min-w-[520px] text-xs md:text-sm">
                   <thead className="bg-blue-800 text-white">
                     <tr>
-                      <th className="p-2 text-left md:p-3">Bowler</th>
+                      <th className="p-2 text-left md:p-3">{isTeamBracketSet ? "Team" : "Bowler"}</th>
                       <th className="p-2 text-right md:p-3">Total Entries</th>
                       <th className="p-2 text-right md:p-3">Entries Used</th>
                     </tr>
@@ -27781,7 +27506,7 @@ row.matches.push({
               {previewRefunds.length > 0 ? (
               <div className="overflow-auto rounded-2xl border border-blue-200 bg-white">
                 <table className="w-full min-w-[560px] text-xs md:text-sm">
-                  <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">Bowler</th><th className="p-2 text-right md:p-3">Purchased</th><th className="p-2 text-right md:p-3">Projected Brackets</th><th className="p-2 text-right md:p-3">Projected Refund</th><th className="p-2 text-right md:p-3">Refund Amount</th></tr></thead>
+                  <thead className="bg-blue-800 text-white"><tr><th className="p-2 text-left md:p-3">{isTeamBracketSet ? "Team" : "Bowler"}</th><th className="p-2 text-right md:p-3">Purchased</th><th className="p-2 text-right md:p-3">Projected Brackets</th><th className="p-2 text-right md:p-3">Projected Refund</th><th className="p-2 text-right md:p-3">Refund Amount</th></tr></thead>
                   <tbody>{previewRefunds.map((row) => <tr key={`preview-refund-${row.seed}`} className="border-t"><td className="p-2 font-semibold md:p-3">{row.name}</td><td className="p-2 text-right md:p-3">{row.purchased}</td><td className="p-2 text-right font-semibold text-blue-900 md:p-3">{row.used}</td><td className="p-2 text-right font-bold text-red-700 md:p-3">{row.refunded}</td><td className="p-2 text-right font-bold text-red-700 md:p-3">{currency(row.refundAmount)}</td></tr>)}</tbody>
                 </table>
               </div>
@@ -27812,7 +27537,7 @@ row.matches.push({
         <table className="w-full min-w-[560px] text-xs md:text-sm">
           <thead className="bg-blue-800 text-white">
             <tr>
-              <th className="p-2 text-left md:p-3">Bowler</th>
+              <th className="p-2 text-left md:p-3">{isTeamBracketSet ? "Team" : "Bowler"}</th>
               <th className="p-2 text-right md:p-3">Alive</th>
             </tr>
           </thead>
@@ -27916,7 +27641,7 @@ row.matches.push({
         <table className="w-full min-w-[420px] text-xs md:text-sm">
           <thead className="bg-blue-800 text-white">
             <tr>
-              <th className="p-2 text-left md:p-3">Bowler</th>
+              <th className="p-2 text-left md:p-3">{isTeamBracketSet ? "Team" : "Bowler"}</th>
               <th className="p-2 text-right md:p-3">Unused Entries</th>
               <th className="p-2 text-right md:p-3">Refund</th>
             </tr>
@@ -27927,7 +27652,7 @@ row.matches.push({
                 <td className="p-2 font-semibold md:p-3">{refund.name}</td>
                 <td className="p-2 text-right md:p-3">{refund.unusedEntries}</td>
                 <td className="p-2 text-right font-bold text-red-700 md:p-3">
-                  {currency(refund.unusedEntries * bracketPrice)}
+                  {currency(refundAmount(refund))}
                 </td>
               </tr>
             ))}
@@ -28000,13 +27725,17 @@ const teamHighGamePayoutPerGame = Math.floor(teamHighGamePot / gameCount);
   const handicapHighGameResults = buildResults(handicapHighGameBowlers, handicapHighGamePayoutPerGame, true);
   const teamHighGameResults = buildResults(teamHighGameTeams, teamHighGamePayoutPerGame, false);
 
+  const teamHandicap = getTeamHandicapHighGame(teamEntries, sidePotState, gameCount, useHandicapScores, handicapPerGame, getTournamentTeamSize(tournamentStyle));
+
   const highGameCsv = [
-    ["Type", "Game", "Place", "Bowler", "Scratch", "Handicap", "Score", "Payout"],
+    ["Type", "Game", "Place", teamEntries.length ? "Bowler / Team" : "Bowler", "Scratch", "Handicap", "Score", "Payout"],
     ...[
       { label: "Scratch", results: highGameResults },
       { label: "Handicap", results: handicapHighGameResults },
+      ...(teamEntries.length ? [{ label: "Team Scratch", results: teamHighGameResults }] : []),
+      ...(teamHandicap ? [{ label: "Team Handicap", results: teamHandicap.results }] : []),
     ].flatMap((section) => section.results.flatMap((game) => game.scores.length
-      ? game.scores.map((item, index) => [section.label, `Game ${game.gameIndex + 1}`, index + 1, item.bowler.name, item.scratch, section.label === "Handicap" ? handicapPerGame(item.bowler) : 0, item.score, index === 0 ? game.payoutEach : 0])
+      ? game.scores.map((item, index) => [section.label, `Game ${game.gameIndex + 1}`, index + 1, item.bowler.name, item.scratch, item.score - item.scratch, item.score, game.winners.includes(item.bowler) ? game.payoutEach : 0])
       : [[section.label, `Game ${game.gameIndex + 1}`, "", "", "", "", "", ""]]
     )),
   ];
@@ -28035,8 +27764,8 @@ const teamHighGamePayoutPerGame = Math.floor(teamHighGamePot / gameCount);
               </div>
               <div className="space-y-2">
                 {game.scores.map((item, index) => {
-                  const isWinner = index === 0 && item.score === game.highScore;
-                  const detail = game.useHandicap && item.scratch !== item.score ? ` (${item.scratch}+${handicapPerGame(item.bowler)})` : "";
+                  const isWinner = game.winners.includes(item.bowler);
+                  const detail = game.useHandicap && item.scratch !== item.score ? ` (${item.scratch}+${item.score - item.scratch})` : "";
                   return (
                     <div key={`${title}-${game.gameIndex}-${item.bowler.seed}-${index}`} className={isWinner ? "grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl bg-green-100 p-2 text-green-900" : "grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl bg-blue-50 p-2 text-blue-950"}>
                       <span className="text-xs font-black">#{index + 1}</span>
@@ -28068,7 +27797,8 @@ const teamHighGamePayoutPerGame = Math.floor(teamHighGamePot / gameCount);
       </AppCard>
       {renderHighGameSection({ title: "Scratch High Game", results: highGameResults, entries: highGameBowlers.length, price: highGamePrice, pot: highGamePot, perGame: highGamePayoutPerGame })}
       {useHandicapScores && renderHighGameSection({ title: "Handicap High Game", results: handicapHighGameResults, entries: handicapHighGameBowlers.length, price: handicapHighGamePrice, pot: handicapHighGamePot, perGame: handicapHighGamePayoutPerGame })}
-      {teamEntries.length > 0 && renderHighGameSection({ title: "Team High Game", results: teamHighGameResults, entries: teamHighGameTeams.length, price: teamHighGamePrice, pot: teamHighGamePot, perGame: teamHighGamePayoutPerGame })}
+      {teamEntries.length > 0 && renderHighGameSection({ title: "Team Scratch High Game", results: teamHighGameResults, entries: teamHighGameTeams.length, price: teamHighGamePrice, pot: teamHighGamePot, perGame: teamHighGamePayoutPerGame })}
+      {teamHandicap && renderHighGameSection({ title: "Team Handicap High Game", ...teamHandicap })}
     </div>
   );
 }
@@ -28081,7 +27811,8 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
     String(label)
       .replace(/^Handicap Games\s*/i, "HDCP G")
       .replace(/^Scratch Games\s*/i, "SCR G")
-      .replace(/^Team Games\s*/i, "Team G");
+      .replace(/^Team Scratch Games\s*/i, "Team SCR G")
+      .replace(/^Team Handicap Games\s*/i, "Team HDCP G");
   const tournamentStyle = tournamentInfo.tournamentStyle || "singles";
   const teamEntries = getTournamentTeamEntries(bowlers, tournamentStyle);
   const bracketSetMeta = {
@@ -28089,7 +27820,8 @@ function PublicSideActionTab({ bowlers, useHandicapScores, sidePotState, qualify
     handicapEarly: { label: "Handicap Games 1-3", offset: 0, scoring: "handicap" },
     middle: { label: "Scratch Games 2-4", offset: 1, scoring: "scratch" },
     late: { label: "Scratch Games 4-6", offset: 3, scoring: "scratch" },
-    team: { label: "Team Games 1-3", offset: 0, scoring: "scratch" },
+    team: { label: "Team Scratch Games 1-3", offset: 0, scoring: "scratch" },
+    teamHandicap: { label: "Team Handicap Games 1-3", offset: 0, scoring: "handicap" },
   };
   const bowlerBySeed = Object.fromEntries([...bowlers, ...teamEntries].map((bowler) => [String(bowler.seed), bowler]));
   const bracketGroups = sidePotState.bracketGroups || { early: sidePotState.brackets || [], middle: [], late: [] };
@@ -28109,9 +27841,9 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
     return bowlerBySeed[String(player.seed)] || player;
   };
 
-  const scoreForGame = (player, gameIndex) =>
-    regularSideActionScore(player, gameIndex, useHandicapScores ? handicapPerGame : null);
-  const advancePlayers = (players, gameIndex) => advanceSideActionPlayers(players, (player) => scoreForGame(player, gameIndex));
+  const scoreForGame = (player, gameIndex, setKey, bracket) => regularSideActionScore(
+    player, gameIndex, usesSideActionBracketHandicap(setKey, bracket, useHandicapScores) ? handicapPerGame : null
+  );
 
   const bracketRows = (() => {
     const playerMap = {};
@@ -28124,11 +27856,12 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
     };
 
     Object.entries(bracketGroups).forEach(([setKey, setBrackets]) => {
-      const offset = bracketSetMeta[setKey]?.offset || 0;
+      if (setKey === "teamHandicap" && !useHandicapScores) return;
+    const offset = bracketSetMeta[setKey]?.offset || 0;
       const safeBrackets = Array.isArray(setBrackets) ? setBrackets : [];
       safeBrackets.forEach((bracket) => {
         const players = Array.from({ length: 8 }, (_, index) => resolvePlayer(bracket.players?.[index]));
-        const { r1Matches, r1Winners, r2Matches, r2Winners, finalPlayers, champions } = buildSideActionRounds(players, (player, round) => scoreForGame(player, offset + round));
+        const { r1Matches, r1Winners, r2Matches, r2Winners, finalPlayers, champions } = buildSideActionRounds(players, (player, round) => scoreForGame(player, offset + round, setKey, bracket));
         const rounds = [
           { label: `${bracketSetMeta[setKey]?.label || "Bracket"} - Bracket ${bracket.number} - Game ${offset + 1}`, gameIndex: offset, matches: r1Matches },
           { label: `${bracketSetMeta[setKey]?.label || "Bracket"} - Bracket ${bracket.number} - Game ${offset + 2}`, gameIndex: offset + 1, matches: r2Matches },
@@ -28138,27 +27871,29 @@ const handicapHighGamePayoutPerGame = Math.floor(handicapHighGamePot / gameCount
         rounds.forEach((round) => {
           round.matches.forEach((match) => {
             const realPlayers = match.map(resolvePlayer).filter((player) => player && player.name !== "BYE");
-            const winners = advancePlayers(match, round.gameIndex);
+            const winners = advanceSideActionPlayers(match, (player) => scoreForGame(player, round.gameIndex, setKey, bracket));
             const matchHasScores = winners.length > 0;
             realPlayers.forEach((player) => {
               const row = ensurePlayer(player);
               if (!row) return;
               const opponents = realPlayers.filter((other) => String(other.seed) !== String(player.seed));
               const opponentText = opponents.length ? opponents.map((other) => other.name).join(" / ") : match.some((other) => other?.name === "BYE") ? "BYE" : "Pending";
-              const opponentScoreText = opponents.length ? opponents.map((other) => bracketScoreText(scoreForGame(other, round.gameIndex))).join(" / ") : " - -";
+              const opponentScoreText = opponents.length ? opponents.map((other) => bracketScoreText(scoreForGame(other, round.gameIndex, setKey, bracket))).join(" / ") : " - -";
               const playerAdvanced = winners.some((winner) => String(winner.seed) === String(player.seed));
               const tied = winners.length > 1 && playerAdvanced;
               const result = !matchHasScores ? "" : tied ? "T" : playerAdvanced ? "W" : "L";
               const isHandicapBracket = bracketSetMeta[setKey]?.scoring === "handicap";
 
 const playerScratch = Number(player.games?.[round.gameIndex] || 0);
-const playerHandicap = isHandicapBracket ? handicapPerGame(player) : 0;
-const playerTotal = bracketScoreText(scoreForGame(player, round.gameIndex));
+const playerHandicap = isHandicapBracket
+  ? (player.isTeam ? player.members.reduce((sum, member) => sum + handicapPerGame(member), 0) : handicapPerGame(player))
+  : 0;
+const playerTotal = bracketScoreText(scoreForGame(player, round.gameIndex, setKey, bracket));
 
 const opponentBreakdownText = isHandicapBracket && opponents.length
   ? opponents.map((other) => {
       const scratch = Number(other.games?.[round.gameIndex] || 0);
-      const handicap = handicapPerGame(other);
+      const handicap = other.isTeam ? other.members.reduce((sum, member) => sum + handicapPerGame(member), 0) : handicapPerGame(other);
       return scratch > 0 ? `(${scratch} + ${handicap})` : "";
     }).join(" / ")
   : "";
@@ -28236,6 +27971,7 @@ row.matches.push({
     return { gameIndex, scores, highScore, winners, payoutEach, label: "Team" };
   });
 
+  const teamHandicap = getTeamHandicapHighGame(teamEntries, sidePotState, gameCount, useHandicapScores, handicapPerGame, getTournamentTeamSize(tournamentStyle));
   const payoutMap = {};
   const addPayout = (player, source, amount, detail, resultType = "") => {
     const livePlayer = resolvePlayer(player);
@@ -28244,6 +27980,7 @@ row.matches.push({
     const current = payoutMap[key] || {
       seed: livePlayer.seed,
       name: livePlayer.name,
+      isTeam: Boolean(livePlayer.isTeam),
       bracket: 0,
       bracketFirsts: 0,
       bracketSeconds: 0,
@@ -28263,11 +28000,12 @@ row.matches.push({
   };
 
   Object.entries(bracketGroups).forEach(([setKey, setBrackets]) => {
+    if (setKey === "teamHandicap" && !useHandicapScores) return;
     const offset = bracketSetMeta[setKey]?.offset || 0;
     const safeBrackets = Array.isArray(setBrackets) ? setBrackets : [];
     safeBrackets.forEach((bracket) => {
       const players = Array.from({ length: 8 }, (_, index) => resolvePlayer(bracket.players?.[index]));
-      const { finalPlayers, champions } = buildSideActionRounds(players, (player, round) => scoreForGame(player, offset + round));
+      const { finalPlayers, champions } = buildSideActionRounds(players, (player, round) => scoreForGame(player, offset + round, setKey, bracket));
       const firstPayout = Number(bracket.payout?.first || 25);
       const secondPayout = Number(bracket.payout?.second || 10);
       if (champions.length > 0) {
@@ -28277,7 +28015,7 @@ row.matches.push({
           if (runnerUps.length === 1) {
             addPayout(runnerUps[0], "Bracket", secondPayout, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`, "bracket-second");
           } else if (runnerUps.length > 1) {
-            const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2) })).filter(({ score }) => score !== null);
+            const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2, setKey, bracket) })).filter(({ score }) => score !== null);
             const secondScore = Math.max(...runnerUpScores.map((item) => item.score));
             const secondPlace = secondScore >= 0 ? runnerUpScores.filter((item) => item.score === secondScore).map((item) => item.player) : [];
             secondPlace.forEach((runnerUp) => addPayout(runnerUp, "Bracket", secondPayout / secondPlace.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`, "bracket-second"));
@@ -28296,7 +28034,10 @@ row.matches.push({
     });
   }
   teamHighGameResults.forEach((game) => {
-    game.winners.forEach((winner) => addPayout(winner, "High Game", game.payoutEach, `Team Game ${game.gameIndex + 1} high game (${game.highScore})`, "high-game"));
+    game.winners.forEach((winner) => addPayout(winner, "High Game", game.payoutEach, `Team Scratch Game ${game.gameIndex + 1} high game (${game.highScore})`, "high-game"));
+  });
+  teamHandicap?.results.forEach((game) => {
+    game.winners.forEach((winner) => addPayout(winner, "High Game", game.payoutEach, "Team Handicap Game " + (game.gameIndex + 1) + " high game (" + game.highScore + ")", "high-game"));
   });
   const payoutRows = Object.values(payoutMap).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
@@ -28394,7 +28135,8 @@ row.matches.push({
             {[
               { title: "Scratch High Game", results: highGameResults, entries: highGameBowlers.length, pot: highGamePot, perGame: highGamePayoutPerGame },
               ...(useHandicapScores ? [{ title: "Handicap High Game", results: handicapHighGameResults, entries: handicapHighGameBowlers.length, pot: handicapHighGamePot, perGame: handicapHighGamePayoutPerGame }] : []),
-              ...(teamEntries.length > 0 ? [{ title: "Team High Game", results: teamHighGameResults, entries: teamHighGameTeams.length, pot: teamHighGamePot, perGame: teamHighGamePayoutPerGame }] : []),
+              ...(teamEntries.length > 0 ? [{ title: "Team Scratch High Game", results: teamHighGameResults, entries: teamHighGameTeams.length, pot: teamHighGamePot, perGame: teamHighGamePayoutPerGame }] : []),
+              ...(teamHandicap ? [{ title: "Team Handicap High Game", ...teamHandicap }] : []),
             ].map((section) => (
               <div key={section.title} className="mb-5 last:mb-0">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-blue-50 px-3 py-2">
@@ -28415,7 +28157,7 @@ row.matches.push({
                         </div>
                         <div className="space-y-1">
                           {game.scores.map((item, index) => {
-                            const detail = item.scratch && item.scratch !== item.score ? ` (${item.scratch}+${handicapPerGame(item.bowler)})` : "";
+                            const detail = item.scratch != null && item.scratch !== item.score ? ` (${item.scratch}+${item.score - item.scratch})` : "";
                             return (
                               <div key={`${section.title}-${game.gameIndex}-${item.bowler.seed}-${index}`} className={index === 0 ? "grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-green-100 px-2 py-1 text-green-900" : "grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-2 py-1 text-blue-950"}>
                                 <span className="text-[10px] font-black">#{index + 1}</span>
@@ -28553,7 +28295,8 @@ function SideActionPayoutsTab({
     handicapEarly: { label: "Handicap Games 1-3", offset: 0, scoring: "handicap" },
     middle: { label: "Scratch Games 2-4", offset: 1, scoring: "scratch" },
     late: { label: "Scratch Games 4-6", offset: 3, scoring: "scratch" },
-    team: { label: "Team Games 1-3", offset: 0, scoring: "scratch" },
+    team: { label: "Team Scratch Games 1-3", offset: 0, scoring: "scratch" },
+    teamHandicap: { label: "Team Handicap Games 1-3", offset: 0, scoring: "handicap" },
   };
   const bowlerBySeed = Object.fromEntries([...bowlers, ...teamEntries].map((bowler) => [String(bowler.seed), bowler]));
   const bracketGroups = sidePotState.bracketGroups || { early: sidePotState.brackets || [], middle: [], late: [] };
@@ -28577,8 +28320,9 @@ function SideActionPayoutsTab({
     return bowlerBySeed[String(player.seed)] || player;
   };
 
-  const scoreForGame = (player, gameIndex) =>
-    regularSideActionScore(player, gameIndex, useHandicapScores ? handicapPerGame : null);
+  const scoreForGame = (player, gameIndex, setKey, bracket) => regularSideActionScore(
+    player, gameIndex, usesSideActionBracketHandicap(setKey, bracket, useHandicapScores) ? handicapPerGame : null
+  );
 
   const addPayout = (map, player, source, amount, detail, resultType = "") => {
     const livePlayer = resolvePlayer(player);
@@ -28587,6 +28331,7 @@ function SideActionPayoutsTab({
     const current = map[key] || {
       seed: livePlayer.seed,
       name: livePlayer.name,
+      isTeam: Boolean(livePlayer.isTeam),
       game4Lane: laneAssignmentForGame(livePlayer, 3, tournamentInfo),
       bracket: 0,
       bracketFirsts: 0,
@@ -28606,15 +28351,17 @@ function SideActionPayoutsTab({
     map[key] = current;
   };
 
+  const teamHandicap = getTeamHandicapHighGame(teamEntries, sidePotState, gameCount, useHandicapScores, handicapPerGame, getTournamentTeamSize(tournamentStyle));
   const payoutMap = {};
 
   Object.entries(bracketGroups).forEach(([setKey, setBrackets]) => {
+    if (setKey === "teamHandicap" && !useHandicapScores) return;
     const offset = bracketSetMeta[setKey]?.offset || 0;
     const safeBrackets = Array.isArray(setBrackets) ? setBrackets : [];
 
     safeBrackets.forEach((bracket) => {
       const players = Array.from({ length: 8 }, (_, index) => resolvePlayer(bracket.players?.[index]));
-      const { finalPlayers, champions } = buildSideActionRounds(players, (player, round) => scoreForGame(player, offset + round));
+      const { finalPlayers, champions } = buildSideActionRounds(players, (player, round) => scoreForGame(player, offset + round, setKey, bracket));
       const firstPayout = Number(bracket.payout?.first || 25);
       const secondPayout = Number(bracket.payout?.second || 10);
 
@@ -28625,7 +28372,7 @@ function SideActionPayoutsTab({
           if (runnerUps.length === 1) {
             addPayout(payoutMap, runnerUps[0], "Bracket", secondPayout, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`, "bracket-second");
           } else if (runnerUps.length > 1) {
-            const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2) })).filter(({ score }) => score !== null);
+            const runnerUpScores = runnerUps.map((player) => ({ player, score: scoreForGame(player, offset + 2, setKey, bracket) })).filter(({ score }) => score !== null);
             const secondScore = Math.max(...runnerUpScores.map((item) => item.score));
             const secondPlace = secondScore >= 0 ? runnerUpScores.filter((item) => item.score === secondScore).map((item) => item.player) : [];
             secondPlace.forEach((runnerUp) => addPayout(payoutMap, runnerUp, "Bracket", secondPayout / secondPlace.length, `${bracketSetMeta[setKey]?.label || "Bracket"} Bracket #${bracket.number} 2nd`, "bracket-second"));
@@ -28662,8 +28409,11 @@ function SideActionPayoutsTab({
     teamWinners.forEach((winner) => addPayout(payoutMap, winner, "High Game", teamPayoutEach, `Team Game ${gameIndex + 1} high game (${teamHighScore})`, "high-game"));
   });
 
+  teamHandicap?.results.forEach((game) => {
+    game.winners.forEach((winner) => addPayout(payoutMap, winner, "High Game", game.payoutEach, "Team Handicap Game " + (game.gameIndex + 1) + " high game (" + game.highScore + ")", "high-game"));
+  });
   const payoutRows = Object.values(payoutMap).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-  const payoutCsv = [["Bowler", "Game 4 Lane", "Bracket 1sts", "Bracket 2nds", "High Games", "Bracket", "High Game", "Total", "Details"], ...payoutRows.map((row) => [row.name, row.game4Lane || "", row.bracketFirsts || 0, row.bracketSeconds || 0, row.highGames || 0, row.bracket, row.highGame, row.total, row.details.map((d) => `${d.source}: ${d.detail} ${currency(d.amount)}`).join(" | ")])];
+  const payoutCsv = [[teamEntries.length ? "Bowler / Team" : "Bowler", "Game 4 Lane", "Bracket 1sts", "Bracket 2nds", "High Games", "Bracket", "High Game", "Total", "Details"], ...payoutRows.map((row) => [row.name, row.game4Lane || "", row.bracketFirsts || 0, row.bracketSeconds || 0, row.highGames || 0, row.bracket, row.highGame, row.total, row.details.map((d) => `${d.source}: ${d.detail} ${currency(d.amount)}`).join(" | ")])];
 
   return (
     <div className="space-y-3 md:space-y-4">
@@ -28676,7 +28426,8 @@ function SideActionPayoutsTab({
             <Button variant="outline" className="rounded-2xl" onClick={() => downloadCsv("side-action-payouts.csv", payoutCsv)}>Export Payouts CSV</Button>
           </div>
           <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-            <StatCard label="Paid Bowlers" value={payoutRows.length} />
+            <StatCard label="Winning Bowlers" value={payoutRows.filter((row) => !row.isTeam).length} />
+            {teamEntries.length > 0 && <StatCard label="Winning Teams" value={payoutRows.filter((row) => row.isTeam).length} />}
             <StatCard label="Bracket Payouts" value={currency(payoutRows.reduce((sum, row) => sum + row.bracket, 0))} />
             <StatCard label="High Game Payouts" value={currency(payoutRows.reduce((sum, row) => sum + row.highGame, 0))} />
             <StatCard label="Total Payouts" value={currency(payoutRows.reduce((sum, row) => sum + row.total, 0))} />
@@ -28685,7 +28436,7 @@ function SideActionPayoutsTab({
             <table className="w-full min-w-[820px] text-xs md:text-sm">
               <thead className="bg-blue-800 text-white">
   <tr>
-    <th className="p-2 text-left md:p-3">Bowler</th>
+    <th className="p-2 text-left md:p-3">{teamEntries.length ? "Bowler / Team" : "Bowler"}</th>
     <th className="p-2 text-center md:p-3">Lane</th>
     <th className="p-2 text-center md:p-3">1sts</th>
     <th className="p-2 text-center md:p-3">2nds</th>

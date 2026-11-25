@@ -72,7 +72,44 @@ test("All Events includes the first valid scored appearance for each configured 
   assert.deepEqual(rows.map((row) => [row.name, row.scratch, row.handicap, row.total]), [["Alex", 1890, 90, 1980]]);
 });
 
-test.todo("All Events ignores an unscored appearance and uses the first later scored appearance");
+test("All Events skips unbowled and incomplete series and locks the first completed series by squad time", () => {
+  const { allEvents } = createMultiEventCalculationHarness();
+  const appearance = (competition, time, scores, name = "Alex", forfeits = {}) => ({
+    competition,
+    squad: { id: time, date: "2027-02-06", time },
+    memberDetails: [{ name, allEvents: true, handicap: 10 }],
+    memberScores: [scores],
+    memberBracketForfeits: forfeits,
+  });
+  const rows = allEvents([
+    appearance("Singles", "12:00", [300, 300, 300], "alex"),
+    appearance("Singles", "08:00", []),
+    appearance("Singles", "08:30", [200, 200, ""], "Alex", { "0:2": true }),
+    appearance("Singles", "09:00", [200, "0", 210], "Alex", { "0:1": true }),
+    appearance("Doubles", "08:00", [0, 0, 0]),
+    appearance("Doubles", "10:00", [190, 195, 200]),
+    appearance("Team", "11:00", [205, 210, 215]),
+    appearance("Team", "10:00", [250, 250], "Incomplete Bowler"),
+    appearance("Singles", "10:00", ["0", "0", "0"], "Completed Zeroes"),
+    appearance("Singles", "11:00", [300, 300, 300], "Completed Zeroes"),
+  ],
+  (entry) => entry.memberDetails,
+  (entry) => entry.competition,
+  (name) => name.trim().toLowerCase(),
+  (time) => time,
+  (entry, member, game) => entry.memberScores[member][game],
+  (member) => member.handicap,
+  (value) => value ?? 0);
+
+  assert.deepEqual(rows.map(({ name, singles, doubles, team, handicap }) => [name, singles, doubles, team, handicap]), [
+    ["Alex", 410, 585, 630, 90],
+    ["Completed Zeroes", 0, null, null, 30],
+  ]);
+  assert.deepEqual(rows[0].details[0].games, [200, 0, 210]);
+  assert.deepEqual(rows[0].countedSquadLabels, [
+    "2027-02-06 - 09:00 - Singles", "2027-02-06 - 10:00 - Doubles", "2027-02-06 - 11:00 - Trios",
+  ]);
+});
 
 test("daily bonuses select the configured squad time and calculate separate scratch and handicap winners", () => {
   const calculations = createMultiEventCalculationHarness();
