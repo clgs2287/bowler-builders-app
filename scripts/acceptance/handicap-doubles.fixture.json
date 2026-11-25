@@ -1,0 +1,364 @@
+{
+  "runId": "bb-synth-20261125-doubles-01",
+  "stagingProject": "evgyzbgixhaiykxznqez",
+  "previewCommit": "01d0f22",
+  "tournament": {
+    "name": "TEST ONLY - BB SYNTH 20261125 - Handicap Doubles Acceptance",
+    "date": "2027-03-06",
+    "center": "Synthetic Test Center",
+    "series": "TEST ONLY",
+    "titleEligible": false,
+    "tournamentStyle": "doubles",
+    "lanesUsed": "1-8"
+  },
+  "localStorageKey": "bowler-builders-tournament-app-v1",
+  "protectedActiveRow": "active",
+  "permittedNewRemoteIds": {
+    "schedule": [],
+    "draft": [],
+    "reservation": [],
+    "archive": [],
+    "title": [],
+    "identity": [],
+    "storage": []
+  },
+  "initialQualifyingGames": 3,
+  "qualifyingGames": 4,
+  "tournamentFormat": "sweeper",
+  "finance": {
+    "entryFee": 65,
+    "paidSeeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "lineagePerGame": 4,
+    "prior": {
+      "ballRaffleAdded": 235,
+      "otherAddedMoney": 75,
+      "prizeFundOverride": 900
+    },
+    "rollup": {
+      "teamFee": 130,
+      "entryRevenue": 1040,
+      "collectedRevenue": 845,
+      "qualifyingLineage": 256,
+      "collectedPrizeFund": 589,
+      "projectedPrizeFund": 784
+    },
+    "manualPayoutAmounts": {
+      "first": 500,
+      "second": 284
+    }
+  },
+  "handicap": {
+    "base": 200,
+    "percent": 90
+  },
+  "bracketPrice": 5,
+  "bracketSets": [
+    {
+      "key": "early",
+      "label": "Scratch",
+      "entrantIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "byes": 2,
+      "first": 15,
+      "second": 10,
+      "retained": 5
+    },
+    {
+      "key": "teamHandicap",
+      "label": "Team Handicap",
+      "entrantIds": [
+        "team-1",
+        "team-2",
+        "team-3",
+        "team-4",
+        "team-5",
+        "team-6",
+        "team-7"
+      ],
+      "byes": 1,
+      "first": 20,
+      "second": 10,
+      "retained": 5
+    },
+    {
+      "key": "team",
+      "label": "Team Scratch",
+      "entrantIds": [
+        "team-1",
+        "team-2",
+        "team-3",
+        "team-4",
+        "team-5",
+        "team-6",
+        "team-7",
+        "team-8"
+      ],
+      "byes": 0,
+      "first": 25,
+      "second": 10,
+      "retained": 5
+    }
+  ],
+  "highGame": {
+    "scratch": {
+      "teamNumbers": [
+        1,
+        3
+      ],
+      "price": 12,
+      "pot": 24,
+      "perGame": 6,
+      "winner": "team-1",
+      "scores": [
+        430,
+        415,
+        405,
+        413
+      ]
+    },
+    "handicap": {
+      "teamNumbers": [
+        2,
+        3
+      ],
+      "price": 16,
+      "pot": 32,
+      "perGame": 8,
+      "winner": "team-2",
+      "scores": [
+        454,
+        454,
+        444,
+        449
+      ]
+    }
+  },
+  "expectedCashSheet": [
+    {
+      "id": "team-2",
+      "scratch": 1585,
+      "total": 1801,
+      "payout": 500
+    },
+    {
+      "id": "team-1",
+      "scratch": 1663,
+      "total": 1663,
+      "payout": 284
+    }
+  ],
+  "bowlers": [
+    {
+      "seed": 1,
+      "name": "SYN 01A",
+      "average": 200,
+      "lane": "1A",
+      "scores": [
+        220,
+        210,
+        205,
+        208
+      ]
+    },
+    {
+      "seed": 2,
+      "name": "SYN 01B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        210,
+        205,
+        200,
+        205
+      ]
+    },
+    {
+      "seed": 3,
+      "name": "SYN 02A",
+      "average": 170,
+      "lane": "",
+      "scores": [
+        205,
+        205,
+        200,
+        200
+      ]
+    },
+    {
+      "seed": 4,
+      "name": "SYN 02B",
+      "average": 170,
+      "lane": "",
+      "scores": [
+        195,
+        195,
+        190,
+        195
+      ]
+    },
+    {
+      "seed": 5,
+      "name": "SYN 03A",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        160,
+        160,
+        160,
+        160
+      ]
+    },
+    {
+      "seed": 6,
+      "name": "SYN 03B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        157,
+        157,
+        157,
+        157
+      ]
+    },
+    {
+      "seed": 7,
+      "name": "SYN 04A",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        154,
+        154,
+        154,
+        154
+      ]
+    },
+    {
+      "seed": 8,
+      "name": "SYN 04B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        151,
+        151,
+        151,
+        151
+      ]
+    },
+    {
+      "seed": 9,
+      "name": "SYN 05A",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        148,
+        148,
+        148,
+        148
+      ]
+    },
+    {
+      "seed": 10,
+      "name": "SYN 05B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        145,
+        145,
+        145,
+        145
+      ]
+    },
+    {
+      "seed": 11,
+      "name": "SYN 06A",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        142,
+        142,
+        142,
+        142
+      ]
+    },
+    {
+      "seed": 12,
+      "name": "SYN 06B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        139,
+        139,
+        139,
+        139
+      ]
+    },
+    {
+      "seed": 13,
+      "name": "SYN 07A",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        136,
+        136,
+        136,
+        136
+      ]
+    },
+    {
+      "seed": 14,
+      "name": "SYN 07B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        133,
+        133,
+        133,
+        133
+      ]
+    },
+    {
+      "seed": 15,
+      "name": "SYN 08A",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        130,
+        130,
+        130,
+        130
+      ]
+    },
+    {
+      "seed": 16,
+      "name": "SYN 08B",
+      "average": 200,
+      "lane": "",
+      "scores": [
+        127,
+        127,
+        127,
+        127
+      ]
+    }
+  ]
+}
