@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { advanceSideActionPlayers, readBracketScore } from "./sideActionBracket.js";
+import { selectMultiEventPayoutDivisions } from "./multiEventPayouts.js";
 
 const source = fs.readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 
@@ -31,6 +33,13 @@ export function createTournamentLogicHarness() {
     "isEliminatorFinalsFormat",
     "isDirectEliminatorFinalsFormat",
     "getEliminatorCutCount",
+    "getTournamentEntryCount",
+    "getPaidTournamentEntryCount",
+    "getRegularEntryFees",
+    "calculateSavedTournamentFinancials",
+    "getQualifyingGameCount",
+    "restorePayoutState",
+    "normalizeBowlerGames",
     "calculateFinancials",
     "getAutoFinalsLineageGames",
     "floorToNearest",
@@ -61,15 +70,24 @@ export function createTournamentLogicHarness() {
       if (qualifiers <= 64) return 64;
       return "Over 64";
     }
+    ${source.slice(source.indexOf("const defaultOverrides ="), source.indexOf("function restorePayoutState("))}
     ${helpers}
     return {
       scratchTotal, completedGamesCount, handicapPerGame, handicapTotal, qualifyingHandicapTotal,
       rankRows, getRankedBowlers, getRankedTournamentEntries, calculateFinancials,
       getAutoFinalsLineageGames, buildPayoutRows, winnerFromMatch, finalsGameScore,
       winnerFromBestOfThreeMatch, winnerFromStepladderMatch, buildStepladderMatches,
-      getEliminatorCutCount,
+      getEliminatorCutCount, getRegularEntryFees, calculateSavedTournamentFinancials,
+      getQualifyingGameCount, restorePayoutState, normalizeBowlerGames,
     };`
   )();
+}
+
+export function createRegistrationHarness() {
+  return new Function(`
+    ${sourceFor("lanePositionParts", "laneAssignmentSortValue", "lanePairFromAssignment", "shuffleArray", "getTeamNumber", "buildBalancedRandomLaneFill", "buildTeamLaneFill", "groupRegistrationRows")}
+    return { buildBalancedRandomLaneFill, buildTeamLaneFill, groupRegistrationRows };
+  `)();
 }
 
 export function createMultiEventAverageHarness() {
@@ -93,8 +111,14 @@ export function createMultiEventCalculationHarness() {
   const payoutEnd = source.indexOf("  const multiDayFinalPayoutPlan =", payoutStart);
   const youthStart = source.indexOf("    const topYouthKeysByDivision =");
   const youthEnd = source.indexOf("    const scoreTable =", youthStart);
+  const financeStart = source.indexOf("  const multiDayFinanceSettings =");
+  const financeEnd = source.indexOf("  const multiDayFinanceSummaryRows =", financeStart);
+  const archiveStart = source.indexOf("    const archiveScoreKey =");
+  const archiveEnd = source.indexOf("    const buildArchiveFirstPlaces =", archiveStart);
+  const bracketStart = source.indexOf("  const multiDayBracketScoreParts =");
+  const bracketEnd = source.indexOf("  const multiDayBracketRounds =", bracketStart);
 
-  if ([allEventsStart, allEventsEnd, dailyBonusStart, dailyBonusEnd, payoutStart, payoutEnd, youthStart, youthEnd].some((index) => index < 0)) {
+  if ([allEventsStart, allEventsEnd, dailyBonusStart, dailyBonusEnd, payoutStart, payoutEnd, youthStart, youthEnd, financeStart, financeEnd, archiveStart, archiveEnd, bracketStart, bracketEnd].some((index) => index < 0)) {
     throw new Error("Could not locate multi-event calculation helpers in App.jsx");
   }
 
@@ -102,6 +126,9 @@ export function createMultiEventCalculationHarness() {
   const dailyBonusSource = source.slice(dailyBonusStart, dailyBonusEnd);
   const payoutSource = source.slice(payoutStart, payoutEnd);
   const youthSource = source.slice(youthStart, youthEnd);
+  const financeSource = source.slice(financeStart, financeEnd);
+  const archiveSource = source.slice(archiveStart, archiveEnd);
+  const bracketSource = source.slice(bracketStart, bracketEnd);
 
   return {
     allEvents: new Function(
@@ -120,5 +147,18 @@ export function createMultiEventCalculationHarness() {
       "youthRows", "bowlerIdentityKey",
       `${youthSource}\nreturn topYouthKeysByDivision;`
     ),
+    adjustedFinanceRow: new Function(
+      "multiDayEvent", "row",
+      `${financeSource}\nreturn multiDayAdjustedFinanceRow(row);`
+    ),
+    archivePaidWinners: new Function(
+      "selectMultiEventPayoutDivisions", "singlesRows", "doublesRows", "teamRows", "allEventsRows", "youthRows", "multiDayPayoutSpotCountForEvent", "multiDayFinalPayoutPlan", "bowlerIdentityKey",
+      `${archiveSource}\nreturn buildArchivePaidWinners();`
+    ).bind(null, selectMultiEventPayoutDivisions),
+    advanceBracketPlayers: new Function(
+      "advanceSideActionPlayers", "readBracketScore", "selectedCheckInPlayerByKey", "handicapPerGame",
+      "getEntryMemberCount", "activeSquad", "players", "roundIndex", "setKey",
+      `${bracketSource}\nreturn multiDayAdvancePlayers(players, roundIndex, setKey);`
+    ).bind(null, advanceSideActionPlayers, readBracketScore),
   };
 }
