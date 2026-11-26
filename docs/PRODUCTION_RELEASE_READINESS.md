@@ -6,6 +6,37 @@ separate approval.** The application-level Strikefest and same-name average
 checks passed on immutable Preview `017ec5d`. The review below used only
 production catalog reads, counts, dashboard metadata and public asset GETs.
 
+## November 26 finalization
+
+The director approved **64** and closure for KWT #3, November 8, 2026
+(`schedule-8`). Schedule publishes 64 and the legacy RPC falls back to
+an unscoped 16. Zero entries are Registered or Waitlisted. The migration
+checks the published 64 and changes only the exact Schedule open flag.
+The global 16 and historical records stay intact.
+
+The production read-only scan found no other conflict among the two
+events marked open. FBET #3 was already past its date, with 16 teams in
+both resolutions. Among closed future events, KWT #5 publishes 64 and
+KWT BOY 32 against the old implicit 16. FBET #4 and KWT #4 have no
+published cap and would use 48 if opened without a scoped fallback.
+Recovery Doubles is closed with a published zero that remains unchanged.
+Past closed records also have differences. No other event settings changed.
+Confirm the listed future capacities before opening those events.
+
+Online single-day reservations now close at **8:00 a.m. Eastern** on
+the published date, in the UI and both public RPCs. Admin roster work and
+multi-day mail-in remain independent. Seven focused tests, an isolated browser test, the build, and static SQL
+and whitespace checks passed. Lint reported no errors and 71 existing warnings. The accepted `017ec5d`
+baseline is retained as evidence. The cutoff requires a new application
+commit and separate focused Preview acceptance.
+
+The [migration and rehearsal runbook](PRODUCTION_MIGRATION_REHEARSAL.md)
+contains the production SQL pair, staging-only cutoff script, focused
+SQL test, backup steps and muted fallback. A disposable PostgreSQL server
+or separately authorized existing isolated database is still needed for
+SQL rehearsal. A muted Production artifact must be verified under separate
+authorization before the release window.
+
 ## Verified environments
 
 | Item | Evidence |
@@ -13,8 +44,8 @@ production catalog reads, counts, dashboard metadata and public asset GETs.
 | Vercel project | `clgs2287s-projects/bowler-builders-app` in the [project dashboard](https://vercel.com/clgs2287s-projects/bowler-builders-app) |
 | Live domain | [tournaments.bowlerbuildersproshop.com](https://tournaments.bowlerbuildersproshop.com/) |
 | Live production | [Ready deployment DRWBVjBbLsywo5akAX3FWFuy73PE](https://vercel.com/clgs2287s-projects/bowler-builders-app/DRWBVjBbLsywo5akAX3FWFuy73PE) on `main`, commit `eded639b01c984f2b922046cb04445e3695992e4` |
-| Rollback target for the proposed release | The current Ready `eded639` deployment above. The [preceding Ready production build 2zLvoPzeHj9bQfoiyoS1bTCgZzFe](https://vercel.com/clgs2287s-projects/bowler-builders-app/2zLvoPzeHj9bQfoiyoS1bTCgZzFe) used `main` at `374f5c4`. Recheck Vercel rollback eligibility at cutover. |
-| Proposed exact source | `017ec5d66c388ca55a3b82bcaf2173b89d486399` on `phase1c-staging-readiness`. Git shows 11 commits ahead of observed production and no production-only commits. Recheck remote refs before release. |
+| Rollback target | Prepare a muted Production build from exact `eded639` before the cutover. The current legacy deployment remains a reference for later authorized recovery that permits email. |
+| Proposed release source | `017ec5d` is the accepted pre-cutoff baseline. Record the exact new cutoff commit after local review and focused Preview acceptance. |
 | Backing database | The published production bundle embeds the Supabase host for `mrwyzfuutcvddaiqperp`, matching the active project `bowler_builders_hub`, PostgreSQL 17, region us-east-1. Preview used `evgyzbgixhaiykxznqez`. |
 
 The [staging closure](PHASE_3_STAGING_HANDOFF.md#november-25-staging-acceptance-closure)
@@ -75,15 +106,6 @@ Verify the tested shorter transaction and consistent lock order
 `app_settings`, `schedule_events`, `reservations`, schema-qualified access,
 and the intended restrictive execute grants. The 340 example remains
 advisory and verifications attach to reservation IDs.
-
-**Capacity decision required.** Two current Schedule entries resolve open.
-The singles entry has no Registered rows and a Schedule cap of 64, while
-the live singles RPC resolves 16 using the existing settings values absent
-an override. The trio entry resolves 16 and has no Registered teams.
-A director must confirm which singles cap should govern before the
-Schedule-first behavior goes live. Rehearse active legacy events, both
-old and new clients, and mixed concurrent singles and team submissions.
-No malformed nonblank Schedule capacity strings appeared in this read.
 
 ### Migration disposition and dependency order
 
@@ -219,14 +241,12 @@ Get-FileHash -Algorithm SHA256 -LiteralPath "$backupDir\production-public.dump",
   protected storage through a supported existing read interface. Verify
   the 18 review-time objects against the fresh release inventory and
   hashes. Keep original object paths and content types.
-- Prepare two migration-specific inverse scripts from production preimages.
-  The mirror inverse restores the prior scoped grants, policy, trigger and
-  refresh body while retaining the current legitimate public event. The
-  Phase 3 inverse restores the exact prior RPC definitions, owners,
-  grants and search paths. Preserve the center and per-reservation
-  verification tables, data and policies for replay. The staging rollback
-  script is a reference. Rehearse both inverses and the prior application
-  against the migrated schema on the disposable copy.
+- The production inverse uses the captured routine and permission preimages.
+  It restores the mirror grants and legacy RPC bodies without refreshing
+  the current public event. It retains reservations, center and verification
+  rows, and the scoped KWT #3 closure. Both legacy public RPCs stay revoked
+  after a full database rollback. Rehearse the inverse and old application's
+  compatibility with the migrated database on the disposable copy.
 - If a migration fails before commit, abort the transaction and verify the
   prior schema and inventories. If a migration commits but deployment
   fails, keep the current domain on the old build only if the rehearsal
@@ -252,48 +272,52 @@ singles function ignores the UI entries-open flag. A short reservation
 pause and zero planned site-wide downtime are targets, subject to the
 rehearsal timings. Avoid active scoring or tournament administration.
 
-1. **Approval to rehearse.** Resolve the singles capacity discrepancy.
+1. **Approval to rehearse.** Verify the approved 64-entry KWT #3 closure.
    Prepare the guarded production SQL and inverse scripts, with the mirror
    change first and adapted Phase 3 second. Review the exact SQL and hashes,
    public mirror privacy, previous-build overlap, permissions, concurrency
-   and rollback on an already authorized disposable database. Time the
+   and rollback on an authorized disposable database. Time the
    transaction and run the established acceptance cases on that copy.
 2. **Approval to back up.** Reconfirm target, live deployment and remote Git
    refs. Verify the target currently reports healthy, the approved window
    is quiet, backup and storage exports are readable, rollback access is
-   available, and the baseline inventory is complete.
-3. **Approval for production database changes.** Use the rehearsed scoped
+   available, and the baseline inventory is complete. Include every
+   Storage object in the fresh inventory, including additions after the
+   review count of 18.
+3. **Approval to mute email and prepare fallback.** Verify the rollback-only
+   Production artifact from exact `eded639` with all provider send keys
+   absent, without changing the stored project credentials. Switch to the
+   verified muted artifact at the start of the release-validation window
+   or use the rehearsed independent mute for both providers.
+4. **Approval for production database changes.** Use the rehearsed scoped
    pause if needed. Run the reviewed SQL with `psql -X --password
    -v ON_ERROR_STOP=1`, a short lock timeout and bounded statement timeout
-   inside its validated transaction. Check schema, seeds, grants, mirrors,
-   data preservation and existing-client compatibility before deployment.
-4. **Approval for configuration and deployment.** Set the two
-   Production-only guard variables with delivery disabled, verify Supabase
-   mapping and provider settings, then release the exact commit via the
-   confirmed `main` branch. The commands below are proposed for execution
-   after this approval. No force push. If branch protections require a PR,
-   use the approved review workflow, verify the resulting tree equals the
-   tested commit's tree, and approve the actual resulting SHA before the
-   branch update triggers Vercel.
-5. Verify the immutable deployment, source, environment and mapped database.
+   inside its transaction. Verify the KWT #3 closure and 64-entry cap,
+   preserved global 16, grants, mirrors, local-date cutoff, data preservation
+   and existing-client compatibility before deployment.
+5. **Approval for deployment.** Set the two Production-only guard variables
+   with delivery disabled, verify the Supabase mapping, and release only the
+   approved cutoff commit through the confirmed `main` workflow. The
+   proposed Git commands below require this approval. If branch protection
+   requires a PR, verify the resulting tree against the accepted build and
+   approve the actual SHA before triggering deployment.
+6. Verify the immutable deployment, environment and mapped database.
    Use read-only smoke paths for Home, Schedule, MIST finance, KWT,
    Strikefest standings and payouts, PDFs and reservation eligibility.
-   Check the public mirror, historical reads and administrator access from
-   an existing session. A non-sending guard probe is allowed only under
-   release approval after configuration proves fail-closed. Use no
-   synthetic production reservations.
-6. **Approval to reopen and enable delivery.** After the smoke gates pass,
-   enable the flag and redeploy the same reviewed source. Recheck the
-   mapping, then restore any paused windows to their exact approved state.
-   A live test message requires separate approval. Check logs for the first
-   ordinary authorized operations.
-7. Stop on an unexpected ref or config, capacity discrepancy, backup/hash
-   mismatch, lock timeout, schema drift, mirror loss, permission failure,
-   failed email guard, failed smoke, or unexplained inventory delta.
-   Keep the pause if needed and use the scoped rollback above.
+   Verify cutoff display and preserve mail-in workflow. Perform a non-sending
+   email-guard probe only after configuration proves fail-closed.
+7. **Approval to reopen and enable delivery.** After the smoke gates pass,
+   enable the flag and redeploy the approved source. Recheck host mapping
+   and restore eligible paused windows to their approved state. Keep
+   KWT #3 closed. A live test message requires separate approval.
+8. Stop on capacity or schema drift, locked migration, failed email guard,
+   lost mirror, unexplained inventory delta, SQL or smoke failure. Restore
+   the muted prior application while keeping the migrated database if
+   compatible. If SQL must also be reverted, use the reviewed scoped inverse
+   and keep public RPCs paused until a cutoff-capable server is verified.
 
 ```powershell
-$release = '017ec5d66c388ca55a3b82bcaf2173b89d486399'
+$release = '<approved full cutoff commit SHA after focused Preview acceptance>'
 $previous = 'eded639b01c984f2b922046cb04445e3695992e4'
 Set-Location 'C:\Projects\bowler-builders-phase1c'
 git fetch origin main phase1c-staging-readiness

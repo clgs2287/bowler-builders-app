@@ -10,6 +10,7 @@ import { emptyStrikefest, verifyStrikefestLeaderboards } from "./strikefest-lead
 
 const strikefestLeaderboards = process.argv.includes("--strikefest-leaderboards");
 const phaseThree = process.argv.includes("--phase3");
+const reservationCutoff = process.argv.includes("--reservation-cutoff");
 const remainingPhaseTwo = process.argv.includes("--remaining-phase2");
 const edge = process.env.BB_ACCEPTANCE_EDGE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
 const temp = await mkdtemp(join(tmpdir(), "bb-doubles-acceptance-"));
@@ -81,7 +82,7 @@ function send(method, params = {}, sessionId) {
 }
 
 try {
-  if (!strikefestLeaderboards && !phaseThree && !remainingPhaseTwo) verifyFixture();
+  if (!strikefestLeaderboards && !phaseThree && !remainingPhaseTwo && !reservationCutoff) verifyFixture();
   process.env.VITE_SUPABASE_URL = "";
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = "";
   process.env.VITE_LOCAL_RESERVATION_TEST = "1";
@@ -139,6 +140,11 @@ try {
   await send("Runtime.enable", {}, sessionId);
   await send("Page.enable", {}, sessionId);
   await send("Emulation.setDeviceMetricsOverride", { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId);
+  if (reservationCutoff) {
+    await send("Page.addScriptToEvaluateOnNewDocument", {
+      source: 'window.cutoffTestNow = Date.parse("2027-07-12T11:59:59.500Z"); Date.now = () => window.cutoffTestNow;',
+    }, sessionId);
+  }
   const navigate = await send("Page.navigate", { url: origin + "/?tab=registration" }, sessionId);
   if (navigate.errorText) throw new Error(navigate.errorText);
   await waitFor('document.body?.innerText.includes("REGISTRATION / ROSTER")', "local registration");
@@ -151,16 +157,62 @@ try {
     ];
     sample.bowlers = [];
   }
+  if (reservationCutoff) {
+    const startDate = "2027-07-12";
+    const entries = (name, style) => ({
+      id: name, eventId: name, name: "Cutoff Fixture " + name,
+      startDate, startTime: "10:30", center: "Synthetic Center",
+      publicInfo: { name: "Cutoff Fixture " + name, date: startDate, tournamentStyle: style },
+      reservationSettings: { entriesOpen: true, reservationLimit: 16 },
+    });
+    sample.reservationState = { entriesOpen: false, reservations: [], reservationsByTournament: {}, openTournamentKeys: [] };
+    sample.scheduleItems = ["singles", "doubles", "trios"].map(style => entries(style, style));
+    sample.scheduleItems.push({ ...entries("mail-in", "singles"), publicDetailsPage: "multiDayInfo", endDate: "2027-07-13" });
+  }
   await run('localStorage.setItem(' + JSON.stringify(fixture.localStorageKey) + ', ' + JSON.stringify(JSON.stringify(sample)) + ')');
+  if (reservationCutoff) {
+    await send("Page.addScriptToEvaluateOnNewDocument", {
+      source: "if (location.origin === " + JSON.stringify(origin) + ") localStorage.setItem("
+        + JSON.stringify(fixture.localStorageKey) + ", " + JSON.stringify(JSON.stringify(sample)) + ");",
+    }, sessionId);
+  }
   await send("Page.reload", {}, sessionId);
+  if (reservationCutoff) {
+    await waitFor('(' + state + ').scheduleItems?.some(item => item.name === "Cutoff Fixture singles")', "cutoff fixture loaded");
+  }
   if (strikefestLeaderboards) {
     await waitFor('(' + state + ').multiDayEvent?.name === ' + JSON.stringify(emptyStrikefest.name), "empty Strikefest fixture");
   } else if (phaseThree) {
     await waitFor('(' + state + ').tournamentInfo?.scheduleEventId === "local-phase3-doubles"', "Phase 3 empty-roster fixture");
-  } else {
+  } else if (!reservationCutoff) {
     await waitFor('!!document.querySelector("[aria-label=\'Team side action\']")', "synthetic registration");
   }
-  if (strikefestLeaderboards) {
+  if (reservationCutoff) {
+    const bookingPage = await send("Page.navigate", { url: origin + "/?view=public&tab=publicreservations" }, sessionId);
+    if (bookingPage.errorText) throw new Error(bookingPage.errorText);
+    await waitFor('document.body?.innerText.includes("Tournament Reservations")', "7:59 a.m. booking form");
+    const names = await run('Array.from(document.querySelectorAll("select option"), option => option.textContent).filter(text => text.includes("Cutoff Fixture"))');
+    assert.equal(names.length, 3);
+    for (const style of ["singles", "doubles", "trios"]) assert.ok(names.some(name => name.endsWith(style)), style);
+    assert.equal(await run('document.body.innerText.includes("8:00 a.m. Eastern")'), true);
+    await run('window.cutoffTestNow = Date.parse("2027-07-12T12:00:00Z")');
+    await waitFor('document.body?.innerText.includes("Entries Currently Closed")', "8 a.m. closure in the same tab");
+    assert.equal(await run('!!document.querySelector("[placeholder=\\"Email Address *\\"]")'), false);
+
+    const mailPage = await send("Page.navigate", { url: origin + "/?view=public&tab=multiDayInfo" }, sessionId);
+    if (mailPage.errorText) throw new Error(mailPage.errorText);
+    await waitFor('document.body?.innerText.includes("Drop off or mail entries with payment")', "multi-day mail-in workflow");
+
+    const deskPage = await send("Page.navigate", { url: origin + "/?tab=registration" }, sessionId);
+    if (deskPage.errorText) throw new Error(deskPage.errorText);
+    await waitFor('document.body?.innerText.includes("REGISTRATION / ROSTER")', "administrator registration");
+    await run('window.cutoffTestNow = Date.parse("2027-07-12T12:01:00Z")');
+    const priorBowlers = await run('(' + state + ').bowlers.length');
+    await click("+ Add Bowler");
+    await waitFor('(' + state + ').bowlers.length === ' + (priorBowlers + 1), "administrator walk-in after cutoff");
+    assert.deepEqual(browserErrors, []);
+    console.log("PASS local browser cutoff, multi-day mail-in, and administrator walk-in.");
+  } else if (strikefestLeaderboards) {
     const seed = async (multiDayEvent) => {
       await run('window.__previousStrikefestFixture = true; localStorage.setItem(' + JSON.stringify(fixture.localStorageKey) + ', '
         + JSON.stringify(JSON.stringify({ multiDayEvent })) + ')');

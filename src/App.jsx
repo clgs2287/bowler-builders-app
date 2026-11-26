@@ -11,6 +11,7 @@ import EmergencyScoresheetPanel from "./EmergencyScoresheetPanel";
 import { BowlingCenterPicker, ReservationRulesFields } from "./PhaseThreeAdmin";
 import { usePhaseThreeDirectory } from "./usePhaseThreeDirectory";
 import { getReservationRules, reservationInfoWithHandicap } from "./reservationEligibility";
+import { isPublicReservationWindowOpen, PUBLIC_RESERVATION_CUTOFF_MESSAGE } from "./reservationCutoff";
 import { createTriosScoresheetPdf } from "./triosScoresheetPdf";
 import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit, hasCompleteTeamNames } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
@@ -2065,7 +2066,7 @@ function reservationStateForKey(reservationState = {}, tournamentKey = "", sched
   };
 }
 
-function openReservationOptions(reservationState = {}, scheduleItems = []) {
+function openReservationOptions(reservationState = {}, scheduleItems = [], now = Date.now()) {
   const seen = new Set();
   const scheduleOpenKeys = (scheduleItems || [])
     .filter((item) => getScheduleEventReservationSettings(item).entriesOpen)
@@ -2106,11 +2107,12 @@ function openReservationOptions(reservationState = {}, scheduleItems = []) {
       };
     })
     .filter((option) => {
-      if (!option.state.entriesOpen || !option.state.tournamentName) return false;
-      if (isReservationCutoffReached(
-        option.state.tournamentDate || option.scheduleItem?.startDate,
-        option.state.tournamentStartTime || option.scheduleItem?.startTime
-      )) return false;
+      if (!option.state.tournamentName || !isPublicReservationWindowOpen({
+        entriesOpen: option.state.entriesOpen,
+        scheduleItem: option.scheduleItem,
+        date: option.state.tournamentDate || option.state.publicTournamentInfo?.date,
+        now,
+      })) return false;
       const identity = reservationTournamentKey({
         name: option.state.tournamentName,
         date: option.state.tournamentDate,
@@ -2199,10 +2201,20 @@ function isTournamentRegistrationWindow(date, startTime) {
   return now >= startDateTime.getTime() - 60 * 60 * 1000 && now < startDateTime.getTime();
 }
 
-function isReservationCutoffReached(date, startTime) {
-  const startDateTime = getTournamentStartDateTime(date, startTime);
-  if (!startDateTime) return isTournamentDayOrLater(date);
-  return Date.now() >= startDateTime.getTime() - 60 * 60 * 1000;
+function usePublicReservationClock(enabled) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let timer;
+    const tick = () => {
+      const current = Date.now();
+      setNow(current);
+      timer = window.setTimeout(tick, 60000 - (current % 60000));
+    };
+    tick();
+    return () => window.clearTimeout(timer);
+  }, [enabled]);
+  return now;
 }
 
 function formatStartTime(startTime) {
@@ -4645,6 +4657,7 @@ function nextUpcomingScheduleItem(scheduleItems = []) {
 }
 
 function PublicHomeTab({
+  reservationNow,
   tournamentInfo = {},
   reservationState = {},
   scheduleItems = [],
@@ -4654,7 +4667,7 @@ function PublicHomeTab({
   onReserve = () => {},
   onEventDetails = () => {},
 }) {
-  const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
+  const publicReservationOptions = openReservationOptions(reservationState, scheduleItems, reservationNow);
   const upcomingEvents = [...(scheduleItems || [])]
     .filter((item) => item?.name && item?.startDate && scheduleDateTimeValue(item) !== Number.POSITIVE_INFINITY)
     .filter((item) => {
@@ -4909,6 +4922,7 @@ function PublicHomeTab({
 }
 
 function TournamentInfoTab({
+  reservationNow,
   tournamentInfo,
   reservationState = {},
   scheduleItems = [],
@@ -4932,7 +4946,7 @@ function TournamentInfoTab({
   const [showDirectorEmail, setShowDirectorEmail] = useState(false);
   const [showReservationRoster, setShowReservationRoster] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
-  const publicReservationOptions = openReservationOptions(reservationState, scheduleItems);
+  const publicReservationOptions = openReservationOptions(reservationState, scheduleItems, reservationNow);
   const selectedEventScheduleItem = selectedEventKey ? scheduleItemForReservationKey(scheduleItems, selectedEventKey) : null;
   const selectedEventDraftSnapshot = selectedEventKey ? findTournamentDraftForReservationKey(savedTournamentDrafts, selectedEventKey)?.snapshot || null : null;
   const selectedEventReservationState = selectedEventKey ? reservationStateForKey(reservationState, selectedEventKey, scheduleItems) : null;
@@ -5022,13 +5036,12 @@ function TournamentInfoTab({
     ...displayedVideoLinks.map((href, index) => ({ label: `Tournament Video ${index + 1}`, href, type: "video" })),
   ].filter((item) => item.href)
     .filter((item, index, links) => links.findIndex((link) => normalizeMatchText(link.href) === normalizeMatchText(item.href)) === index);
-  const reservationsMatchCurrentTournament = Boolean(
-    matchingReservationState?.entriesOpen &&
-    !isReservationCutoffReached(
-      matchingReservationState.tournamentDate || displayedTournamentInfo.date,
-      matchingReservationState.tournamentStartTime || displayedTournamentInfo.startTime
-    )
-  );
+  const reservationsMatchCurrentTournament = isPublicReservationWindowOpen({
+    entriesOpen: matchingReservationState?.entriesOpen,
+    scheduleItem: matchingScheduleItem,
+    date: matchingReservationState?.tournamentDate || displayedTournamentInfo.date,
+    now: reservationNow,
+  });
   const publicReservationEntries = matchingReservationState
     ? (matchingReservationState.reservations?.length
         ? matchingReservationState.reservations
@@ -17501,6 +17514,7 @@ function ReservationsTab({
   );
 }
 function PublicReservations({
+  reservationNow,
   reservationState,
   setReservationState,
   tournamentInfo,
@@ -17515,7 +17529,7 @@ function PublicReservations({
 }) {
   const [submittingReservation, setSubmittingReservation] = useState(false);
   const [submitNotice, setSubmitNotice] = useState("");
-  const publicReservationOptions = useMemo(() => openReservationOptions(reservationState, scheduleItems), [reservationState, scheduleItems]);
+  const publicReservationOptions = useMemo(() => openReservationOptions(reservationState, scheduleItems, reservationNow), [reservationState, scheduleItems, reservationNow]);
   const [selectedPublicReservationKey, setSelectedPublicReservationKey] = useState("");
   const activePublicReservationKey =
     publicReservationOptions.some((option) => option.key === selectedPublicReservationKey)
@@ -17605,7 +17619,7 @@ const registrationStatus =
           </h2>
 
           <p className="mt-3 text-sm text-slate-700">
-            Reservations are not currently being accepted.
+            {PUBLIC_RESERVATION_CUTOFF_MESSAGE}
           </p>
         </CardContent>
       </Card>
@@ -17645,6 +17659,7 @@ const registrationStatus =
           </div>
         )}
         <div className="mb-5 space-y-2 rounded-2xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
+          <p>{PUBLIC_RESERVATION_CUTOFF_MESSAGE}</p>
           <p>After submitting, please check your inbox and spam folder for your confirmation email.</p>
           <p>If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.</p>
           {isTeamReservation && <p>All bowler names are required. For player substitutions after submitting, email bowlerbuildersproshop@yahoo.com.</p>}
@@ -17738,6 +17753,14 @@ const registrationStatus =
       : "cursor-not-allowed bg-slate-400"
   }`}
   onClick={async () => {
+    if (!isPublicReservationWindowOpen({
+      entriesOpen: activeReservationState.entriesOpen,
+      scheduleItem: scheduleItemForReservationKey(scheduleItems, activePublicReservationKey),
+      date: activeReservationState.tournamentDate || activeTournamentInfo.date,
+    })) {
+      setSubmitNotice(PUBLIC_RESERVATION_CUTOFF_MESSAGE);
+      return;
+    }
     const pendingReservation = {
       tournament:
         activeReservationState.tournamentName ||
@@ -20476,7 +20499,7 @@ function PublicViewTab({
     </div>
   );
 }
-function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservationState = {}, onRegisterClick = () => {}, onEventDetails = () => {} }) {
+function PublicSchedule({ reservationNow, scheduleItems = [], tournamentHistory = [], reservationState = {}, onRegisterClick = () => {}, onEventDetails = () => {} }) {
   const [selectedArchiveId, setSelectedArchiveId] = useState(null);
   const [selectedArchiveView, setSelectedArchiveView] = useState("archive");
   const [selectedArchiveSection, setSelectedArchiveSection] = useState("results");
@@ -20492,7 +20515,7 @@ function PublicSchedule({ scheduleItems = [], tournamentHistory = [], reservatio
   const isRegistrationOpenForItem = (item) => {
     const scheduleTournament = normalizeMatchText(item.name || "");
     if (!scheduleTournament) return false;
-    return openReservationOptions(reservationState, scheduleItems).some(({ state }) =>
+    return openReservationOptions(reservationState, scheduleItems, reservationNow).some(({ state }) =>
       normalizeMatchText(state.tournamentName || "") === scheduleTournament
     );
   };
@@ -30389,7 +30412,8 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     totalLineageGames: financialLineageGames,
   }), [entries, entryFees.entryParticipants, entryFees.teamEntryFee, bowlers.length, payoutState, qualifyingGames, financialFinalsGames, financialLineageGames]);
   const payoutRows = useMemo(() => buildPayoutRows({ financials, middlePercent: payoutState.middlePercent, minCashPercent: payoutState.minCashPercent, rounding: payoutState.rounding, sameThirdFourth: payoutState.sameThirdFourth, manualOverridesEnabled: payoutState.manualOverridesEnabled, overrides: payoutState.overrides, payoutMode: payoutState.payoutMode, manualPayoutAmounts: payoutState.manualPayoutAmounts }), [financials, payoutState]);
-  const publicHeaderReservationOptions = openReservationOptions(reservationState, scheduleItems);
+  const reservationNow = usePublicReservationClock(PUBLIC_TAB_IDS.has(activeTab));
+  const publicHeaderReservationOptions = openReservationOptions(reservationState, scheduleItems, reservationNow);
   const publicHeaderOpenOption = publicHeaderReservationOptions[0] || null;
   const publicHeaderScheduleItem = selectedPublicEventKey
     ? scheduleItemForReservationKey(scheduleItems, selectedPublicEventKey)
@@ -30937,6 +30961,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 {activeTab === "tournamentInfo" && (
   selectedPublicEventKey ? (
     <TournamentInfoTab
+      reservationNow={reservationNow}
       tournamentInfo={tournamentInfo}
       reservationState={reservationState}
       scheduleItems={scheduleItems}
@@ -30959,6 +30984,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
     />
   ) : (
     <PublicHomeTab
+      reservationNow={reservationNow}
       tournamentInfo={tournamentInfo}
       reservationState={reservationState}
       scheduleItems={scheduleItems}
@@ -31013,6 +31039,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 {activeTab === "publicschedule" && (
   <AppErrorBoundary key="publicschedule">
     <PublicSchedule
+      reservationNow={reservationNow}
       scheduleItems={scheduleItems}
       tournamentHistory={tournamentHistory}
       reservationState={reservationState}
@@ -31046,6 +31073,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 {activeTab === "publicreservations" && (
   <AppErrorBoundary key="publicreservations">
 <PublicReservations
+  reservationNow={reservationNow}
   reservationState={reservationState}
   setReservationState={setReservationState}
   tournamentInfo={tournamentInfo}
