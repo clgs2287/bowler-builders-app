@@ -112,3 +112,35 @@ reservation. Champion restrictions still apply at both public endpoints.
 The forward migration, transaction-scoped SQL tests, rollback, and focused
 staging acceptance are in [Phase 3 staging acceptance and handoff](PHASE_3_STAGING_HANDOFF.md).
 The public redesign remains deferred to approximately May or June 2027.
+
+### Final Preview acceptance and release blocker
+
+Preview 26dfd0e passed the deployed email guard, center lifecycle, emergency
+PDFs, public reservation and advisory average workflows, focused team brackets
+and trios side action, multi-page cash printing, and Strikefest blank/zero
+advancement. Exact synthetic cleanup returned all thirteen inventories to the
+approved baseline.
+
+Populated Strikefest Leaderboards throws a ReferenceError. The non-youth
+payout callback accesses the two payout plans before initialization. Correct
+the declaration order and add a rendered populated-leaderboard regression,
+then repeat payout redistribution and first-completed-series acceptance in an
+approved Preview. The cross-event same-name browser check should be repeated
+at that time. See [staging results](PHASE_3_STAGING_HANDOFF.md) and
+[production release readiness](PRODUCTION_RELEASE_READINESS.md).
+
+#### Correction implemented locally
+
+The two payout plans now initialize after the payout-count guard and before
+any division selection. The existing archive path already used this order.
+The new actual-page browser regression reproduced the previous error and
+passed after the fix. It covers empty and populated standings, lowest and
+highest cashing rows in both divisions, tied payout splitting, and first
+completed All Events series with a valid zero. All 71 tests and stepladder
+checks passed. Lint reported 0 errors and 71 warnings, and the build and
+whitespace check passed. No database migration is required.
+
+The remaining deployed checks are scoped to Strikefest Leaderboards and
+payouts, All Events and browser same-name isolation, with email-guard and
+exact cleanup verification. See the focused retest in the
+[staging handoff](PHASE_3_STAGING_HANDOFF.md#strikefest-correction-and-focused-preview-retest).

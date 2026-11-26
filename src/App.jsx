@@ -15891,6 +15891,8 @@ function MultiDayEventsTab({
       const scratchPayoutCount = multiDayPayoutSpotCountForEvent(config.label, "scratch");
       const handicapPayoutCount = multiDayPayoutSpotCountForEvent(config.label, "handicap");
       if (!scratchPayoutCount && !handicapPayoutCount) return [];
+      const scratchPayoutPlan = multiDayFinalPayoutPlan(config.label, "Scratch", scratchPayoutCount);
+      const handicapPayoutPlan = multiDayFinalPayoutPlan(config.label, "Handicap", handicapPayoutCount);
       if (config.id !== "youth") {
         const rowsByDivision = selectMultiEventPayoutDivisions({
           scratchRows: bestPaidRowsForDivision(config.rows || [], "scratch", config.id),
@@ -15913,8 +15915,6 @@ function MultiDayEventsTab({
       }
       const scratchPlaced = placeRows(bestPaidRowsForDivision(rows, "scratch", config.id), "scratch");
       const handicapPlaced = placeRows(bestPaidRowsForDivision(rows, "total", config.id), "total");
-      const scratchPayoutPlan = multiDayFinalPayoutPlan(config.label, "Scratch", scratchPayoutCount);
-      const handicapPayoutPlan = multiDayFinalPayoutPlan(config.label, "Handicap", handicapPayoutCount);
       const scratchByKey = new Map(scratchPlaced.map((row) => [paidWinnerKey(row, config.id), row]));
       const handicapByKey = new Map(handicapPlaced.map((row) => [paidWinnerKey(row, config.id), row]));
       const chosenByKey = new Map();

@@ -6,7 +6,9 @@ import { dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { createServer } from "vite";
 import { fixture, snapshot, verifyFixture } from "./handicap-doubles.mjs";
+import { emptyStrikefest, verifyStrikefestLeaderboards } from "./strikefest-leaderboards.browser.mjs";
 
+const strikefestLeaderboards = process.argv.includes("--strikefest-leaderboards");
 const phaseThree = process.argv.includes("--phase3");
 const remainingPhaseTwo = process.argv.includes("--remaining-phase2");
 const edge = process.env.BB_ACCEPTANCE_EDGE || "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
@@ -31,6 +33,9 @@ function receiveMessage(event) {
     const localReservation = phaseThree && message.params.type === "alert" && /^(Registration submitted successfully|You have been added to the waitlist)/.test(text);
     if (!confirmation && !localReservation) browserErrors.push(text);
     void send("Page.handleJavaScriptDialog", { accept: true }, message.sessionId).catch((error) => browserErrors.push(error.message));
+  }
+  if (strikefestLeaderboards && message.method === "Runtime.consoleAPICalled" && message.params.type === "error") {
+    browserErrors.push(message.params.args.map((arg) => arg.description || arg.value).filter(Boolean).join(" "));
   }
   const response = pending.get(message.id);
   if (!response) return;
@@ -76,7 +81,7 @@ function send(method, params = {}, sessionId) {
 }
 
 try {
-  if (!phaseThree && !remainingPhaseTwo) verifyFixture();
+  if (!strikefestLeaderboards && !phaseThree && !remainingPhaseTwo) verifyFixture();
   process.env.VITE_SUPABASE_URL = "";
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = "";
   process.env.VITE_LOCAL_RESERVATION_TEST = "1";
@@ -137,7 +142,7 @@ try {
   const navigate = await send("Page.navigate", { url: origin + "/?tab=registration" }, sessionId);
   if (navigate.errorText) throw new Error(navigate.errorText);
   await waitFor('document.body?.innerText.includes("REGISTRATION / ROSTER")', "local registration");
-  const sample = snapshot();
+  const sample = strikefestLeaderboards ? { multiDayEvent: emptyStrikefest } : snapshot();
   if (phaseThree) {
     sample.tournamentInfo.scheduleEventId = "local-phase3-doubles";
     sample.scheduleItems = [
@@ -148,12 +153,24 @@ try {
   }
   await run('localStorage.setItem(' + JSON.stringify(fixture.localStorageKey) + ', ' + JSON.stringify(JSON.stringify(sample)) + ')');
   await send("Page.reload", {}, sessionId);
-  if (phaseThree) {
+  if (strikefestLeaderboards) {
+    await waitFor('(' + state + ').multiDayEvent?.name === ' + JSON.stringify(emptyStrikefest.name), "empty Strikefest fixture");
+  } else if (phaseThree) {
     await waitFor('(' + state + ').tournamentInfo?.scheduleEventId === "local-phase3-doubles"', "Phase 3 empty-roster fixture");
   } else {
     await waitFor('!!document.querySelector("[aria-label=\'Team side action\']")', "synthetic registration");
   }
-  if (phaseThree) {
+  if (strikefestLeaderboards) {
+    const seed = async (multiDayEvent) => {
+      await run('window.__previousStrikefestFixture = true; localStorage.setItem(' + JSON.stringify(fixture.localStorageKey) + ', '
+        + JSON.stringify(JSON.stringify({ multiDayEvent })) + ')');
+      await send("Page.reload", {}, sessionId);
+      await waitFor('!window.__previousStrikefestFixture && (' + state + ').multiDayEvent?.name === '
+        + JSON.stringify(multiDayEvent.name), "populated Strikefest fixture");
+    };
+    await verifyStrikefestLeaderboards({ run, waitFor, switchTab, click, seed });
+    assert.deepEqual(browserErrors, []);
+  } else if (phaseThree) {
     const select = async (label, value) => {
       await run('(() => { const menu = [...document.querySelectorAll("label")].find((element) => element.firstChild?.textContent.trim() === ' + JSON.stringify(label) + ')?.querySelector("select"); if (!menu) throw Error("Missing select"); menu.value = ' + JSON.stringify(value) + '; menu.dispatchEvent(new Event("change", {bubbles:true})); })()');
     };

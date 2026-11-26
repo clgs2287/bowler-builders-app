@@ -98,6 +98,40 @@ Use this post-migration baseline as the comparison target for the consolidated
 Preview run below. Phase 3 is ready for the separately authorized Preview
 deployment and deployed browser acceptance.
 
+## Final consolidated Preview acceptance
+
+Run **bb-final-26dfd0e-b3e74966** used immutable Preview commit **26dfd0e**
+on staging project **evgyzbgixhaiykxznqez**. Vercel showed Ready. Chrome
+confirmed the staging host, and the example.invalid email probe returned HTTP
+200, sent false, skipped true, and provider blocked before submissions.
+
+| Check | Deployed result |
+| --- | --- |
+| Bowling centers | Passed. The three seeds appeared. Added a synthetic center in Tournament Setup, confirmed Schedule and a separately loaded authorized tab displayed it, rejected a normalized duplicate, then renamed and deactivated it. The synthetic schedule event kept its saved center and address. |
+| Emergency blank PDF | Passed for singles and doubles with one page each and trios across two lanes and pages. Verified landscape letter, event metadata, game fields, blank roster, series and signature fields, and optional average and handicap columns in generated files. The existing prefilled trios Blank-Lane Score Entry PDF control remained available. |
+| Reservation eligibility | Passed for two independent events through the public browser. The champions-only event accepted the synthetic champion and rejected the novice. Previous-champion and multi-time-champion enforcement were verified on the unchanged staging RPCs in the recorded SQL integration suite. |
+| Combined-average advisory | Passed. Three teams booked without averages and the fourth waitlisted with normal confirmations #1, #3, #5 and #7. The duplicate attempt was rejected. The director UI showed 340 and 330 within limit, 341 over the limit, and incomplete verification. It saved both source types and the date, and a second authorized tab loaded the 341 result. The team stayed Registered. With the synthetic cap disabled, the warning disappeared while the total remained visible. A separate event with the same name had zero linked verification rows by exact database association; that cross-event browser check did not confirm independently. Anonymous modification was rejected in the prior staging RLS suite. |
+| Team brackets, trios side action | Passed in deployed Chrome using isolated synthetic workspace data. Six handicap teams had two split byes and $15/$10; eight teams had no byes and $25/$10. The trios draw passed, and scratch/handicap high-game pools used separate entrant sets. |
+| Multi-page cash sheet | Passed. Chrome preview rendered 90 teams on four pages with team prize and paid column labels. Print preview was canceled. |
+| Strikefest missing scores | Passed with an isolated synthetic import and database writes blocked in that test tab. A blank held the first match and its feeder; an entered zero counted and advanced the scored opponent in the second match. |
+| Strikefest payouts and All Events standings | **Blocked.** The populated synthetic Leaderboards route hit a ReferenceError before rendering. The deployed expression reads scratchPayoutPlan and handicapPayoutPlan before their declarations in the non-youth callback. Local calculation coverage remains valid; deployed acceptance of both results requires a corrected Preview. |
+| Existing data and navigation | Passed for the reviewed smoke paths. MIST displayed the $100 fee; the final manifest confirmed its explicit entry basis and the unchanged historical records. Existing Strikefest 26 and KWT BOY Points loaded. Public event navigation worked. |
+
+Cleanup ran after both synthetic browser tabs closed. It removed seven exact
+synthetic schedule IDs, eleven reservation members, seven cascading
+verifications, one center, and one title. The final read-only database check
+matched all thirteen approved inventories, including three active seeded
+centers and zero average verification records. No active workspace or shared
+settings restoration write was required because their hashes were unchanged.
+
+Final verified cleanup directory: `C:\Users\coryl\BowlerBuilders-StagingActiveWorkspacePreflights\2026-11-25_203252-PHASE3-FINAL-CLEANUP-VERIFIED`.
+Its phase3-final-cleanup-manifest.json lists every deleted ID and all thirteen
+verified files. The local file bytes were rechecked against the final live
+read-only hashes.
+
+Production release remains **blocked**. See
+[production release readiness](PRODUCTION_RELEASE_READINESS.md).
+
 ## Consolidated browser and concurrency checks
 
 Before saving, use **TEST ONLY — PHASE 3** and a unique run suffix. Record the returned schedule ID, draft and snapshot IDs, reservation group and member IDs, new center IDs, verification member IDs, and any storage or ancillary IDs in a manifest kept outside Git. Record exact IDs as each save returns. Use the existing conditional active-workspace tooling and avoid edits to MIST or Strikefest 26.
@@ -108,6 +142,99 @@ Before saving, use **TEST ONLY — PHASE 3** and a unique run suffix. Record the
 4. **Capacity race.** Use a separate open cap-340 doubles event with capacity **1** and no reservations. In two parallel psql sessions using the authorized staging connection, `SET ROLE anon` and call `public.create_public_team_reservation` with the same event key, distinct group IDs, and two distinct names per team. Commit both. Expect one Registered team and one Waitlisted team with nonoverlapping confirmation numbers and exactly four member rows. Submit the Registered team's same names again with a third group ID and expect duplicate rejection with no new rows. Track both committed group/member IDs for cleanup. Use the public RPC directly so this test has no email side effects.
 5. **Scoresheets and Phase 2.** Download roster-free singles, doubles, and trios PDFs. Use trios, 12 games, lanes 7–8, and 12 positions for the dense two-page case. Spot-check the existing prefilled and Strikefest sheets. Replay only the targeted Phase 2 gaps on synthetic copies. Generate six- and eight-entrant handicap doubles draws at $5 and verify two separated byes and $15/$10 or no byes and $25/$10. Verify the trios scratch and handicap pools remain separate. Verify a multi-page cash sheet retains repeated column headings, whole rows, totals and the printable paid column. In a synthetic Strikefest event, use a blank, a scored zero, an explicit forfeit, and an incomplete feeder. Verify the higher eligible Scratch or Handicap payout and redistribution. For All Events, exercise a blank first attempt, an incomplete series, a complete series containing a zero and a higher repeat. Only the first complete series should count in each competition.
 6. **Restore and compare.** Remove only tracked synthetic rows and keys. Delete synthetic reservation members before the schedule records; their verification rows cascade. Delete only synthetic centers by their manifest IDs and leave the migration's seeds in place. Follow `docs/STAGING_ACTIVE_WORKSPACE_EXECUTION_PLAN.md` for the conditional workspace restore. Repeat the eleven original inventories with the existing checker, and compare canonical sorted exports and SHA-256 hashes of the two new tables against the post-migration baseline. Verify MIST, Strikefest 26, and all protected records by exact ID and data. Stop for review if there is any unexplained difference.
+
+## Strikefest correction and focused Preview retest
+
+### Local correction
+
+The populated Leaderboards render computes projected payouts before it
+displays any tab. After obtaining the Scratch and Handicap payout counts,
+its non-youth branch passed the two payout plans to division selection
+before their `const` declarations ran. Move both calls to
+`multiDayFinalPayoutPlan` immediately after the no-cashers return and before
+the division split. The archive path already initializes them in that
+order. The youth path, regular tournament payout calculation, React hooks,
+financial settings, and Phase 3 logic retain their existing behavior.
+
+The loopback browser test runs the actual app's admin Leaderboards page.
+It checks empty standings and payouts, populated Singles, Doubles, three-
+person Team and All Events standings, both Singles payout divisions, vacated
+places, a tied Doubles payout, and the first complete series in each event.
+The All Events fixture includes unbowled and incomplete starts, an entered
+zero, and higher repeats. Against the previous code the renderer threw
+`Cannot access 'scratchPayoutPlan' before initialization`; the fixed browser
+run passed all assertions. The entered zero completes a 410-pin series
+even though the detail cell uses the existing dash display.
+
+Local verification passed all 71 regression tests, the stepladder checks,
+the isolated browser run, and Git whitespace validation. Lint reported
+zero errors and 71 warnings. The build passed with the bundle-size warning.
+The local thirteen-file cleanup manifest also verified. The correction
+requires no database migration.
+
+### Focused deployed retest
+
+After separate Preview approval, confirm its immutable corrected commit,
+the Preview environment, and staging project `evgyzbgixhaiykxznqez`. Compare
+live canonical counts and hashes with the thirteen files in the latest
+verified cleanup baseline,
+`C:\Users\coryl\BowlerBuilders-StagingActiveWorkspacePreflights\2026-11-25_203252-PHASE3-FINAL-CLEANUP-VERIFIED`.
+Reuse the existing backup and exact synthetic cleanup procedures.
+
+1. Run the approved email guard probe in the signed-in Preview before any
+   reservation. Use only an `example.invalid` address. Require HTTP 200,
+   `sent: false`, `skipped: true`, and nested provider `blocked`.
+2. Use the same synthetic browser fixture as the local regression. Export
+   the import file locally using the commands below. In the authorized
+   Chrome test tab, intercept staging Supabase REST writes before importing
+   the Strikefest fixture. The existing Import Backup flow autosaves the
+   multi-event workspace, so keep writes to both `app_settings` and
+   `public_app_settings` blocked in the test tab until it is closed.
+3. Open Leaderboards and verify the populated view renders. In Singles
+   Payouts expect Alex Scratch $240, Casey Scratch $200, Blair Handicap
+   $270, and Devon Handicap $100. Each bowler appears once. In Doubles
+   Scratch expect the tied teams paid at #1T for $90 each. In All Events
+   Scratch expand SYN First Series. Expect Singles 410, Doubles 585 and
+   Team 630, for 1,625 scratch and 1,715 handicap. The counted Singles
+   series is 200, entered zero, 210. The earlier unbowled or incomplete
+   attempts and higher later repeats do not replace these totals.
+4. In two distinct synthetic handicap doubles events capped at 340,
+   reserve one team in each using the same exact display name for one
+   member and different synthetic partners. Record both event IDs,
+   reservation groups and member IDs. In the admin browser select event A
+   and confirm the review displays its partner before saving USBC 140
+   and league sheet 200. Verify 340 within limit. Open event B in a
+   freshly loaded authorized tab. Wait for its event heading and different
+   partner to appear. Verify the same-name member is unverified and
+   the team shows Verification incomplete. Switch back to event A and
+   confirm its verification is still present.
+5. Close both synthetic editing sessions before cleanup. Remove only
+   manifest-listed records from this run. Compare the thirteen live
+   inventories with the approved cleanup baseline and record zero
+   remaining synthetic IDs. Verify Strikefest 26, seeded centers,
+   historical finance and MIST's $100 fee and legacy `entry` basis.
+   Production remains blocked until these focused checks pass.
+
+Create the reusable synthetic Strikefest import file on the local machine:
+
+```powershell
+Set-Location 'C:\Projects\bowler-builders-phase1c'
+@'
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { populatedStrikefest } from "./scripts/acceptance/strikefest-leaderboards.browser.mjs";
+const file = join(tmpdir(), "bb-strikefest-focused-acceptance.json");
+const event = populatedStrikefest();
+writeFileSync(file, JSON.stringify({ type: "bowler-builders-multi-event-backup", version: 1, event }));
+console.log(file);
+'@ | node --input-type=module
+```
+
+Run the local rendering regression with
+`node scripts/acceptance/handicap-doubles.browser.mjs --strikefest-leaderboards`.
+The existing acceptance harness keeps the browser on loopback with an
+isolated profile and Supabase disabled.
 
 ## Local verification
 
