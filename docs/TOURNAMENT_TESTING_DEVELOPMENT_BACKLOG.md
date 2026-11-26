@@ -97,3 +97,18 @@ Use synthetic tournament data in an isolated staging test workspace.
    repeat does not replace it. Repeat the eligibility check for Doubles and
    Trios, and verify the higher eligible division pays once with the vacated
    spot filled.
+
+
+## Phase 3 reservation average review
+
+The handicap doubles combined-average maximum is an advisory requirement for
+public reservations. Standard registration, confirmation, capacity and
+waitlist rules still apply when verified averages are unavailable or the sum
+exceeds the maximum. The director reviews the two averages by reservation
+member, with optional USBC, Bayside Bowl league sheet, or other approved source
+and verification date. A matching name never copies an average to another
+reservation. Champion restrictions still apply at both public endpoints.
+
+The forward migration, transaction-scoped SQL tests, rollback, and focused
+staging acceptance are in [Phase 3 staging acceptance and handoff](PHASE_3_STAGING_HANDOFF.md).
+The public redesign remains deferred to approximately May or June 2027.

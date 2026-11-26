@@ -6,6 +6,11 @@ import { buildBracketTicketPlans, drawBracketPlayers, getBracketPlanAmounts, pla
 import { getTeamHandicapHighGame, isCompleteSideActionTeam, usesSideActionBracketHandicap } from "./teamSideAction";
 import { selectMultiEventPayoutDivisions } from "./multiEventPayouts";
 import { advanceSideActionPlayers, buildSideActionRounds, bracketScoreText, readBracketScore, regularSideActionScore } from "./sideActionBracket";
+import ReservationAverageReview from "./ReservationAverageReview";
+import EmergencyScoresheetPanel from "./EmergencyScoresheetPanel";
+import { BowlingCenterPicker, ReservationRulesFields } from "./PhaseThreeAdmin";
+import { usePhaseThreeDirectory } from "./usePhaseThreeDirectory";
+import { getReservationRules, reservationInfoWithHandicap } from "./reservationEligibility";
 import { createTriosScoresheetPdf } from "./triosScoresheetPdf";
 import { buildTeamReservationRows, teamReservationFits, isTbdReservation, findTeamRosterSlot, validateTeamChampionLimit, hasCompleteTeamNames } from "./teamReservations";
 import bowlerBuildersLogo from "./assets/bowler-builders-logo.jpeg";
@@ -1731,7 +1736,12 @@ function scheduleEventInfoBelongsToItem(info = {}, item = {}) {
 
 function getScheduleEventSavedPublicInfo(item = {}) {
   const setupInfo = item?.eventSetup?.tournamentInfo || null;
-  if (scheduleEventInfoBelongsToItem(setupInfo, item)) return setupInfo;
+  if (scheduleEventInfoBelongsToItem(setupInfo, item)) {
+    return {
+      ...reservationInfoWithHandicap(setupInfo, item?.eventSetup?.snapshot?.useHandicapScores),
+      ...item.eventSetup.reservationRules,
+    };
+  }
   return {};
 }
 
@@ -1752,7 +1762,9 @@ function getScheduleEventPublicInfo(item = {}) {
 }
 
 function buildScheduleEventSetupFromSnapshot(snapshot = {}) {
-  const tournamentInfo = snapshot.tournamentInfo || {};
+  const setupInfo = reservationInfoWithHandicap(snapshot.tournamentInfo, snapshot.useHandicapScores);
+  const rules = getReservationRules(setupInfo);
+  const tournamentInfo = { ...setupInfo, ...rules };
   return {
     publicInfo: buildReservationTournamentInfoSnapshot({
       tournamentInfo,
@@ -1768,6 +1780,11 @@ function buildScheduleEventSetupFromSnapshot(snapshot = {}) {
     eventSetup: {
       snapshot,
       tournamentInfo,
+      reservationRules: {
+        ...rules,
+        tournamentStyle: setupInfo.tournamentStyle || "singles",
+        useHandicapScores: setupInfo.useHandicapScores,
+      },
       payoutState: snapshot.payoutState || {},
       tournamentFormat: snapshot.tournamentFormat || "bracket",
       qualifyingGames: Number(snapshot.qualifyingGames || 4),
@@ -1880,6 +1897,9 @@ function buildReservationTournamentInfoSnapshot({ tournamentInfo = {}, scheduleI
   const hasEntryFee = Object.prototype.hasOwnProperty.call(payoutState || {}, "entryFee");
   return {
     ...tournamentInfo,
+    ...(tournamentInfo.maxCombinedTeamAverage != null ? {
+      maxCombinedTeamAverage: getReservationRules(tournamentInfo).maxCombinedTeamAverage,
+    } : {}),
     announcementImages: Array.isArray(tournamentInfo.announcementImages) ? tournamentInfo.announcementImages : [],
     lanePatternImages: Array.isArray(tournamentInfo.lanePatternImages) ? tournamentInfo.lanePatternImages : [],
     name: reservationState.tournamentName || scheduleItem?.name || tournamentInfo.name || "Tournament",
@@ -2012,7 +2032,9 @@ function reservationStateForKey(reservationState = {}, tournamentKey = "", sched
     const bucket = reservationState.reservationsByTournament?.[tournamentKey] || {};
     return {
       ...reservationState,
-      publicTournamentInfo: reservationState.publicTournamentInfo || bucket.publicTournamentInfo || null,
+      publicTournamentInfo: scheduleItem?.eventSetup?.reservationRules
+        ? { ...(reservationState.publicTournamentInfo || bucket.publicTournamentInfo || getScheduleEventPublicInfo(scheduleItem)), ...scheduleItem.eventSetup.reservationRules }
+        : reservationState.publicTournamentInfo || bucket.publicTournamentInfo || null,
       entriesOpen: scheduleItem ? Boolean(scheduleReservationSettings.entriesOpen) : Boolean(reservationState.entriesOpen || bucket.entriesOpen),
       reservationLimit: Number(scheduleReservationSettings.reservationLimit || reservationState.reservationLimit || DEFAULT_RESERVATION_LIMIT),
       reservationLimitUpdatedAt: scheduleReservationSettings.reservationLimitUpdatedAt || reservationState.reservationLimitUpdatedAt || "",
@@ -6407,6 +6429,7 @@ function DashboardTab({
   scheduleItems = [],
   setScheduleItems = () => {},
   scheduleLocked = false,
+  centerDirectory,
   manualTitles = [],
   bowlerIdentities = [],
   supabaseSession = null,
@@ -6474,6 +6497,7 @@ function DashboardTab({
       series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
       reservationEligibility: savedInfo.reservationEligibility || "open",
       maxPreviousChampions: savedInfo.maxPreviousChampions ?? null,
+      maxCombinedTeamAverage: savedInfo.maxCombinedTeamAverage ?? null,
       limitMultiTimeChampions: Boolean(savedInfo.limitMultiTimeChampions),
       tournamentStyle: savedInfo.tournamentStyle || "singles",
       announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
@@ -6536,14 +6560,11 @@ function DashboardTab({
       lanePatternImages: (Array.isArray(current.lanePatternImages) ? current.lanePatternImages : []).filter((image) => image.id !== imageId),
     }));
   };
-  const selectedCenterIsPreset = BOWLING_CENTERS.some((center) => center.name === tournamentInfo.center);
-  const updateCenter = (centerName) => {
-    const selectedCenter = BOWLING_CENTERS.find((center) => center.name === centerName);
-
+  const updateCenter = (centerName, address) => {
     setTournamentInfo((current) => ({
       ...current,
       center: centerName,
-      location: selectedCenter ? selectedCenter.address : centerName ? current.location : "",
+      location: address ?? (centerName ? current.location : ""),
     }));
   };
   const updateQualifyingGames = (value) => {
@@ -6642,24 +6663,8 @@ function DashboardTab({
                 <DashboardTournamentSelect value={tournamentInfo.name} scheduleItems={scheduleItems} onChange={applyScheduledTournament} />
                 <LockedTextField label="Date" value={tournamentInfo.date} onChange={(value) => update("date", value)} type="date" />
                 <LockedTextField label="Start Time" value={tournamentInfo.startTime || ""} onChange={(value) => update("startTime", value)} type="time" />
-                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                  <Label className="text-left text-sm font-bold text-blue-900">Center</Label>
-                  <select
-                    value={selectedCenterIsPreset ? tournamentInfo.center : tournamentInfo.center || ""}
-                    onChange={(e) => updateCenter(e.target.value)}
-                    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
-                  >
-                    <option value="">Select Center</option>
-                    {!selectedCenterIsPreset && tournamentInfo.center && (
-                      <option value={tournamentInfo.center}>{tournamentInfo.center}</option>
-                    )}
-                    {BOWLING_CENTERS.map((center) => (
-                      <option key={center.name} value={center.name}>
-                        {center.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <BowlingCenterPicker presets={BOWLING_CENTERS} directory={centerDirectory}
+                  name={tournamentInfo.center} onSelect={updateCenter} disabled={!adminCanSave} />
                 <LockedTextField key={`dashboard-address-${tournamentInfo.location || "blank"}`} label="Address" value={tournamentInfo.location} onChange={(value) => update("location", value)} />
                 <LockedTextField label="Season" value={tournamentInfo.season || ""} onChange={(value) => update("season", value)} />
                   <LockedTextField label="Lanes" value={tournamentInfo.lanesUsed || ""} onChange={(value) => update("lanesUsed", value)} placeholder="Example: 1-8, 11-18" commitOnChange />
@@ -6974,30 +6979,9 @@ function DashboardTab({
                     <span className="text-sm font-semibold text-blue-950">{tournamentInfo.titleEligible ?? true ? "Yes" : "No"}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                  <Label className="text-left text-sm font-bold text-blue-900">Reservation Eligibility</Label>
-                  <select
-                    value={tournamentInfo.reservationEligibility || "open"}
-                    onChange={(e) => update("reservationEligibility", e.target.value)}
-                    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
-                  >
-                    {RESERVATION_ELIGIBILITY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </div>
-                {["doubles", "trios"].includes(tournamentInfo.tournamentStyle) && (
-                  <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                    <Label className="text-left text-sm font-bold text-blue-900">{tournamentInfo.tournamentStyle === "doubles" ? "Max 1 Previous Champion" : "Max 2 Previous Champions"}</Label>
-                    <Switch compact checked={Number(tournamentInfo.maxPreviousChampions) === (tournamentInfo.tournamentStyle === "doubles" ? 1 : 2)} onCheckedChange={(checked) => update("maxPreviousChampions", checked ? (tournamentInfo.tournamentStyle === "doubles" ? 1 : 2) : null)} />
-                  </div>
-                )}
-                {tournamentInfo.tournamentStyle === "trios" && Number(tournamentInfo.maxPreviousChampions) === 2 && (
-                  <div className="grid grid-cols-[120px_1fr] items-center gap-3">
-                    <Label className="text-left text-sm font-bold text-blue-900">Max 1 Multi-Time Champion</Label>
-                    <Switch compact checked={Boolean(tournamentInfo.limitMultiTimeChampions)} onCheckedChange={(checked) => update("limitMultiTimeChampions", checked)} />
-                  </div>
-                )}
+                <ReservationRulesFields info={{ ...tournamentInfo, useHandicapScores }}
+                  options={RESERVATION_ELIGIBILITY_OPTIONS} disabled={!adminCanSave}
+                  onChange={(rules) => setTournamentInfo((current) => ({ ...current, ...rules }))} />
                 <div className="grid grid-cols-[120px_1fr] items-center gap-3">
   <Label className="text-left text-sm font-bold text-blue-900">
     Major
@@ -9660,7 +9644,7 @@ function PayoutsTab({
     </div>
   );
 }
-function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setScheduleLocked }) {
+function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setScheduleLocked, centerDirectory }) {
   const [selectedScheduleIndex, setSelectedScheduleIndex] = useState(0);
   const selectedItem = scheduleItems[selectedScheduleIndex] || scheduleItems[0] || null;
   const selectedIndex = selectedItem ? Math.max(0, scheduleItems.indexOf(selectedItem)) : -1;
@@ -9680,16 +9664,15 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
     );
   };
 
-  const updateScheduleCenter = (index, centerName) => {
+  const updateScheduleCenter = (index, centerName, address) => {
     if (scheduleLocked) return;
-    const selectedCenter = BOWLING_CENTERS.find((center) => center.name === centerName);
     setScheduleItems((current) =>
       current.map((item, i) =>
         i === index
           ? {
               ...item,
               center: centerName,
-              address: selectedCenter ? selectedCenter.address : centerName ? item.address : "",
+              address: address ?? (centerName ? item.address : ""),
             }
           : item
       )
@@ -9922,23 +9905,9 @@ function ScheduleTab({ scheduleItems, setScheduleItems, scheduleLocked, setSched
                 <section className="space-y-3 border-t border-blue-100 pt-4">
                   <h4 className="text-xs font-black uppercase tracking-wide text-blue-700">Location & Registration</h4>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-black text-blue-900">Center</Label>
-                      <select
-                        value={BOWLING_CENTERS.some((center) => center.name === selectedItem.center) ? selectedItem.center : selectedItem.center || ""}
-                        disabled={scheduleLocked}
-                        onChange={(e) => updateScheduleCenter(selectedIndex, e.target.value)}
-                        className="h-10 w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-950"
-                      >
-                        <option value="">Select Center</option>
-                        {selectedItem.center && !BOWLING_CENTERS.some((center) => center.name === selectedItem.center) && (
-                          <option value={selectedItem.center}>{selectedItem.center}</option>
-                        )}
-                        {BOWLING_CENTERS.map((center) => (
-                          <option key={center.name} value={center.name}>{center.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <BowlingCenterPicker presets={BOWLING_CENTERS} directory={centerDirectory}
+                      name={selectedItem.center} disabled={scheduleLocked}
+                      onSelect={(name, address) => updateScheduleCenter(selectedIndex, name, address)} />
                     <div className="space-y-1">
                       <Label className="text-xs font-black text-blue-900">Max Entries</Label>
                       <Input
@@ -16235,6 +16204,7 @@ function ReservationsTab({
   reservationState,
   setReservationState,
   tournamentInfo = {},
+  useHandicapScores,
   payoutState = {},
   scheduleItems = [],
   setScheduleItems = () => {},
@@ -16245,6 +16215,8 @@ function ReservationsTab({
   setBowlerIdentities = () => {},
   isOwnerAdmin = false,
   supabaseSession = null,
+  signedInAdminId,
+  adminCanSave,
   onAddReservationToRegistration = () => {},
   onDeleteReservation = () => Promise.resolve(),
   onRemoveReservationFromRegistration = () => {},
@@ -16275,6 +16247,9 @@ function ReservationsTab({
         })
       : ""
   );
+  const selectedReservationInfo = reservationStateForKey(reservationState, currentScheduledTournamentKey, scheduleItems).publicTournamentInfo;
+  const reviewInfo = selectedReservationInfo || (activeDashboardTournamentKey === currentScheduledTournamentKey
+    ? reservationInfoWithHandicap(tournamentInfo, useHandicapScores) : {});
   const reservedCount = getReservationEntryCount(reservationState.reservations, "Registered") || Number(reservationState.reservationCount || 0);
   const reservationLimit = Number(reservationState.reservationLimit || 0);
   const remainingReservationSpots = Math.max(0, reservationLimit - reservedCount);
@@ -16424,7 +16399,7 @@ function ReservationsTab({
       const eventReservationSettings = getScheduleEventReservationSettings(item || {});
       const nextEntriesOpen = Boolean(eventReservationSettings.entriesOpen);
       const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
-        tournamentInfo,
+        tournamentInfo: reservationInfoWithHandicap(tournamentInfo, useHandicapScores),
         payoutState,
         scheduleItem: item || null,
         reservationState: {
@@ -16613,7 +16588,9 @@ function ReservationsTab({
           entriesOpen: checked,
           publicTournamentInfo: checked
             ? buildReservationTournamentInfoSnapshot({
-                tournamentInfo: matchingDraftSnapshot?.tournamentInfo || (dashboardTournamentMatchesSelection ? tournamentInfo : {}),
+                tournamentInfo: matchingDraftSnapshot
+                  ? reservationInfoWithHandicap(matchingDraftSnapshot.tournamentInfo, matchingDraftSnapshot.useHandicapScores)
+                  : dashboardTournamentMatchesSelection ? reservationInfoWithHandicap(tournamentInfo, useHandicapScores) : {},
                 payoutState: matchingDraftSnapshot?.payoutState || (dashboardTournamentMatchesSelection ? payoutState : {}),
                 scheduleItem: currentScheduleItem || null,
                 reservationState: current,
@@ -16673,7 +16650,9 @@ function ReservationsTab({
       const dashboardTournamentMatchesSelection = tournamentInfoMatchesReservationKey(tournamentInfo, currentKey);
       const matchingDraftSnapshot = findTournamentDraftForReservationKey(savedTournamentDrafts, currentKey)?.snapshot || null;
       const publicTournamentInfo = buildReservationTournamentInfoSnapshot({
-        tournamentInfo: matchingDraftSnapshot?.tournamentInfo || (dashboardTournamentMatchesSelection ? tournamentInfo : {}),
+        tournamentInfo: matchingDraftSnapshot
+          ? reservationInfoWithHandicap(matchingDraftSnapshot.tournamentInfo, matchingDraftSnapshot.useHandicapScores)
+          : dashboardTournamentMatchesSelection ? reservationInfoWithHandicap(tournamentInfo, useHandicapScores) : {},
         payoutState: matchingDraftSnapshot?.payoutState || (dashboardTournamentMatchesSelection ? payoutState : {}),
         scheduleItem: currentScheduleItem || null,
         reservationState: current,
@@ -17294,6 +17273,9 @@ function ReservationsTab({
             </div>
           </div>
         )}
+        <ReservationAverageReview key={String(signedInAdminId) + ":" + currentScheduledTournamentKey}
+          adminId={signedInAdminId} tournamentKey={currentScheduledTournamentKey} info={reviewInfo}
+          reservations={reservationState.reservations || []} disabled={!adminCanSave} />
         <div className="mt-6 overflow-auto rounded-2xl border border-blue-200 bg-white">
   <table className="w-full min-w-[760px] text-xs md:text-sm">
     <thead className="bg-blue-800 text-white">
@@ -17587,8 +17569,10 @@ function PublicReservations({
     }
   }, [activePublicReservationKey, publicReservationOptions, selectedPublicReservationKey, selectedReservationKey]);
 
+  const activeRules = getReservationRules(activeTournamentInfo);
+  const requiresChampionHistory = reservationEligibility !== "open" || activeRules.maxPreviousChampions != null;
   const formValid =
-  (!(["trios", "doubles"].includes(activeTournamentInfo.tournamentStyle) && Number(activeTournamentInfo.maxPreviousChampions) === (activeTournamentInfo.tournamentStyle === "doubles" ? 1 : 2)) || eligibilityDataReady) &&
+  (!requiresChampionHistory || eligibilityDataReady || Boolean(supabase)) &&
   form.name.trim() &&
   form.email.trim() &&
   (!isTeamReservation || hasCompleteTeamNames([form, ...form.partners.slice(0, reservationTeamSize - 1)])) &&
@@ -17665,6 +17649,11 @@ const registrationStatus =
           <p>If you need to withdraw from the tournament, please email bowlerbuildersproshop@yahoo.com.</p>
           {isTeamReservation && <p>All bowler names are required. For player substitutions after submitting, email bowlerbuildersproshop@yahoo.com.</p>}
           <p>Withdrawals should be made at least 48 hours before the tournament. Anyone withdrawing within 48 hours may be moved to the waitlist for future reservations.</p>
+          {activeRules.maxCombinedTeamAverage != null && (
+            <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
+              Maximum combined team average: {activeRules.maxCombinedTeamAverage}. The tournament director will verify both averages and contact you directly if there is an eligibility issue.
+            </p>
+          )}
           {reservationEligibility !== "open" && (
             <p className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-blue-950">
               Eligibility: {getReservationEligibilityLabel(reservationEligibility)}.
@@ -17772,20 +17761,25 @@ const registrationStatus =
       alert(error.message);
       return;
     }
-    const teamEligibility = validateTrioChampionEligibility(pendingMembers, activeTournamentInfo, tournamentHistory, manualTitles, bowlerIdentities);
-    if (!teamEligibility.ok) { alert(teamEligibility.message); return; }
-    for (const member of pendingMembers.filter((member) => !isTbdReservation(member))) {
-    const eligibilityResult = validateReservationEligibility({
-      reservation: member,
-      tournamentInfo: activeTournamentInfo,
-      tournamentHistory,
-      manualTitles,
-      bowlerIdentities,
-    });
-    if (!eligibilityResult.ok) {
-      alert(eligibilityResult.message);
-      return;
-    }
+    if (!supabase || eligibilityDataReady) {
+      const teamEligibility = validateTrioChampionEligibility(pendingMembers, activeTournamentInfo, tournamentHistory, manualTitles, bowlerIdentities);
+      if (!teamEligibility.ok) {
+        alert(teamEligibility.message);
+        return;
+      }
+      for (const member of pendingMembers.filter((member) => !isTbdReservation(member))) {
+        const eligibilityResult = validateReservationEligibility({
+          reservation: member,
+          tournamentInfo: activeTournamentInfo,
+          tournamentHistory,
+          manualTitles,
+          bowlerIdentities,
+        });
+        if (!eligibilityResult.ok) {
+          alert(eligibilityResult.message);
+          return;
+        }
+      }
     }
     if (!supabase) {
       const duplicateReservation = currentReservations.find((reservation) =>
@@ -18602,6 +18596,7 @@ Lane {lanePairForGame(
 
   return (
     <div className="space-y-3 md:space-y-4">
+      <EmergencyScoresheetPanel tournamentInfo={tournamentInfo} qualifyingGames={qualifyingGames} useHandicapScores={useHandicapScores} />
       <AppCard className="print:hidden">
         <CardContent className="p-3 md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -28579,6 +28574,8 @@ export default function BowlingPayoutApp() {
       ? { id: "local-test-admin", role: "owner" }
       : null
   );
+  const signedInAdminId = supabaseAdminProfile && supabaseSession?.user?.id;
+  const centerDirectory = usePhaseThreeDirectory(signedInAdminId);
   const [supabaseAuthLoading, setSupabaseAuthLoading] = useState(hasSupabaseConfig);
   const [supabaseLoadStatus, setSupabaseLoadStatus] = useState("Not loaded");
   const [supabaseLoadReady, setSupabaseLoadReady] = useState(false);
@@ -29203,7 +29200,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
       reservationsForSettings[tournamentKey] = {
         ...bucket,
         publicTournamentInfo: buildReservationTournamentInfoSnapshot({
-          tournamentInfo: snapshot.tournamentInfo || {},
+          tournamentInfo: reservationInfoWithHandicap(snapshot.tournamentInfo, snapshot.useHandicapScores),
           payoutState: snapshot.payoutState || {},
           scheduleItem,
           reservationState: {
@@ -29882,6 +29879,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
       series: scheduledItem.series || savedInfo.series || DEFAULT_TOURNAMENT_SERIES,
       reservationEligibility: savedInfo.reservationEligibility || "open",
       maxPreviousChampions: savedInfo.maxPreviousChampions ?? null,
+      maxCombinedTeamAverage: savedInfo.maxCombinedTeamAverage ?? null,
       limitMultiTimeChampions: Boolean(savedInfo.limitMultiTimeChampions),
       tournamentStyle: savedInfo.tournamentStyle || "singles",
       announcementImages: Array.isArray(savedInfo.announcementImages) ? savedInfo.announcementImages : [],
@@ -29944,7 +29942,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
   };
 
   const refreshOpenReservationPublicInfoFromSnapshot = (snapshot = {}) => {
-    const snapshotTournamentInfo = snapshot.tournamentInfo || {};
+    const snapshotTournamentInfo = reservationInfoWithHandicap(snapshot.tournamentInfo, snapshot.useHandicapScores);
     const snapshotPayoutState = snapshot.payoutState || {};
     const targetKey = reservationTournamentKey({
       name: snapshotTournamentInfo.name,
@@ -30034,6 +30032,12 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         return;
       }
 
+      const setupInfo = reservationInfoWithHandicap(snapshotInfo, snapshot.useHandicapScores);
+      if (setupInfo.tournamentStyle === "doubles" && setupInfo.useHandicapScores &&
+        setupInfo.maxCombinedTeamAverage != null && getReservationRules(setupInfo).maxCombinedTeamAverage == null) {
+        window.alert("Enter a combined average limit from 0.01 to 600 with up to two decimal places, or clear the field to disable the limit.");
+        return;
+      }
       const scheduleSetup = buildScheduleEventSetupFromSnapshot(snapshot);
       setScheduleItems((current) => (current || []).map((item) => (
         reservationKeyFromScheduleItem(item) === snapshotKey ||
@@ -30045,8 +30049,8 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
               name: item.name || scheduleSetup.publicInfo.name || "",
               startDate: item.startDate || scheduleSetup.publicInfo.date || "",
               startTime: item.startTime || scheduleSetup.publicInfo.startTime || "",
-              center: item.center || scheduleSetup.publicInfo.center || "",
-              address: item.address || scheduleSetup.publicInfo.location || "",
+              center: scheduleSetup.publicInfo.center || item.center || "",
+              address: scheduleSetup.publicInfo.center ? scheduleSetup.publicInfo.location : item.address || "",
               series: scheduleSetup.publicInfo.series || item.series || DEFAULT_TOURNAMENT_SERIES,
               fkmTitle: typeof scheduleSetup.publicInfo.titleEligible === "boolean" ? scheduleSetup.publicInfo.titleEligible : item.fkmTitle,
               major: typeof scheduleSetup.publicInfo.major === "boolean" ? scheduleSetup.publicInfo.major : item.major,
@@ -30708,6 +30712,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         {activeTab === "dashboard" && (
   <AppErrorBoundary key="dashboard">
     <DashboardTab
+      centerDirectory={centerDirectory}
       tournamentInfo={tournamentInfo}
       setTournamentInfo={setTournamentInfo}
       entries={entries}
@@ -30773,6 +30778,7 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
         {activeTab === "summary" && <SummaryCashSheetTab entries={entries} bowlers={bowlers} payoutRows={payoutRows} financials={financials} useHandicapScores={useHandicapScores} tournamentInfo={tournamentInfo} tournamentFormat={tournamentFormat} bracketState={bracketState} eliminatorState={eliminatorState} laneEliminatorState={laneEliminatorState} matchplayState={matchplayState} eliminatorTournamentState={eliminatorTournamentState} paidPayouts={paidPayouts}setPaidPayouts={setPaidPayouts}/>}
  {activeTab === "schedule" && (
   <ScheduleTab
+    centerDirectory={centerDirectory}
     scheduleItems={scheduleItems}
     setScheduleItems={setScheduleItems}
     scheduleLocked={scheduleLocked}
@@ -30789,9 +30795,12 @@ const [adminControlRequiresReload, setAdminControlRequiresReload] = useState(fal
 
 {activeTab === "reservations" && (
 <ReservationsTab
+  signedInAdminId={signedInAdminId}
+  adminCanSave={adminCanSave}
   reservationState={reservationState}
   setReservationState={setReservationState}
   tournamentInfo={tournamentInfo}
+  useHandicapScores={useHandicapScores}
   payoutState={payoutState}
   scheduleItems={scheduleItems}
   setScheduleItems={setScheduleItems}
