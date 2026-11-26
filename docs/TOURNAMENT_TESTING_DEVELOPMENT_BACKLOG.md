@@ -144,3 +144,32 @@ The remaining deployed checks are scoped to Strikefest Leaderboards and
 payouts, All Events and browser same-name isolation, with email-guard and
 exact cleanup verification. See the focused retest in the
 [staging handoff](PHASE_3_STAGING_HANDOFF.md#strikefest-correction-and-focused-preview-retest).
+
+#### Corrected Preview retest interrupted
+
+Preview `017ec5d` matched staging and passed the deployed email guard. The
+administrator review opened the first synthetic team, but Computer Use stopped
+when it could not verify Chrome's URL. No average verification persisted.
+The same-name isolation check and populated Strikefest rendering, payouts,
+redistribution, tie handling, and All Events checks remain open in Preview.
+Cleanup matched all thirteen approved inventory counts and SHA-256 hashes,
+with zero synthetic rows remaining. See the
+[focused retest results](PHASE_3_STAGING_HANDOFF.md#november-25-focused-preview-retest).
+
+#### Resumed Preview retest
+
+Populated Strikefest rendering, payouts, redistribution, ties, and All
+Events passed on Preview `017ec5d`. Same-name average isolation remains
+open for a manual administrator session. Final cleanup matched all thirteen
+inventories and removed all tracked rows. See the
+[resumed retest](PHASE_3_STAGING_HANDOFF.md#november-25-resumed-preview-retest).
+
+#### Staging acceptance closed
+
+Preview `017ec5d` passed manual same-name average isolation. The 140 and
+200 verifications persisted for event A only, with all four fixture
+members still registered. Exact-ID cleanup and scoped workspace
+restoration matched all thirteen baseline counts and SHA-256 hashes.
+Zero synthetic records remained. No application-level release blocker
+remains. See the [staging closure](PHASE_3_STAGING_HANDOFF.md#november-25-staging-acceptance-closure)
+and the [production release sequence](PRODUCTION_RELEASE_READINESS.md#proposed-production-sequence).

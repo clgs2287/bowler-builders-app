@@ -1,5 +1,7 @@
 # Phase 3 staging acceptance and handoff
 
+**Staging acceptance closed on Preview `017ec5d` on November 25, 2026.**
+
 ## Director workflow
 
 - In Schedule or Tournament Setup, expand **Remembered bowling centers** to add a center and select it. Use the same editor to rename it or change its address or active status. The catalog starts with Bayside Bowl, Just-In-Time Recreation, and Interstate Bowling Center. Case and whitespace normalize for duplicate detection. Historical events retain their saved name and address, even if a catalog entry changes.
@@ -235,6 +237,96 @@ Run the local rendering regression with
 `node scripts/acceptance/handicap-doubles.browser.mjs --strikefest-leaderboards`.
 The existing acceptance harness keeps the browser on loopback with an
 isolated profile and Supabase disabled.
+
+### November 25 focused Preview retest
+
+Vercel showed immutable Preview commit `017ec5d66c388ca55a3b82bcaf2173b89d486399`
+on `phase1c-staging-readiness`. The signed-in Chrome tab contacted staging
+project `evgyzbgixhaiykxznqez`. Before fixture creation the deployed email
+guard returned HTTP 200, `sent: false`, `skipped: true`, provider `blocked`.
+The thirteen live counts and canonical SHA-256 hashes matched the approved
+cleanup baseline before testing.
+
+The two tracked handicap doubles fixtures registered through the staging RPC.
+The deployed administrator review displayed event A with the same-name member
+and partner A, both unverified, and an enabled verification form. Computer Use
+stopped during submission because it could not verify the Chrome URL. No
+verification row persisted. Event B isolation and the populated Strikefest
+rendering, payout and All Events checks remain open. The Strikefest fixture
+was never imported.
+
+Cleanup removed the two exact Schedule IDs and four exact reservation member
+IDs. Both groups were tracked. The 9:05 p.m. Eastern read-only comparison
+matched all thirteen approved counts and SHA-256 hashes. Zero run IDs
+remained, and the active snapshot, shared settings, MIST's $100 fee and legacy
+`entry` basis, Strikefest 26, and all three seeded centers were preserved.
+No workspace restore write was needed. Exact IDs and inventory hashes are in
+`C:\Users\coryl\BowlerBuilders-StagingActiveWorkspacePreflights\2026-11-25_210511-PHASE3-FOCUSED-RETEST-CLEANUP-VERIFIED\phase3-focused-retest-cleanup-manifest.json`.
+
+Resume only the outstanding browser checks on this immutable Preview in a
+Chrome tab whose URL Computer Use can verify. Use fresh run IDs and the same
+fixtures and expected values above. Repeat the per-run guard and inventory
+safeguards. Production remains on hold.
+
+### November 25 resumed Preview retest
+
+The thirteen staging inventories matched before fixture creation. The
+deployed email guard confirmed HTTP 200, `sent: false`, `skipped: true`
+and provider `blocked` on the immutable Preview connected to
+`evgyzbgixhaiykxznqez`.
+
+Populated Strikefest Leaderboards passed on `017ec5d`. Singles, Doubles,
+Trios and All Events rendered. Singles paid Alex Scratch $240, Casey
+Scratch $200, Blair Handicap $270 and Devon Handicap $100, once each.
+The tied Doubles Scratch teams split the first two positions at $90
+each. All Events counted the first valid Singles (410, including the
+entered zero), Doubles (585), and Trios (630) series for 1,625 scratch
+and 1,715 handicap. Earlier incomplete series and later repeats did
+not displace the counted series. The browser intercepted writes to the
+shared settings and discarded the synthetic Strikefest workspace.
+
+The administrator interface loaded the new event A and displayed both
+unverified members. Windows Computer Use stopped on URL verification
+during the save interaction. No verification row persisted. Same-name
+isolation is the only outstanding staging acceptance check. Perform
+it manually following step 4 above after the two tracked fixtures are
+prepared once for the manual session.
+
+At 9:22 p.m. Eastern, all thirteen inventories matched by count and
+SHA-256. Two exact Schedule rows and four exact reservation members were
+removed, and no run rows remained. MIST still showed $100 and legacy
+`entry`. Strikefest 26 and the three seeded centers matched.
+The exact IDs and hashes are in
+`C:\Users\coryl\BowlerBuilders-StagingActiveWorkspacePreflights\2026-11-25_212212-PHASE3-FOCUSED-RETEST-CLEANUP-VERIFIED\phase3-focused-retest-cleanup-manifest.json`.
+
+### November 25 staging acceptance closure
+
+Staging acceptance closed on immutable Preview `017ec5d66c388ca55a3b82bcaf2173b89d486399`.
+The administrator verified event A at 140 (USBC) and 200 (Bayside Bowl league
+sheet), both dated November 25, 2026. After refresh, both sources and values
+persisted and the team displayed 340 and Verified within limit. Both event B
+members stayed unverified and the team displayed Verification incomplete.
+All four members remained Registered. The database confirmed both
+verification rows belonged to event A's exact reservation IDs. The deployed
+email guard passed before fixture creation.
+
+Cleanup removed the two exact Schedule rows and four reservation members in
+run `bb-focused-017ec5d-manual-64ea95c1`. The two verification rows followed their parent
+reservations. The browser had autosaved the synthetic active workspace and
+reservation state. Cleanup restored the MIST snapshot and reservation state
+from the verified baseline. The existing trigger refreshed the public
+reservation mirror.
+
+At 9:54 p.m. Eastern, all thirteen approved counts and SHA-256 hashes
+matched and zero synthetic records remained. MIST's $100 fee and legacy
+`entry` basis, Strikefest 26, historical records and all three seeded
+centers were preserved. The earlier Strikefest pass and this manual check
+close staging acceptance with no application-level release blockers.
+Production execution requires separate approval and the safeguards in the
+[release readiness report](PRODUCTION_RELEASE_READINESS.md).
+
+The local closure manifest records the exact IDs and final hashes.
+`C:\Users\coryl\BowlerBuilders-StagingActiveWorkspacePreflights\2026-11-25_215441-PHASE3-STAGING-ACCEPTANCE-CLOSED-VERIFIED\phase3-staging-acceptance-closure-manifest.json`
 
 ## Local verification
 
